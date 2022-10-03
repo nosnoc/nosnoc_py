@@ -1,0 +1,53 @@
+name: nosnoc tests
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  test_nosnoc:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Python and pip package
+      shell: bash
+      run: |
+        python3 --version
+        sudo pip3 install virtualenv
+        virtualenv --python=python3 env
+        source env/bin/activate
+        which python
+        pip install -e .
+
+    - name: Run dimension tests
+      shell: bash
+      run: |
+        source env/bin/activate
+        python test/test_problem_dimensions.py
+
+    - name: Run simulation tests
+      shell: bash
+      run: |
+        source env/bin/activate
+        python test/simple_sim_tests.py
+
+    - name: Run OCP tests motor example
+      shell: bash
+      run: |
+        source env/bin/activate
+        python test/test_ocp_motor.py
+
+    - name: Run OCP tests
+      shell: bash
+      run: |
+        source env/bin/activate
+        python test/test_ocp.py
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: test-results/

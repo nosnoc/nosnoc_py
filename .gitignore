@@ -1,0 +1,9 @@
+__pycache__
+env
+.vscode
+nosnoc
+*.egg-info
+
+private*
+external
+*~
