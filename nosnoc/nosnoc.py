@@ -689,7 +689,6 @@ class NosnocSolver:
         self.ind_lambda_p = []
         self.ind_u = []
         self.ind_h = []
-        self.ind_boundary = []  # index of bundary value lambda and mu
 
         nu_vector = []
 
@@ -740,9 +739,6 @@ class NosnocSolver:
                                 g_cross_comp_j = vertcat(
                                     g_cross_comp_j,
                                     diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r))
-
-                            else:
-                                raise Exception('cross_comp_mode not implemented.')
                     else:
                         g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
 
