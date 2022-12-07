@@ -167,8 +167,10 @@ class FiniteElement(FiniteElementBase):
         self.control_stage_idx = control_stage_idx
         self.fe_idx = fe_idx
 
-        create_right_boundary_point = settings.use_fesd and not settings.right_boundary_point_explicit and fe_idx < settings.N_finite_elements_list[
-            control_stage_idx] - 1
+        create_right_boundary_point = (
+            settings.use_fesd and not settings.right_boundary_point_explicit and
+            fe_idx < settings.Nfe_list[control_stage_idx] - 1)
+        end_allowance = 1 if create_right_boundary_point else 0
 
         # Initialze index vectors. Note ind_x contains an extra element
         # in order to store the end variables
@@ -177,7 +179,6 @@ class FiniteElement(FiniteElementBase):
         if settings.irk_representation == IrkRepresentation.DIFFERENTIAL and not settings.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
         self.ind_v = np.empty((n_s, 0), dtype=int).tolist()
-        end_allowance = 1 if create_right_boundary_point else 0
         self.ind_theta = np.empty((n_s, dims.n_simplex, 0), dtype=int).tolist()
         self.ind_lam = np.empty((n_s + end_allowance, dims.n_simplex, 0), dtype=int).tolist()
         self.ind_mu = np.empty((n_s + end_allowance, dims.n_simplex, 0), dtype=int).tolist()
@@ -192,7 +193,7 @@ class FiniteElement(FiniteElementBase):
         h = SX.sym(f'h_{control_stage_idx}_{fe_idx}')
         h_ctrl_stages = settings.terminal_time / settings.N_stages
         h0 = np.array(
-            [h_ctrl_stages / np.array(settings.N_finite_elements_list[control_stage_idx])])
+            [h_ctrl_stages / np.array(settings.Nfe_list[control_stage_idx])])
         ubh = (1 + settings.gamma_h) * h0
         lbh = (1 - settings.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
@@ -328,8 +329,8 @@ class NosnocSolver:
                         np.log(settings.comp_tol / settings.sigma_0) /
                         np.log(settings.homotopy_update_slope)))) + 1
 
-        if len(settings.N_finite_elements_list) == 0:
-            settings.N_finite_elements_list = settings.N_stages * [settings.N_finite_elements]
+        if len(settings.Nfe_list) == 0:
+            settings.Nfe_list = settings.N_stages * [settings.N_finite_elements]
 
         # Butcher Tableau
         if settings.irk_representation == IrkRepresentation.INTEGRAL:
@@ -501,7 +502,7 @@ class NosnocSolver:
 
         # Create Finite elements in this control stage
         control_stage = []
-        for ii in range(self.settings.N_finite_elements_list[control_stage_idx]):
+        for ii in range(self.settings.Nfe_list[control_stage_idx]):
             fe = FiniteElement(self.dims,
                                self.settings,
                                self.model,
@@ -747,7 +748,7 @@ class NosnocSolver:
 
                 # g_z_all constraint for boundary point and continuity of algebraic variables.
                 if not settings.right_boundary_point_explicit and settings.use_fesd and (
-                        i < settings.N_finite_elements_list[k] - 1):
+                        i < settings.Nfe_list[k] - 1):
                     temp = model.g_z_all_fun(fe.w[fe.ind_x[-1]], fe.rk_stage_z(-1), Uk)
                     self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
 
@@ -755,7 +756,7 @@ class NosnocSolver:
                 if settings.use_fesd and i > 0:  # TODO: is the I > 0 constraint here right?
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                         self.objective += settings.rho_h * (
-                            fe.w[fe.ind_h] - h_ctrl_stages / settings.N_finite_elements_list[k])**2
+                            fe.w[fe.ind_h] - h_ctrl_stages / settings.Nfe_list[k])**2
                     elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                         self.objective += settings.rho_h * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
@@ -906,7 +907,7 @@ class NosnocSolver:
             time_steps = w_opt[self.ind_h]
         else:
             t_stages = settings.terminal_time / settings.N_stages
-            for Nfe in settings.N_finite_elements_list:
+            for Nfe in settings.Nfe_list:
                 time_steps = Nfe * [t_stages / Nfe]
         results["time_steps"] = time_steps
         # stats
@@ -918,7 +919,7 @@ class NosnocSolver:
         results["u_traj"] = results["u_list"]  # duplicate name
         t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
         results["t_grid"] = t_grid
-        u_grid = [0] + np.cumsum(settings.N_finite_elements_list).tolist()
+        u_grid = [0] + np.cumsum(settings.Nfe_list).tolist()
         results["t_grid_u"] = [t_grid[i] for i in u_grid]
 
         return results

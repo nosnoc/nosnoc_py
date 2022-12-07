@@ -103,7 +103,7 @@ class NosnocSettings:
     initial_gamma: float = 1.0
 
     N_finite_elements: int = 2  # of length N_stages
-    N_finite_elements_list: list = field(default_factory=list)  # of length N_stages
+    Nfe_list: list = field(default_factory=list)  # of length N_stages
 
     # MPCC and Homotopy Settings
     comp_tol: float = 1e-8
