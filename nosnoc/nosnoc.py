@@ -672,8 +672,6 @@ class NosnocSolver:
                             X_ki.append(x_temp)
                     X_ki.append(fe.w[fe.ind_x[-1]])
 
-                sum_Lambda_ki = fe.sum_Lambda()
-
                 # TODO: Move this to within each finite element, in and provide an
                 #       interface `get_integration_constraints` to generate the
                 #       the necessary implicit integrator constraints.
@@ -686,6 +684,7 @@ class NosnocSolver:
                     Xk_end = prev_fe.w[prev_fe.ind_x[-1]]  # initialize
 
                 for j in range(settings.n_s):
+                    # Dynamics excluding complementarities
                     fj = model.f_x_fun(X_ki[j], fe.rk_stage_z(j), Uk)
                     gj = model.g_z_all_fun(X_ki[j], fe.rk_stage_z(j), Uk)
                     qj = ocp.f_q_fun(X_ki[j], Uk)
@@ -701,14 +700,17 @@ class NosnocSolver:
                         self._add_constraint(fj - fe.w[fe.ind_v[j]])
                         self.objective += settings.b_irk[j] * fe.h() * qj
                     self._add_constraint(gj)
+                # continuity condition: end of fe state - final stage state
+                self._add_constraint(Xk_end - fe.w[fe.ind_x[-1]])
 
+                for j in range(settings.n_s):
                     # complementarity constraints
                     if settings.use_fesd:
                         g_cross_comp_j = SX.zeros((0, 1))
                         # update vector valued sumes over control interval
                         if j == self.settings.n_s - 1:
                             # update only once per finite element
-                            cross_comp_all += diag(fe.sum_Theta()) @ sum_Lambda_ki
+                            cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
                         for r in range(dims.n_simplex):
                             # for different subsystems the lambdas and thetas are decoupled and should be treated as such.
                             # sum of all cross-complementarities (vector-valued) --> later put into scalar value for the complementarity residual
@@ -734,7 +736,6 @@ class NosnocSolver:
                     else:
                         g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
 
-                    # reformulate_mpcc_constraints
                     n_cross_comp_j = casadi_length(g_cross_comp_j)
                     g_cross_comp = g_cross_comp_j - sigma_p
                     g_cross_comp_ub = 0 * np.ones((n_cross_comp_j,))
@@ -744,8 +745,6 @@ class NosnocSolver:
                         g_cross_comp_lb = 0 * np.ones((n_cross_comp_j,))
 
                     self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
-                # continuity condition: end of fe state - final stage state
-                self._add_constraint(Xk_end - fe.w[fe.ind_x[-1]])
 
                 # g_z_all constraint for boundary point and continuity of algebraic variables.
                 if not settings.right_boundary_point_explicit and settings.use_fesd and (
@@ -770,8 +769,8 @@ class NosnocSolver:
                         self.objective += settings.rho_h * tanh(
                             nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                        eta_k = prev_fe.sum_Lambda() * sum_Lambda_ki + prev_fe.sum_Theta(
-                        ) * fe.sum_Theta()
+                        eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
+                                prev_fe.sum_Theta() * fe.sum_Theta()
                         nu_k = 1
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
