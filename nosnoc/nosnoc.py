@@ -646,17 +646,8 @@ class NosnocSolver:
             Uk = self.w[self.ind_u[k]]
             for i, fe in enumerate(stage):
                 prev_fe = fe.prev_fe
-                if settings.use_fesd:
-                    if i > 0:
-                        delta_h_ki = fe.h() - prev_fe.h()
-                    else:
-                        delta_h_ki = 0
 
-                # update standard complementarites
-                for j in range(settings.n_s):
-                    J_comp_std += model.J_cc_fun(fe.rk_stage_z(j))
-
-                # lifted differential vars
+                # 1) Stewart Runge-Kutta discretization
                 if settings.irk_representation == IrkRepresentation.INTEGRAL:
                     X_ki = [fe.w[x_kij] for x_kij in fe.ind_x]
                 if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
@@ -703,8 +694,18 @@ class NosnocSolver:
                 # continuity condition: end of fe state - final stage state
                 self._add_constraint(Xk_end - fe.w[fe.ind_x[-1]])
 
+                # g_z_all constraint for boundary point and continuity of algebraic variables.
+                if not settings.right_boundary_point_explicit and settings.use_fesd and (
+                        i < settings.Nfe_list[k] - 1):
+                    temp = model.g_z_all_fun(fe.w[fe.ind_x[-1]], fe.rk_stage_z(-1), Uk)
+                    self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
+
+
+                # 2) Complementarity Constraints
                 for j in range(settings.n_s):
-                    # complementarity constraints
+                    J_comp_std += model.J_cc_fun(fe.rk_stage_z(j))
+
+                for j in range(settings.n_s):
                     if settings.use_fesd:
                         g_cross_comp_j = SX.zeros((0, 1))
                         # update vector valued sumes over control interval
@@ -746,14 +747,9 @@ class NosnocSolver:
 
                     self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
-                # g_z_all constraint for boundary point and continuity of algebraic variables.
-                if not settings.right_boundary_point_explicit and settings.use_fesd and (
-                        i < settings.Nfe_list[k] - 1):
-                    temp = model.g_z_all_fun(fe.w[fe.ind_x[-1]], fe.rk_stage_z(-1), Uk)
-                    self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
-
-                # Do step equilibration
+                # 3) Step Equilibration
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.
+                    delta_h_ki = fe.h() - prev_fe.h()
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                         self.objective += settings.rho_h * (fe.h() -
                                                             h_ctrl_stages / settings.Nfe_list[k])**2
