@@ -164,6 +164,7 @@ class FiniteElement(FiniteElementBase):
         super().__init__(dims, settings)
         n_s = settings.n_s
 
+        # store info
         self.n_rkstages = n_s
         self.control_stage_idx = control_stage_idx
         self.fe_idx = fe_idx
@@ -171,6 +172,7 @@ class FiniteElement(FiniteElementBase):
         self.settings = settings
         self.model = model
 
+        # right boundary
         create_right_boundary_point = (settings.use_fesd and
                                        not settings.right_boundary_point_explicit and
                                        fe_idx < settings.Nfe_list[control_stage_idx] - 1)
@@ -698,6 +700,7 @@ class NosnocSolver:
         # Generate all the variables we need
         self.__create_primal_variables()
 
+        fe: FiniteElement
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for i, fe in enumerate(stage):
