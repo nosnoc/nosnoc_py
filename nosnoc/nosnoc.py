@@ -65,7 +65,7 @@ class NosnocDims:
     n_f_simplex: list = field(default_factory=list)
 
 
-class FiniteElementBase(ABC):
+class NosnocFormulationObject(ABC):
 
     @abstractmethod
     def __init__(self):
@@ -110,6 +110,8 @@ class FiniteElementBase(ABC):
         else:
             index[stage] = list(range(nw, nw + n))
         return
+
+class FiniteElementBase(NosnocFormulationObject):
 
     def Lambda(self, stage=slice(None), simplex=slice(None)):
         return vertcat(self.w[flatten(self.ind_lam[stage][simplex])],
@@ -382,7 +384,7 @@ class FiniteElement(FiniteElementBase):
         return cost, equalities
 
 
-class NosnocSolver:
+class NosnocSolver(NosnocFormulationObject):
 
     def __preprocess_settings(self):
         settings = self.settings
@@ -584,12 +586,6 @@ class NosnocSolver:
         return control_stage
 
     def __create_primal_variables(self):
-        # start empty
-        self.w = SX.zeros(0, 1)
-        self.lbw = np.zeros((0,))
-        self.ubw = np.zeros((0,))
-        self.w0 = np.zeros((0,))
-
         # Initial
         self.fe0 = FiniteElementZero(self.dims, self.settings, self.model)
 
@@ -655,6 +651,8 @@ class NosnocSolver:
 
     def __init__(self, settings: NosnocSettings, model: NosnocModel, ocp=None):
 
+        super().__init__()
+
         if ocp is None:
             ocp = NosnocOcp()
         self.model = model
@@ -672,16 +670,9 @@ class NosnocSolver:
         self.stages: list(FiniteElementBase) = []
 
         # Formulate NLP - Start with an empty NLP
-        # cost
-        self.cost = 0.0
         J_comp = 0.0
         J_comp_std = 0.0
         cross_comp_all = 0.0
-
-        # constraints
-        self.g = SX.zeros(0, 1)
-        self.lbg = np.zeros((0,))
-        self.ubg = np.zeros((0,))
 
         # Index vectors
         self.ind_x = []
