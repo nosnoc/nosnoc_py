@@ -663,10 +663,6 @@ class NosnocSolver:
                             X_ki.append(x_temp)
                     X_ki.append(fe.w[fe.ind_x[-1]])
 
-                # TODO: Move this to within each finite element, in and provide an
-                #       interface `get_integration_constraints` to generate the
-                #       the necessary implicit integrator constraints.
-                # Do RK steps
                 if settings.irk_representation == IrkRepresentation.INTEGRAL:
                     Xk_end = settings.D_irk[0] * prev_fe.w[prev_fe.ind_x[-1]]
                     # Note that the polynomial is initialized with the previous value
