@@ -69,7 +69,6 @@ class NosnocFormulationObject(ABC):
 
     @abstractmethod
     def __init__(self):
-        # Finite element variables
         self.w = SX([])
         self.w0 = np.array([])
         self.lbw = np.array([])
@@ -90,7 +89,7 @@ class NosnocFormulationObject(ABC):
                      lb: np.array,
                      ub: np.array,
                      initial: np.array,
-                     stage: int,
+                     stage: Optional[int] = None,
                      simplex: Optional[int] = None):
         n = casadi_length(symbolic)
         nw = casadi_length(self.w)
@@ -105,10 +104,14 @@ class NosnocFormulationObject(ABC):
         self.ubw = np.concatenate((self.ubw, ub))
         self.w0 = np.concatenate((self.w0, initial))
 
-        if simplex is not None:
-            index[stage][simplex] = list(range(nw, nw + n))
+        new_indices = list(range(nw, nw + n))
+        if stage is None:
+            index.append(new_indices)
         else:
-            index[stage] = list(range(nw, nw + n))
+            if simplex is not None:
+                index[stage][simplex] = new_indices
+            else:
+                index[stage] = new_indices
         return
 
 class FiniteElementBase(NosnocFormulationObject):
@@ -566,10 +569,8 @@ class NosnocSolver(NosnocFormulationObject):
 
     def __create_control_stage(self, control_stage_idx, prev_fe):
         # Create control vars
-        w_len = casadi_length(self.w)
         Uk = SX.sym(f'U_{control_stage_idx}', self.dims.nu)
-        self._add_primal_vector(Uk, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
-        self.ind_u.append(list(range(w_len, w_len + self.dims.nu)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
 
         # Create Finite elements in this control stage
         control_stage = []
@@ -593,9 +594,8 @@ class NosnocSolver(NosnocFormulationObject):
         self.p = vertcat(self.p, self.fe0.Lambda())
 
         # X0 is variable
-        self._add_primal_vector(self.fe0.w[self.fe0.ind_x[0]], self.fe0.lbw[self.fe0.ind_x[0]],
+        self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x, self.fe0.lbw[self.fe0.ind_x[0]],
                                 self.fe0.ubw[self.fe0.ind_x[0]], self.fe0.w0[self.fe0.ind_x[0]])
-        self.ind_x.append(self.fe0.ind_x[0])
 
         # Generate control_stages
         prev_fe = self.fe0
