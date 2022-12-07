@@ -709,11 +709,14 @@ class NosnocSolver:
                 self._add_constraint(fe_equalities)
 
                 # 2) Complementarity Constraints
+                # fe.create_cross_complemententarities()
                 for j in range(settings.n_s):
                     J_comp_std += model.J_cc_fun(fe.rk_stage_z(j))
 
                 for j in range(settings.n_s):
-                    if settings.use_fesd:
+                    if not settings.use_fesd:
+                        g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
+                    else:
                         g_cross_comp_j = SX.zeros((0, 1))
                         # update vector valued sumes over control interval
                         if j == self.settings.n_s - 1:
@@ -738,8 +741,6 @@ class NosnocSolver:
                                 g_cross_comp_j = vertcat(
                                     g_cross_comp_j,
                                     diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r))
-                    else:
-                        g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
 
                     n_cross_comp_j = casadi_length(g_cross_comp_j)
                     g_cross_comp = g_cross_comp_j - sigma_p
