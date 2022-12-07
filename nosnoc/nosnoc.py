@@ -620,6 +620,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.ind_lambda_n.append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p.append(increment_indices(fe.ind_lambda_p, w_len))
 
+    # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
         n = casadi_length(symbolic)
 
