@@ -68,12 +68,18 @@ class NosnocDims:
 class FiniteElementBase(ABC):
 
     @abstractmethod
-    def __init__(self, dims: NosnocDims, settings: NosnocSettings):
+    def __init__(self):
         # Finite element variables
         self.w = SX([])
         self.w0 = np.array([])
         self.lbw = np.array([])
         self.ubw = np.array([])
+
+        self.g = SX([])
+        self.lbg = np.array([])
+        self.ubg = np.array([])
+
+        self.cost: float = 0.0
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -120,7 +126,7 @@ class FiniteElementBase(ABC):
 class FiniteElementZero(FiniteElementBase):
 
     def __init__(self, dims: NosnocDims, settings: NosnocSettings, model: NosnocModel):
-        super().__init__(dims, settings)
+        super().__init__()
         self.n_rkstages = 1
 
         self.ind_x = np.empty((1, 0), dtype=int).tolist()
@@ -161,7 +167,7 @@ class FiniteElement(FiniteElementBase):
                  fe_idx: int,
                  prev_fe=None):
 
-        super().__init__(dims, settings)
+        super().__init__()
         n_s = settings.n_s
 
         # store info
