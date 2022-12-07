@@ -7,7 +7,7 @@ import numpy as np
 from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
 
 from nosnoc.nosnoc_settings import NosnocSettings, MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_vectors, generate_butcher_tableu, generate_butcher_tableu_integral, flatten_layer, flatten, increment_indices, validate
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_vectors, flatten_layer, flatten, increment_indices
 
 
 @dataclass
@@ -389,41 +389,7 @@ class FiniteElement(FiniteElementBase):
 
 class NosnocSolver(NosnocFormulationObject):
 
-    def __preprocess_settings(self):
-        settings = self.settings
-        validate(settings)
-
-        settings.opts_ipopt['ipopt']['print_level'] = settings.print_level
-
-        if settings.max_iter_homotopy == 0:
-            settings.max_iter_homotopy = int(
-                np.ceil(
-                    np.abs(
-                        np.log(settings.comp_tol / settings.sigma_0) /
-                        np.log(settings.homotopy_update_slope)))) + 1
-
-        if len(settings.Nfe_list) == 0:
-            settings.Nfe_list = settings.N_stages * [settings.N_finite_elements]
-
-        # Butcher Tableau
-        if settings.irk_representation == IrkRepresentation.INTEGRAL:
-            B_irk, C_irk, D_irk, irk_time_points = generate_butcher_tableu_integral(
-                settings.n_s, settings.irk_scheme)
-            settings.B_irk = B_irk
-            settings.C_irk = C_irk
-            settings.D_irk = D_irk
-        elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
-                settings.n_s, settings.irk_scheme)
-            settings.A_irk = A_irk
-            settings.b_irk = b_irk
-
-        if np.abs(irk_time_points[-1] - 1.0) < 1e-9:
-            settings.right_boundary_point_explicit = True
-        else:
-            settings.right_boundary_point_explicit = False
-
-    def __preprocess_model(self):
+    def preprocess_model(self):
         # Note: checks ommitted for now.
         settings = self.settings
         dims = self.dims
@@ -661,8 +627,9 @@ class NosnocSolver(NosnocFormulationObject):
         self.ocp = ocp
         self.dims = NosnocDims()
 
-        self.__preprocess_settings()
-        self.__preprocess_model()
+        self.settings = settings
+        settings.preprocess()
+        self.preprocess_model()
 
         dims = self.dims
 
@@ -757,8 +724,8 @@ class NosnocSolver(NosnocFormulationObject):
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.
                     delta_h_ki = fe.h() - prev_fe.h()
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                        self.cost += settings.rho_h * (fe.h() -
-                                                            h_ctrl_stages / settings.Nfe_list[k])**2
+                        self.cost += settings.rho_h * \
+                            (fe.h() - h_ctrl_stages / settings.Nfe_list[k])**2
                     elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                         self.cost += settings.rho_h * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
@@ -777,7 +744,7 @@ class NosnocSolver(NosnocFormulationObject):
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
                         nu_vector = vertcat(nu_vector, nu_k)
-                        self.cost = settings.rho_h * (nu_k) * delta_h_ki**2
+                        self.cost = settings.rho_h * nu_k * delta_h_ki**2
 
             if settings.use_fesd and settings.equidistant_control_grid:
                 h_FE = sum([fe.h() for fe in stage])

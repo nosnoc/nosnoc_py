@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+import numpy as np
+
+from .utils import generate_butcher_tableu, generate_butcher_tableu_integral, validate
 
 class MpccMode(Enum):
     SCHOLTES_INEQ = 0
@@ -66,7 +69,8 @@ class PssMode(Enum):
     alpha_i >= 0;     for all i = 1,..., n_simplex
     """
 
-
+IRK_SCHEME_TO_STRING = {IRKSchemes.GAUSS_LEGENDRE: "legendre",
+                        IRKSchemes.RADAU_IIA: "radau"}
 @dataclass
 class NosnocSettings:
 
@@ -147,6 +151,38 @@ class NosnocSettings:
             out += f"{k} : {v}\n"
         return out
 
+    def preprocess(self):
+        validate(self)
+        self.opts_ipopt['ipopt']['print_level'] = self.print_level
+
+        if self.max_iter_homotopy == 0:
+            self.max_iter_homotopy = int(
+                np.ceil(
+                    np.abs(
+                        np.log(self.comp_tol / self.sigma_0) /
+                        np.log(self.homotopy_update_slope)))) + 1
+
+        if len(self.Nfe_list) == 0:
+            self.Nfe_list = self.N_stages * [self.N_finite_elements]
+
+        # Butcher Tableau
+        if self.irk_representation == IrkRepresentation.INTEGRAL:
+            B_irk, C_irk, D_irk, irk_time_points = generate_butcher_tableu_integral(
+                self.n_s, IRK_SCHEME_TO_STRING[self.irk_scheme])
+            self.B_irk = B_irk
+            self.C_irk = C_irk
+            self.D_irk = D_irk
+        elif self.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
+                self.n_s, IRK_SCHEME_TO_STRING[self.irk_scheme])
+            self.A_irk = A_irk
+            self.b_irk = b_irk
+
+        if np.abs(irk_time_points[-1] - 1.0) < 1e-9:
+            self.right_boundary_point_explicit = True
+        else:
+            self.right_boundary_point_explicit = False
+        return
     ## Options in matlab..
     # MPCC related, not implemented yet.
     # s_elastic_0 = 1

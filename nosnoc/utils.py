@@ -1,7 +1,5 @@
 import numpy as np
 import casadi as ca
-from .nosnoc_settings import IRKSchemes
-
 
 def validate(obj: object) -> bool:
     for attr, expected_type in obj.__annotations__.items():
@@ -13,8 +11,8 @@ def validate(obj: object) -> bool:
     return
 
 
-def generate_butcher_tableu(n_s, irk_scheme):
-    if irk_scheme == IRKSchemes.RADAU_IIA:
+def generate_butcher_tableu(n_s, irk_string):
+    if irk_string == "radau":
         order = 2 * n_s - 1
         if n_s == 1:
             A = np.array([[1.0]])
@@ -507,7 +505,7 @@ def generate_butcher_tableu(n_s, irk_scheme):
         else:
             raise NotImplementedError()
 
-    elif irk_scheme == IRKSchemes.GAUSS_LEGENDRE:
+    elif irk_string == "legendre":
         order = 2 * n_s
         if n_s == 1:
             A = np.array([[
@@ -1019,13 +1017,7 @@ def generate_butcher_tableu(n_s, irk_scheme):
     return A, b, c, order
 
 
-def generate_butcher_tableu_integral(n_s, irk_scheme):
-    if irk_scheme == IRKSchemes.RADAU_IIA:
-        irk_string = 'radau'
-    elif irk_scheme == IRKSchemes.GAUSS_LEGENDRE:
-        irk_string = 'legendre'
-    else:
-        raise NotImplementedError()
+def generate_butcher_tableu_integral(n_s, irk_string):
 
     points = ca.collocation_points(n_s, irk_string)
     tau_root = np.array([0.0] + points)
