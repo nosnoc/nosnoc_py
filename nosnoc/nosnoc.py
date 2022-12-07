@@ -167,9 +167,9 @@ class FiniteElement(FiniteElementBase):
         self.control_stage_idx = control_stage_idx
         self.fe_idx = fe_idx
 
-        create_right_boundary_point = (
-            settings.use_fesd and not settings.right_boundary_point_explicit and
-            fe_idx < settings.Nfe_list[control_stage_idx] - 1)
+        create_right_boundary_point = (settings.use_fesd and
+                                       not settings.right_boundary_point_explicit and
+                                       fe_idx < settings.Nfe_list[control_stage_idx] - 1)
         end_allowance = 1 if create_right_boundary_point else 0
 
         # Initialze index vectors. Note ind_x contains an extra element
@@ -192,8 +192,7 @@ class FiniteElement(FiniteElementBase):
         # create variables
         h = SX.sym(f'h_{control_stage_idx}_{fe_idx}')
         h_ctrl_stages = settings.terminal_time / settings.N_stages
-        h0 = np.array(
-            [h_ctrl_stages / np.array(settings.Nfe_list[control_stage_idx])])
+        h0 = np.array([h_ctrl_stages / np.array(settings.Nfe_list[control_stage_idx])])
         ubh = (1 + settings.gamma_h) * h0
         lbh = (1 - settings.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
@@ -312,6 +311,9 @@ class FiniteElement(FiniteElementBase):
     def sum_Theta(self):
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
         return casadi_sum_vectors(Thetas)
+
+    def h(self):
+        return self.w[self.ind_h]
 
 
 class NosnocSolver:
@@ -477,14 +479,15 @@ class NosnocSolver:
         # CasADi functions for indicator and region constraint functions
         x = model.x
         u = model.u
+        model.z = z
         model.g_Stewart_fun = Function('g_Stewart_fun', [x], [g_Stewart])
         model.c_fun = Function('c_fun', [x], [c_all])
 
+        # dynamics
         model.f_x_fun = Function('f_x_fun', [x, z, u], [f_x])
-        model.g_z_all_fun = Function(
-            'g_z_all_fun', [x, z, u], [g_z_all]
-        )  # lp kkt conditions without bilinear complementarity term (it is treated with the other c.c. conditions)
-        model.z = z
+
+        # lp kkt conditions without bilinear complementarity terms
+        model.g_z_all_fun = Function('g_z_all_fun', [x, z, u], [g_z_all])
         model.lambda00_fun = Function('lambda00_fun', [model.x], [lambda00_expr])
 
         model.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
@@ -642,9 +645,10 @@ class NosnocSolver:
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for i, fe in enumerate(stage):
+                prev_fe = fe.prev_fe
                 if settings.use_fesd:
                     if i > 0:
-                        delta_h_ki = fe.w[fe.ind_h] - fe.prev_fe.w[fe.prev_fe.ind_h]
+                        delta_h_ki = fe.h() - prev_fe.h()
                     else:
                         delta_h_ki = 0
 
@@ -658,9 +662,9 @@ class NosnocSolver:
                 if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
                     X_ki = []
                     for j in range(settings.n_s):  # Ignore continuity vars
-                        x_temp = fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
+                        x_temp = prev_fe.w[prev_fe.ind_x[-1]]
                         for r in range(settings.n_s):
-                            x_temp += fe.w[fe.ind_h] * settings.A_irk[j, r] * fe.w[fe.ind_v[r]]
+                            x_temp += fe.h() * settings.A_irk[j, r] * fe.w[fe.ind_v[r]]
                         if settings.lift_irk_differential:
                             X_ki.append(fe.w[fe.ind_x[j]])
                             self._add_constraint(fe.w[fe.ind_x[j]] - x_temp)
@@ -675,27 +679,27 @@ class NosnocSolver:
                 #       the necessary implicit integrator constraints.
                 # Do RK steps
                 if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                    Xk_end = settings.D_irk[0] * fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
+                    Xk_end = settings.D_irk[0] * prev_fe.w[prev_fe.ind_x[-1]]
                     # Note that the polynomial is initialized with the previous value
                     # X_k+1 = X_k0 + sum_{j=1}^{n_s} D[j]*X_kj; Xk0 = D(1)*Xk
                 elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                    Xk_end = fe.prev_fe.w[fe.prev_fe.ind_x[-1]]  # initialize
+                    Xk_end = prev_fe.w[prev_fe.ind_x[-1]]  # initialize
 
                 for j in range(settings.n_s):
                     fj = model.f_x_fun(X_ki[j], fe.rk_stage_z(j), Uk)
                     gj = model.g_z_all_fun(X_ki[j], fe.rk_stage_z(j), Uk)
                     qj = ocp.f_q_fun(X_ki[j], Uk)
                     if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                        xp = settings.C_irk[0, j + 1] * fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
+                        xp = settings.C_irk[0, j + 1] * prev_fe.w[prev_fe.ind_x[-1]]
                         for r, x in enumerate(X_ki[:-1]):
                             xp += settings.C_irk[r + 1, j + 1] * x
                         Xk_end += settings.D_irk[j + 1] * X_ki[j]
-                        self._add_constraint(fe.w[fe.ind_h] * fj - xp)
-                        self.objective += settings.B_irk[j + 1] * fe.w[fe.ind_h] * qj
+                        self._add_constraint(fe.h() * fj - xp)
+                        self.objective += settings.B_irk[j + 1] * fe.h() * qj
                     elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                        Xk_end += fe.w[fe.ind_h] * settings.b_irk[j] * fe.w[fe.ind_v[j]]
+                        Xk_end += fe.h() * settings.b_irk[j] * fe.w[fe.ind_v[j]]
                         self._add_constraint(fj - fe.w[fe.ind_v[j]])
-                        self.objective += settings.b_irk[j] * fe.w[fe.ind_h] * qj
+                        self.objective += settings.b_irk[j] * fe.h() * qj
                     self._add_constraint(gj)
 
                     # complementarity constraints
@@ -711,7 +715,7 @@ class NosnocSolver:
                             if settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
                                 g_cross_comp_j = vertcat(
                                     g_cross_comp_j,
-                                    diag(fe.Theta(stage=j, simplex=r)) @ (fe.prev_fe.Lambda(
+                                    diag(fe.Theta(stage=j, simplex=r)) @ (prev_fe.Lambda(
                                         stage=-1, simplex=r)))
                                 for jj in range(settings.n_s):
                                     g_cross_comp_j = vertcat(
@@ -752,13 +756,13 @@ class NosnocSolver:
                 # Do step equilibration
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                        self.objective += settings.rho_h * (
-                            fe.w[fe.ind_h] - h_ctrl_stages / settings.Nfe_list[k])**2
+                        self.objective += settings.rho_h * (fe.h() -
+                                                            h_ctrl_stages / settings.Nfe_list[k])**2
                     elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                         self.objective += settings.rho_h * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-                        eta_k = fe.prev_fe.sum_Lambda() * fe.sum_Lambda() + fe.prev_fe.sum_Theta(
-                        ) * fe.sum_Theta()
+                        eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
+                                prev_fe.sum_Theta() * fe.sum_Theta()
                         nu_k = 1
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
@@ -766,7 +770,7 @@ class NosnocSolver:
                         self.objective += settings.rho_h * tanh(
                             nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                        eta_k = fe.prev_fe.sum_Lambda() * sum_Lambda_ki + fe.prev_fe.sum_Theta(
+                        eta_k = prev_fe.sum_Lambda() * sum_Lambda_ki + prev_fe.sum_Theta(
                         ) * fe.sum_Theta()
                         nu_k = 1
                         for jjj in range(dims.n_theta):
@@ -775,7 +779,7 @@ class NosnocSolver:
                         self.objective = settings.rho_h * (nu_k) * delta_h_ki**2
 
             if settings.use_fesd and settings.equidistant_control_grid:
-                h_FE = sum([fe.w[fe.ind_h] for fe in stage])
+                h_FE = sum([fe.h() for fe in stage])
                 self._add_constraint(h_FE - h_ctrl_stages)
 
         # Scalar-valued complementarity residual
@@ -795,7 +799,7 @@ class NosnocSolver:
         if settings.time_freezing:
             raise NotImplementedError()
         if settings.use_fesd:
-            all_h = [fe.w[fe.ind_h] for stage in self.stages for fe in stage]
+            all_h = [fe.h() for stage in self.stages for fe in stage]
             self._add_constraint(sum(all_h) - settings.terminal_time)
 
         if settings.print_level > 1:
