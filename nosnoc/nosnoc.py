@@ -163,9 +163,13 @@ class FiniteElement(FiniteElementBase):
 
         super().__init__(dims, settings)
         n_s = settings.n_s
+
         self.n_rkstages = n_s
         self.control_stage_idx = control_stage_idx
         self.fe_idx = fe_idx
+        self.dims = dims
+        self.settings = settings
+        self.model = model
 
         create_right_boundary_point = (settings.use_fesd and
                                        not settings.right_boundary_point_explicit and
@@ -314,6 +318,60 @@ class FiniteElement(FiniteElementBase):
 
     def h(self):
         return self.w[self.ind_h]
+
+
+    def forward_simulation(self, ocp, Uk):
+        settings = self.settings
+        model = self.model
+        dims = self.dims
+
+        cost = 0.0
+        equalities = SX.zeros(0)
+        if settings.irk_representation == IrkRepresentation.INTEGRAL:
+            X_ki = [self.w[x_kij] for x_kij in self.ind_x]
+            Xk_end = settings.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+
+        if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            X_ki = []
+            for j in range(settings.n_s):  # Ignore continuity vars
+                x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(settings.n_s):
+                    x_temp += self.h() * settings.A_irk[j, r] * self.w[self.ind_v[r]]
+                if settings.lift_irk_differential:
+                    X_ki.append(self.w[self.ind_x[j]])
+                    equalities = vertcat(equalities, self.w[self.ind_x[j]] - x_temp)
+                else:
+                    X_ki.append(x_temp)
+            X_ki.append(self.w[self.ind_x[-1]])
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
+
+        for j in range(settings.n_s):
+            # Dynamics excluding complementarities
+            fj = model.f_x_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            qj = ocp.f_q_fun(X_ki[j], Uk)
+            if settings.irk_representation == IrkRepresentation.INTEGRAL:
+                xp = settings.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r, x in enumerate(X_ki[:-1]):
+                    xp += settings.C_irk[r + 1, j + 1] * x
+                Xk_end += settings.D_irk[j + 1] * X_ki[j]
+                equalities = vertcat(equalities, self.h() * fj - xp)
+                cost += settings.B_irk[j + 1] * self.h() * qj
+            elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
+                Xk_end += self.h() * settings.b_irk[j] * self.w[self.ind_v[j]]
+                equalities = vertcat(equalities, fj - self.w[self.ind_v[j]])
+                cost += settings.b_irk[j] * self.h() * qj
+            equalities = vertcat(equalities, gj)
+        # continuity condition: end of fe state - final stage state
+        equalities = vertcat(equalities, Xk_end - self.w[self.ind_x[-1]])
+
+        # g_z_all constraint for boundary point and continuity of algebraic variables.
+        if not settings.right_boundary_point_explicit and settings.use_fesd and (
+                self.fe_idx < settings.Nfe_list[self.control_stage_idx] - 1):
+            temp = model.g_z_all_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk)
+            equalities = vertcat(equalities, temp[:casadi_length(temp) - dims.n_lift_eq])
+
+        return cost, equalities
 
 
 class NosnocSolver:
@@ -648,54 +706,9 @@ class NosnocSolver:
                 prev_fe = fe.prev_fe
 
                 # 1) Stewart Runge-Kutta discretization
-                if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                    X_ki = [fe.w[x_kij] for x_kij in fe.ind_x]
-                if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                    X_ki = []
-                    for j in range(settings.n_s):  # Ignore continuity vars
-                        x_temp = prev_fe.w[prev_fe.ind_x[-1]]
-                        for r in range(settings.n_s):
-                            x_temp += fe.h() * settings.A_irk[j, r] * fe.w[fe.ind_v[r]]
-                        if settings.lift_irk_differential:
-                            X_ki.append(fe.w[fe.ind_x[j]])
-                            self._add_constraint(fe.w[fe.ind_x[j]] - x_temp)
-                        else:
-                            X_ki.append(x_temp)
-                    X_ki.append(fe.w[fe.ind_x[-1]])
-
-                if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                    Xk_end = settings.D_irk[0] * prev_fe.w[prev_fe.ind_x[-1]]
-                    # Note that the polynomial is initialized with the previous value
-                    # X_k+1 = X_k0 + sum_{j=1}^{n_s} D[j]*X_kj; Xk0 = D(1)*Xk
-                elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                    Xk_end = prev_fe.w[prev_fe.ind_x[-1]]  # initialize
-
-                for j in range(settings.n_s):
-                    # Dynamics excluding complementarities
-                    fj = model.f_x_fun(X_ki[j], fe.rk_stage_z(j), Uk)
-                    gj = model.g_z_all_fun(X_ki[j], fe.rk_stage_z(j), Uk)
-                    qj = ocp.f_q_fun(X_ki[j], Uk)
-                    if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                        xp = settings.C_irk[0, j + 1] * prev_fe.w[prev_fe.ind_x[-1]]
-                        for r, x in enumerate(X_ki[:-1]):
-                            xp += settings.C_irk[r + 1, j + 1] * x
-                        Xk_end += settings.D_irk[j + 1] * X_ki[j]
-                        self._add_constraint(fe.h() * fj - xp)
-                        self.objective += settings.B_irk[j + 1] * fe.h() * qj
-                    elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                        Xk_end += fe.h() * settings.b_irk[j] * fe.w[fe.ind_v[j]]
-                        self._add_constraint(fj - fe.w[fe.ind_v[j]])
-                        self.objective += settings.b_irk[j] * fe.h() * qj
-                    self._add_constraint(gj)
-                # continuity condition: end of fe state - final stage state
-                self._add_constraint(Xk_end - fe.w[fe.ind_x[-1]])
-
-                # g_z_all constraint for boundary point and continuity of algebraic variables.
-                if not settings.right_boundary_point_explicit and settings.use_fesd and (
-                        i < settings.Nfe_list[k] - 1):
-                    temp = model.g_z_all_fun(fe.w[fe.ind_x[-1]], fe.rk_stage_z(-1), Uk)
-                    self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
-
+                fe_cost, fe_equalities = fe.forward_simulation(ocp, Uk)
+                self.objective += fe_cost
+                self._add_constraint(fe_equalities)
 
                 # 2) Complementarity Constraints
                 for j in range(settings.n_s):
@@ -783,7 +796,8 @@ class NosnocSolver:
             J_comp = J_comp_std
 
         # terminal constraint
-        g_terminal = ocp.g_terminal_fun(Xk_end)
+        # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
+        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
         self._add_constraint(g_terminal)
 
         # Terminal numerical Time
