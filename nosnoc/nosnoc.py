@@ -668,7 +668,6 @@ class NosnocSolver:
         self.objective = 0.0
         J_comp = 0.0
         J_comp_std = 0.0
-        J_comp_fesd = 0.0
         cross_comp_all = 0.0
 
         # constraints
@@ -784,11 +783,9 @@ class NosnocSolver:
 
         # Scalar-valued complementarity residual
         if settings.use_fesd:
-            J_comp_fesd = cross_comp_all
-            J_comp = J_comp_fesd
+            J_comp = cross_comp_all
         else:
             # no additional complementarites than the standard ones
-            J_comp_fesd = J_comp_std
             J_comp = J_comp_std
 
         # terminal constraint
