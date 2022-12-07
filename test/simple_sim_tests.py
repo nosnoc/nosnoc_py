@@ -134,18 +134,16 @@ def main_test_fesd_off():
         # solve
         results = solve_simplest_example(settings=settings, model=model)
 
-        X_sim = results["X_sim"]
-        err_x0 = np.abs(X_sim[0] - X0)
-
-        switch_diff = np.abs(results["t_grid"] - TSIM / 2)
-        err_t_switch = np.min(switch_diff)
-
-        err_t_end = np.abs(results["t_grid"][-1] - TSIM)
-        err_x_end = np.abs(X_sim[-1] - NO_FESD_X_END)
-        tol = 1e1 * TOL
-        assert err_x_end < tol
-        assert err_t_end < tol
-        assert err_t_switch < tol
+        errors = compute_errors(results, model)
+        tol = 1e1*TOL
+        # these should be off
+        assert errors["x_end"] > 0.01
+        assert errors["t_switch"] > 0.01
+        # these should be correct
+        assert errors["x0"] < tol
+        assert errors["t_end"] < tol
+        #
+        assert np.allclose(results["time_steps"], np.min(results["time_steps"]))
     except:
         raise Exception("Test with FESD off failed")
     print("main_test_fesd_off: SUCCESS")
