@@ -666,8 +666,8 @@ class NosnocSolver:
         self.stages: list(FiniteElementBase) = []
 
         # Formulate NLP - Start with an empty NLP
-        # objective
-        self.objective = 0.0
+        # cost
+        self.cost = 0.0
         J_comp = 0.0
         J_comp_std = 0.0
         cross_comp_all = 0.0
@@ -708,7 +708,7 @@ class NosnocSolver:
 
                 # 1) Stewart Runge-Kutta discretization
                 fe_cost, fe_equalities = fe.forward_simulation(ocp, Uk)
-                self.objective += fe_cost
+                self.cost += fe_cost
                 self._add_constraint(fe_equalities)
 
                 # 2) Complementarity Constraints
@@ -759,10 +759,10 @@ class NosnocSolver:
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.
                     delta_h_ki = fe.h() - prev_fe.h()
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                        self.objective += settings.rho_h * (fe.h() -
+                        self.cost += settings.rho_h * (fe.h() -
                                                             h_ctrl_stages / settings.Nfe_list[k])**2
                     elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
-                        self.objective += settings.rho_h * delta_h_ki**2
+                        self.cost += settings.rho_h * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
                         eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
                                 prev_fe.sum_Theta() * fe.sum_Theta()
@@ -770,7 +770,7 @@ class NosnocSolver:
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
                         nu_vector = vertcat(nu_vector, nu_k)
-                        self.objective += settings.rho_h * tanh(
+                        self.cost += settings.rho_h * tanh(
                             nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
                         eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
@@ -779,7 +779,7 @@ class NosnocSolver:
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
                         nu_vector = vertcat(nu_vector, nu_k)
-                        self.objective = settings.rho_h * (nu_k) * delta_h_ki**2
+                        self.cost = settings.rho_h * (nu_k) * delta_h_ki**2
 
             if settings.use_fesd and settings.equidistant_control_grid:
                 h_FE = sum([fe.h() for fe in stage])
@@ -808,13 +808,13 @@ class NosnocSolver:
             self.print_problem()
 
         # CasADi Functions
-        self.objective_fun = Function('objective_fun', [self.w], [self.objective])
+        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
         self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
         # NLP Solver
         try:
-            prob = {'f': self.objective, 'x': self.w, 'g': self.g, 'p': self.p}
+            prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, settings.opts_ipopt)
         except Exception as err:
             self.print_problem()
@@ -949,4 +949,4 @@ class NosnocSolver:
         print("w0")
         for xx in self.w0:
             print(xx)
-        print(f"objective:\n{self.objective}")
+        print(f"cost:\n{self.cost}")
