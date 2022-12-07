@@ -638,8 +638,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.stages: list(FiniteElementBase) = []
 
         # Formulate NLP - Start with an empty NLP
-        J_comp = 0.0
-        J_comp_std = 0.0
         cross_comp_all = 0.0
 
         # Index vectors
@@ -655,8 +653,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.ind_lambda_p = []
         self.ind_u = []
         self.ind_h = []
-
-        nu_vector = []
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
@@ -678,45 +674,37 @@ class NosnocSolver(NosnocFormulationObject):
 
                 # 2) Complementarity Constraints
                 # fe.create_cross_complemententarities()
-                for j in range(settings.n_s):
-                    J_comp_std += model.J_cc_fun(fe.rk_stage_z(j))
+                J_comp_std = casadi_sum_vectors([model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
 
+                cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
                 for j in range(settings.n_s):
                     if not settings.use_fesd:
-                        g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
+                        g_cross_comp = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
                     else:
-                        g_cross_comp_j = SX.zeros((0, 1))
-                        # update vector valued sumes over control interval
-                        if j == self.settings.n_s - 1:
-                            # update only once per finite element
-                            cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
+                        g_cross_comp = SX.zeros((0, 1))
                         for r in range(dims.n_simplex):
-                            # for different subsystems the lambdas and thetas are decoupled and should be treated as such.
-                            # sum of all cross-complementarities (vector-valued) --> later put into scalar value for the complementarity residual
                             if settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-                                g_cross_comp_j = vertcat(
-                                    g_cross_comp_j,
+                                g_cross_comp = vertcat(g_cross_comp,
                                     diag(fe.Theta(stage=j, simplex=r)) @ (prev_fe.Lambda(
                                         stage=-1, simplex=r)))
                                 for jj in range(settings.n_s):
-                                    g_cross_comp_j = vertcat(
-                                        g_cross_comp_j,
-                                        diag(fe.Theta(stage=j, simplex=r)) @ (fe.Lambda(stage=jj,
-                                                                                        simplex=r)))
+                                    g_cross_comp = vertcat(g_cross_comp,
+                                        diag(fe.Theta(stage=j, simplex=r)) @
+                                            (fe.Lambda(stage=jj, simplex=r)))
 
                             elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
                                 # For every stage point one vector-valued constraint via sum of all \lambda
-                                g_cross_comp_j = vertcat(
-                                    g_cross_comp_j,
+                                g_cross_comp = vertcat(
+                                    g_cross_comp,
                                     diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r))
 
-                    n_cross_comp_j = casadi_length(g_cross_comp_j)
-                    g_cross_comp = g_cross_comp_j - sigma_p
-                    g_cross_comp_ub = 0 * np.ones((n_cross_comp_j,))
+                    n_cross_comp = casadi_length(g_cross_comp)
+                    g_cross_comp = g_cross_comp - sigma_p
+                    g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
                     if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-                        g_cross_comp_lb = -np.inf * np.ones((n_cross_comp_j,))
+                        g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
                     elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
-                        g_cross_comp_lb = 0 * np.ones((n_cross_comp_j,))
+                        g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
 
                     self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
@@ -734,7 +722,6 @@ class NosnocSolver(NosnocFormulationObject):
                         nu_k = 1
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
-                        nu_vector = vertcat(nu_vector, nu_k)
                         self.cost += settings.rho_h * tanh(
                             nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
                     elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
@@ -743,7 +730,6 @@ class NosnocSolver(NosnocFormulationObject):
                         nu_k = 1
                         for jjj in range(dims.n_theta):
                             nu_k = nu_k * eta_k[jjj]
-                        nu_vector = vertcat(nu_vector, nu_k)
                         self.cost = settings.rho_h * nu_k * delta_h_ki**2
 
             if settings.use_fesd and settings.equidistant_control_grid:
