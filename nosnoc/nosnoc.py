@@ -533,7 +533,6 @@ class NosnocSolver:
         self.ind_x.append(self.fe0.ind_x[0])
 
         # Generate control_stages
-        self.stages = []
         prev_fe = self.fe0
         for ii in range(self.settings.N_stages):
             stage = self.__create_control_stage(ii, prev_fe=prev_fe)
@@ -601,13 +600,15 @@ class NosnocSolver:
 
         # Initialization and bounds for step-size
         h_ctrl_stages = settings.terminal_time / settings.N_stages
+        self.stages: list(FiniteElementBase) = []
 
         # Formulate NLP - Start with an empty NLP
         # objective
-        self.objective = 0
-        J_comp = 0
-        J_comp_std = 0
-        J_comp_fesd = 0
+        self.objective = 0.0
+        J_comp = 0.0
+        J_comp_std = 0.0
+        J_comp_fesd = 0.0
+        cross_comp_all = 0.0
 
         # constraints
         self.g = SX.zeros(0, 1)
@@ -635,14 +636,10 @@ class NosnocSolver:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
         self.p = sigma_p
 
-        # initialize
-        cross_comp_all = 0.0
-
         # Generate all the variables we need
         self.__create_primal_variables()
 
         for k, stage in enumerate(self.stages):
-            # TODO: maybe make stage an object
             Uk = self.w[self.ind_u[k]]
             for i, fe in enumerate(stage):
                 if settings.use_fesd:
@@ -753,7 +750,7 @@ class NosnocSolver:
                     self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
 
                 # Do step equilibration
-                if settings.use_fesd and i > 0:  # TODO: is the I > 0 constraint here right?
+                if settings.use_fesd and i > 0:  # step equilibration only within control stages.
                     if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                         self.objective += settings.rho_h * (
                             fe.w[fe.ind_h] - h_ctrl_stages / settings.Nfe_list[k])**2
@@ -783,8 +780,7 @@ class NosnocSolver:
 
         # Scalar-valued complementarity residual
         if settings.use_fesd:
-            # sum of all possible cross complementarities
-            J_comp_fesd = sum1(cross_comp_all)
+            J_comp_fesd = cross_comp_all
             J_comp = J_comp_fesd
         else:
             # no additional complementarites than the standard ones
