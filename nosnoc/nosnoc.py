@@ -166,17 +166,17 @@ class FiniteElementZero(FiniteElementBase):
                 self.add_variable(SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
                                   -inf * np.ones(dims.n_f_sys[ij]),
                                   inf * np.ones(dims.n_f_sys[ij]),
-                                  opts.initial_lambda * np.ones(dims.n_f_sys[ij]), 0, ij)
+                                  opts.init_lambda * np.ones(dims.n_f_sys[ij]), 0, ij)
         elif opts.pss_mode == PssMode.STEP:
             for ij in range(dims.n_sys):
                 self.add_variable(SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
                                   self.ind_lambda_n, -inf * np.ones(dims.n_c_sys[ij]),
                                   inf * np.ones(dims.n_c_sys[ij]),
-                                  opts.initial_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
+                                  opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
                 self.add_variable(SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]),
                                   self.ind_lambda_p, -inf * np.ones(dims.n_c_sys[ij]),
                                   inf * np.ones(dims.n_c_sys[ij]),
-                                  opts.initial_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
+                                  opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
 
 
 class FiniteElement(FiniteElementBase):
@@ -250,19 +250,19 @@ class FiniteElement(FiniteElementBase):
                         SX.sym(f'theta_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_theta,
                         np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
-                        opts.initial_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
+                        opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
                         inf * np.ones(dims.n_f_sys[ij]),
-                        opts.initial_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
+                        opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
                     self.add_variable(SX.sym(f'mu_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
-                                      opts.initial_mu * np.ones(1), ii, ij)
+                                      opts.init_mu * np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
@@ -270,21 +270,21 @@ class FiniteElement(FiniteElementBase):
                         SX.sym(f'alpha_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_alpha,
                         np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
-                        opts.initial_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.initial_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.initial_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
 
         # Add right boundary points if needed
         if create_right_boundary_point:
@@ -295,12 +295,12 @@ class FiniteElement(FiniteElementBase):
                         SX.sym(f'lambda_{control_stage_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
                         inf * np.ones(dims.n_f_sys[ij]),
-                        opts.initial_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
+                        opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
                     self.add_variable(SX.sym(f'mu_{control_stage_idx}_{fe_idx}_end_{ij+1}', 1),
                                       self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
-                                      opts.initial_mu * np.ones(1), opts.n_s, ij)
+                                      opts.init_mu * np.ones(1), opts.n_s, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):
@@ -308,14 +308,14 @@ class FiniteElement(FiniteElementBase):
                         SX.sym(f'lambda_n_{control_stage_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.initial_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                        opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{control_stage_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.initial_mu * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                        opts.init_mu * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
         # add final X variables
         self.add_variable(SX.sym(f'X_end_{control_stage_idx}_{fe_idx+1}', dims.nx), self.ind_x,
                           -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, -1)

@@ -31,15 +31,15 @@ class NosnocOpts:
     gamma_h: float = 1.0
 
     # initialization - Stewart
-    initial_theta: float = 1.0
-    initial_lambda: float = 1.0
-    initial_mu: float = 1.0
+    init_theta: float = 1.0
+    init_lambda: float = 1.0
+    init_mu: float = 1.0
     # initialization - Step
-    initial_alpha: float = 1.0  # for step only
-    initial_lambda_0: float = 1.0
-    initial_lambda_1: float = 1.0
-    initial_beta: float = 1.0
-    initial_gamma: float = 1.0
+    init_alpha: float = 1.0  # for step only
+    init_lambda_0: float = 1.0
+    init_lambda_1: float = 1.0
+    init_beta: float = 1.0
+    init_gamma: float = 1.0
 
     N_finite_elements: int = 2  # of length N_stages
     Nfe_list: list = field(default_factory=list)  # of length N_stages
