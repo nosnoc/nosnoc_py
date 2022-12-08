@@ -11,6 +11,7 @@ def validate(obj: object) -> bool:
             )
     return
 
+
 def print_dict(input: dict):
     out = ''
     for k, v in input.items():

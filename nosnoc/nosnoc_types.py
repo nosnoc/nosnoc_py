@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MpccMode(Enum):
     SCHOLTES_INEQ = 0
     SCHOLTES_EQ = 1

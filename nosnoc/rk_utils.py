@@ -3,6 +3,7 @@ import casadi as ca
 
 from .nosnoc_types import IRKSchemes
 
+
 def generate_butcher_tableu(n_s, irk_scheme):
     if irk_scheme == IRKSchemes.RADAU_IIA:
         order = 2 * n_s - 1

@@ -6,6 +6,7 @@ from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
 from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
+
 @dataclass
 class NosnocOpts:
 
@@ -111,8 +112,7 @@ class NosnocOpts:
             self.C_irk = C_irk
             self.D_irk = D_irk
         elif self.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
-                self.n_s, self.irk_scheme)
+            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(self.n_s, self.irk_scheme)
             self.A_irk = A_irk
             self.b_irk = b_irk
 

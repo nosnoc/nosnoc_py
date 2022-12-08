@@ -97,8 +97,7 @@ class NosnocFormulationObject(ABC):
 
         if len(lb) != n or len(ub) != n or len(initial) != n:
             raise Exception(
-                f'add_variable, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
-            )
+                f'add_variable, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}')
 
         self.w = vertcat(self.w, symbolic)
         self.lbw = np.concatenate((self.lbw, lb))
@@ -164,18 +163,15 @@ class FiniteElementZero(FiniteElementBase):
         if opts.pss_mode == PssMode.STEWART:
             for ij in range(dims.n_sys):
                 self.add_variable(SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
-                                  -inf * np.ones(dims.n_f_sys[ij]),
-                                  inf * np.ones(dims.n_f_sys[ij]),
+                                  -inf * np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_f_sys[ij]), 0, ij)
         elif opts.pss_mode == PssMode.STEP:
             for ij in range(dims.n_sys):
-                self.add_variable(SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
-                                  self.ind_lambda_n, -inf * np.ones(dims.n_c_sys[ij]),
-                                  inf * np.ones(dims.n_c_sys[ij]),
+                self.add_variable(SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_n,
+                                  -inf * np.ones(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
-                self.add_variable(SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]),
-                                  self.ind_lambda_p, -inf * np.ones(dims.n_c_sys[ij]),
-                                  inf * np.ones(dims.n_c_sys[ij]),
+                self.add_variable(SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_p,
+                                  -inf * np.ones(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
 
 
@@ -201,8 +197,7 @@ class FiniteElement(FiniteElementBase):
         self.model = model
 
         # right boundary
-        create_right_boundary_point = (opts.use_fesd and
-                                       not opts.right_boundary_point_explicit and
+        create_right_boundary_point = (opts.use_fesd and not opts.right_boundary_point_explicit and
                                        fe_idx < opts.Nfe_list[ctrl_idx] - 1)
         end_allowance = 1 if create_right_boundary_point else 0
 
@@ -239,24 +234,21 @@ class FiniteElement(FiniteElementBase):
                                   self.ind_v, -inf * np.ones(dims.nx), inf * np.ones(dims.nx),
                                   np.zeros(dims.nx), ii)
             if opts.irk_representation == IrkRepresentation.INTEGRAL or opts.lift_irk_differential:
-                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}',
-                                         dims.nx), self.ind_x, -inf * np.ones(dims.nx),
-                                  inf * np.ones(dims.nx), model.x0, ii)
+                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx), self.ind_x,
+                                  -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_f_sys[ij]), self.ind_theta,
-                        np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_theta, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
-                        inf * np.ones(dims.n_f_sys[ij]),
+                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -267,24 +259,23 @@ class FiniteElement(FiniteElementBase):
                 # add alpha
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_alpha,
-                        np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
+                        SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
+                        self.ind_alpha, np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
                         opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n,
-                        np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                        inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p,
-                        np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
+                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                        inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
+                        ii, ij)
 
         # Add right boundary points if needed
         if create_right_boundary_point:
@@ -292,9 +283,8 @@ class FiniteElement(FiniteElementBase):
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
-                        inf * np.ones(dims.n_f_sys[ij]),
+                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -306,16 +296,16 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n,
-                        np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                        inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p,
-                        np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_mu * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                        inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
+                        opts.n_s, ij)
         # add final X variables
         self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.nx), self.ind_x,
                           -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, -1)
@@ -411,8 +401,7 @@ class FiniteElement(FiniteElementBase):
             # complement within fe
             g_cross_comp = casadi_vertcat_list([
                 diag(self.Theta(stage=j, sys=r)) @ self.Lambda(stage=jj, sys=r)
-                for r in range(dims.n_sys) for j in range(opts.n_s)
-                for jj in range(opts.n_s)
+                for r in range(dims.n_sys) for j in range(opts.n_s) for jj in range(opts.n_s)
             ])
             # complement with end of previous fe
             g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
@@ -457,8 +446,7 @@ class FiniteElement(FiniteElementBase):
                 nu_k = 1
                 for jjj in range(dims.n_theta):
                     nu_k = nu_k * eta_k[jjj]
-                self.cost += opts.rho_h * tanh(
-                    nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
+                self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
                 eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
                         self.prev_fe.sum_Theta() * self.sum_Theta()
@@ -537,8 +525,8 @@ class NosnocSolver(NosnocFormulationObject):
                     for k in range(len(S_temp[0, :])):
                         # create multiafine term
                         if S_temp[j, k] != 0:
-                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) + S_temp[j, k] *
-                                                        fe.w[fe.ind_alpha[0][ii]][k])
+                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) +
+                                                       S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
                     upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
                 upsilon = horzcat(upsilon, upsilon_temp)
             # prepare for time freezing lifting and co, not implemented
