@@ -43,6 +43,10 @@ class IrkRepresentation(Enum):
     # NOTE: tested in test_ocp
 
 
+class HomotopyUpdateRule(Enum):
+    LINEAR = 0
+    SUPERLINEAR = 1
+
 class PssMode(Enum):
     # NOTE: tested in simple_sim_tests
     STEWART = 0
@@ -74,7 +78,7 @@ class NosnocSettings:
     max_iter_homotopy: int = 0
 
     initialization_strategy: InitializationStrategy = InitializationStrategy.ALL_XCURRENT_W0_START
-    homotopy_update_slope: float = 0.1
+
     irk_representation: IrkRepresentation = IrkRepresentation.INTEGRAL
 
     # IRK and FESD Settings
@@ -104,6 +108,10 @@ class NosnocSettings:
     # MPCC and Homotopy Settings
     comp_tol: float = 1e-8
     sigma_0: float = 1.0
+    sigma_N: float = 1e-8
+    homotopy_update_slope: float = 0.1
+    homotopy_update_exponent: float = 1.5
+    homotopy_update_rule: HomotopyUpdateRule = HomotopyUpdateRule.LINEAR
 
     # step equilibration
     step_equilibration: StepEquilibrationMode = StepEquilibrationMode.HEURISTIC_DELTA
