@@ -527,20 +527,19 @@ class NosnocSolver(NosnocFormulationObject):
         if settings.pss_mode == PssMode.STEP:
             # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
             # terms or gamma from lifting
+            if pss_lift_step_functions:
+                raise NotImplementedError
             for ii in range(self.dims.n_simplex):
                 upsilon_temp = []
                 S_temp = model.S[ii]
-                if pss_lift_step_functions:
-                    raise NotImplementedError
-                else:
-                    for j in range(len(S_temp)):
-                        upsilon_ij = 1
-                        for k in range(len(S_temp[0, :])):
-                            # create multiafine term
-                            if S_temp[j, k] != 0:
-                                upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) + S_temp[j, k] *
-                                                           fe.w[fe.ind_alpha[0][ii]][k])
-                        upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
+                for j in range(len(S_temp)):
+                    upsilon_ij = 1
+                    for k in range(len(S_temp[0, :])):
+                        # create multiafine term
+                        if S_temp[j, k] != 0:
+                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) + S_temp[j, k] *
+                                                        fe.w[fe.ind_alpha[0][ii]][k])
+                    upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
                 upsilon = horzcat(upsilon, upsilon_temp)
             # prepare for time freezing lifting and co, not implemented
 
