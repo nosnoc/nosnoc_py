@@ -114,6 +114,21 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
+    def add_constraint(self, symbolic: SX, lb=None, ub=None):
+        n = casadi_length(symbolic)
+        if lb is None:
+            lb = np.zeros((n,))
+        if ub is None:
+            ub = np.zeros((n,))
+        if len(lb) != n or len(ub) != n:
+            raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+
+        self.g = vertcat(self.g, symbolic)
+        self.lbg = np.concatenate((self.lbg, lb))
+        self.ubg = np.concatenate((self.ubg, ub))
+
+        return
+
 
 class FiniteElementBase(NosnocFormulationObject):
 
@@ -338,8 +353,6 @@ class FiniteElement(FiniteElementBase):
         model = self.model
         dims = self.dims
 
-        cost = 0.0
-        equalities = SX.zeros(0)
         if settings.irk_representation == IrkRepresentation.INTEGRAL:
             X_ki = [self.w[x_kij] for x_kij in self.ind_x]
             Xk_end = settings.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -352,7 +365,7 @@ class FiniteElement(FiniteElementBase):
                     x_temp += self.h() * settings.A_irk[j, r] * self.w[self.ind_v[r]]
                 if settings.lift_irk_differential:
                     X_ki.append(self.w[self.ind_x[j]])
-                    equalities = vertcat(equalities, self.w[self.ind_x[j]] - x_temp)
+                    self.add_constraint(self.w[self.ind_x[j]] - x_temp)
                 else:
                     X_ki.append(x_temp)
             X_ki.append(self.w[self.ind_x[-1]])
@@ -368,24 +381,62 @@ class FiniteElement(FiniteElementBase):
                 for r, x in enumerate(X_ki[:-1]):
                     xp += settings.C_irk[r + 1, j + 1] * x
                 Xk_end += settings.D_irk[j + 1] * X_ki[j]
-                equalities = vertcat(equalities, self.h() * fj - xp)
-                cost += settings.B_irk[j + 1] * self.h() * qj
+                self.add_constraint(self.h() * fj - xp)
+                self.cost += settings.B_irk[j + 1] * self.h() * qj
             elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
                 Xk_end += self.h() * settings.b_irk[j] * self.w[self.ind_v[j]]
-                equalities = vertcat(equalities, fj - self.w[self.ind_v[j]])
-                cost += settings.b_irk[j] * self.h() * qj
-            equalities = vertcat(equalities, gj)
+                self.add_constraint(fj - self.w[self.ind_v[j]])
+                self.cost += settings.b_irk[j] * self.h() * qj
+            self.add_constraint(gj)
         # continuity condition: end of fe state - final stage state
-        equalities = vertcat(equalities, Xk_end - self.w[self.ind_x[-1]])
+        self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
 
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not settings.right_boundary_point_explicit and settings.use_fesd and (
                 self.fe_idx < settings.Nfe_list[self.control_stage_idx] - 1):
             temp = model.g_z_all_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk)
-            equalities = vertcat(equalities, temp[:casadi_length(temp) - dims.n_lift_eq])
+            self.add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
 
-        return cost, equalities
+        return
 
+
+    def create_complementarity_constraints(self, sigma_p):
+        settings = self.settings
+        dims = self.dims
+        if not settings.use_fesd:
+            g_cross_comp = casadi_vertcat_list(
+                [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(settings.n_s)])
+
+        elif settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
+            # complement within fe
+            g_cross_comp = casadi_vertcat_list([
+                diag(self.Theta(stage=j, simplex=r)) @ self.Lambda(stage=jj, simplex=r)
+                for r in range(dims.n_simplex) for j in range(settings.n_s)
+                for jj in range(settings.n_s)
+            ])
+            # complement with end of previous fe
+            g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
+                diag(self.Theta(stage=j, simplex=r)) @ self.prev_fe.Lambda(stage=-1, simplex=r)
+                for r in range(dims.n_simplex)
+                for j in range(settings.n_s)
+            ])
+        elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+            # Note: sum_Lambda contains last stage of prev_fe
+            g_cross_comp = casadi_vertcat_list([
+                diag(self.Theta(stage=j, simplex=r)) @ self.sum_Lambda(simplex=r)
+                for r in range(dims.n_simplex)
+                for j in range(settings.n_s)
+            ])
+
+        n_cross_comp = casadi_length(g_cross_comp)
+        g_cross_comp = g_cross_comp - sigma_p
+        g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
+        if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
+        elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
+            g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
+
+        self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
 class NosnocSolver(NosnocFormulationObject):
 
@@ -602,21 +653,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.w0 = np.concatenate((self.w0, initial))
         return
 
-    def _add_constraint(self, symbolic: SX, lb=None, ub=None):
-        n = casadi_length(symbolic)
-        if lb is None:
-            lb = np.zeros((n,))
-        if ub is None:
-            ub = np.zeros((n,))
-        if len(lb) != n or len(ub) != n:
-            raise Exception(f'_add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
-
-        self.g = vertcat(self.g, symbolic)
-        self.lbg = np.concatenate((self.lbg, lb))
-        self.ubg = np.concatenate((self.ubg, ub))
-
-        return
-
     def __init__(self, settings: NosnocSettings, model: NosnocModel, ocp=None):
 
         super().__init__()
@@ -669,50 +705,18 @@ class NosnocSolver(NosnocFormulationObject):
                 prev_fe: FiniteElement = fe.prev_fe
 
                 # 1) Stewart Runge-Kutta discretization
-                fe_cost, fe_equalities = fe.forward_simulation(ocp, Uk)
-                self.cost += fe_cost
-                self._add_constraint(fe_equalities)
+                fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                # fe.create_cross_complemententarities()
+                fe.create_complementarity_constraints(sigma_p)
+
+                self.cost += fe.cost
+                self.add_constraint(fe.g, fe.lbg, fe.ubg)
+
+                # TODO: move this somewhere
                 J_comp_std = casadi_sum_list(
                     [model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
-
                 cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
-                if not settings.use_fesd:
-                    g_cross_comp = casadi_vertcat_list(
-                        [diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j) for j in range(settings.n_s)])
-
-                elif settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-                    # complement within fe
-                    g_cross_comp = casadi_vertcat_list([
-                        diag(fe.Theta(stage=j, simplex=r)) @ fe.Lambda(stage=jj, simplex=r)
-                        for r in range(dims.n_simplex) for j in range(settings.n_s)
-                        for jj in range(settings.n_s)
-                    ])
-                    # complement with end of previous fe
-                    g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
-                        diag(fe.Theta(stage=j, simplex=r)) @ prev_fe.Lambda(stage=-1, simplex=r)
-                        for r in range(dims.n_simplex)
-                        for j in range(settings.n_s)
-                    ])
-                elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
-                    # Note: sum_Lambda contains last stage of prev_fe
-                    g_cross_comp = casadi_vertcat_list([
-                        diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r)
-                        for r in range(dims.n_simplex)
-                        for j in range(settings.n_s)
-                    ])
-
-                n_cross_comp = casadi_length(g_cross_comp)
-                g_cross_comp = g_cross_comp - sigma_p
-                g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
-                if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-                    g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
-                elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
-                    g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
-
-                self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
                 # 3) Step Equilibration
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.
@@ -740,7 +744,7 @@ class NosnocSolver(NosnocFormulationObject):
 
             if settings.use_fesd and settings.equidistant_control_grid:
                 h_FE = sum([fe.h() for fe in stage])
-                self._add_constraint(h_FE - h_ctrl_stages)
+                self.add_constraint(h_FE - h_ctrl_stages)
 
         # Scalar-valued complementarity residual
         if settings.use_fesd:
@@ -752,14 +756,14 @@ class NosnocSolver(NosnocFormulationObject):
         # terminal constraint
         # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
         g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
-        self._add_constraint(g_terminal)
+        self.add_constraint(g_terminal)
 
         # Terminal numerical Time
         if settings.time_freezing:
             raise NotImplementedError()
         if settings.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
-            self._add_constraint(sum(all_h) - settings.terminal_time)
+            self.add_constraint(sum(all_h) - settings.terminal_time)
 
         if settings.print_level > 1:
             self.print_problem()
