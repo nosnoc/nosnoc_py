@@ -3,7 +3,7 @@ import nosnoc
 from examples.sliding_mode_ocp import (
     solve_ocp,
     example,
-    get_default_settings,
+    get_default_options,
     X0,
     X_TARGET,
     TERMINAL_TIME,
@@ -26,19 +26,19 @@ def test_loop():
                 for irk_scheme in nosnoc.IRKSchemes:
                     for pss_mode in PSS_MODES:
                         for homotopy_update_rule in nosnoc.HomotopyUpdateRule:
-                            settings = get_default_settings()
-                            settings.comp_tol = 1e-5
-                            settings.N_stages = 5
-                            settings.N_finite_elements = 2
-                            settings.equidistant_control_grid = equidistant_control_grid
-                            settings.step_equilibration = step_equilibration
-                            settings.irk_representation = irk_representation
-                            settings.irk_scheme = irk_scheme
-                            settings.pss_mode = pss_mode
-                            settings.homotopy_update_rule = homotopy_update_rule
+                            opts = get_default_options()
+                            opts.comp_tol = 1e-5
+                            opts.N_stages = 5
+                            opts.N_finite_elements = 2
+                            opts.equidistant_control_grid = equidistant_control_grid
+                            opts.step_equilibration = step_equilibration
+                            opts.irk_representation = irk_representation
+                            opts.irk_scheme = irk_scheme
+                            opts.pss_mode = pss_mode
+                            opts.homotopy_update_rule = homotopy_update_rule
 
-                            print(f"test setting: {settings}")
-                            results = solve_ocp(settings)
+                            print(f"test setting: {opts}")
+                            results = solve_ocp(opts)
 
                             x_traj = results["x_traj"]
                             u_traj = results["u_traj"]

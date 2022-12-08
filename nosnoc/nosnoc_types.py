@@ -51,16 +51,16 @@ class PssMode(Enum):
     STEWART = 0
     """
     basic algebraic equations and complementarity condtions of the DCS
-    lambda_i'*theta_i = 0; for all i = 1,..., n_simplex
-    lambda_i >= 0;    for all i = 1,..., n_simplex
-    theta_i >= 0;     for all i = 1,..., n_simplex
+    lambda_i'*theta_i = 0; for all i = 1,..., n_sys
+    lambda_i >= 0;    for all i = 1,..., n_sys
+    theta_i >= 0;     for all i = 1,..., n_sys
     """
     STEP = 1
     """
-    c_i(x) - (lambda_p_i-lambda_n_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i'*alpha_i  = 0; for all i = 1,..., n_simplex
-    lambda_p_i'*(e-alpha_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i >= 0;    for all i = 1,..., n_simplex
-    lambda_p_i >= 0;    for all i = 1,..., n_simplex
-    alpha_i >= 0;     for all i = 1,..., n_simplex
+    c_i(x) - (lambda_p_i-lambda_n_i)  = 0; for all i = 1,..., n_sys
+    lambda_n_i'*alpha_i  = 0; for all i = 1,..., n_sys
+    lambda_p_i'*(e-alpha_i)  = 0; for all i = 1,..., n_sys
+    lambda_n_i >= 0;    for all i = 1,..., n_sys
+    lambda_p_i >= 0;    for all i = 1,..., n_sys
+    alpha_i >= 0;     for all i = 1,..., n_sys
     """

@@ -14,19 +14,19 @@ TSIM = np.pi / 4
 X0 = np.array([-1.0])
 
 
-def get_default_settings():
-    settings = nosnoc.NosnocSettings()
-    settings.comp_tol = TOL
-    settings.N_finite_elements = 2
-    settings.n_s = 2
-    return settings
+def get_default_options():
+    opts = nosnoc.NosnocOpts()
+    opts.comp_tol = TOL
+    opts.N_finite_elements = 2
+    opts.n_s = 2
+    return opts
 
 
 def get_simplest_model_sliding():
     # Variable defintion
     x1 = SX.sym("x1")
     x = x1
-    # every constraint function corresponds to a simplex (note that the c_i might be vector valued)
+    # every constraint function corresponds to a sys (note that the c_i might be vector valued)
     c = [x1]
     # sign matrix for the modes
     S = [np.array([[-1], [1]])]
@@ -45,7 +45,7 @@ def get_simplest_model_switch():
     # Variable defintion
     x1 = SX.sym("x1")
     x = x1
-    # every constraint function corresponds to a simplex (note that the c_i might be vector valued)
+    # every constraint function corresponds to a sys (note that the c_i might be vector valued)
     c = [x1]
     # sign matrix for the modes
     S = [np.array([[-1], [1]])]
@@ -60,19 +60,19 @@ def get_simplest_model_switch():
     return model
 
 
-def solve_simplest_example(settings=None, model=None):
-    if settings is None:
-        settings = get_default_settings()
-        settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-        settings.pss_mode = nosnoc.PssMode.STEWART
+def solve_simplest_example(opts=None, model=None):
+    if opts is None:
+        opts = get_default_options()
+        opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+        opts.pss_mode = nosnoc.PssMode.STEWART
     if model is None:
         model = get_simplest_model_sliding()
 
     Nsim = 1
     Tstep = TSIM / Nsim
-    settings.terminal_time = Tstep
+    opts.terminal_time = Tstep
 
-    solver = nosnoc.NosnocSolver(settings, model)
+    solver = nosnoc.NosnocSolver(opts, model)
 
     # loop
     looper = nosnoc.NosnocSimLooper(solver, X0, Nsim)
@@ -116,10 +116,10 @@ def example():
     model = get_simplest_model_sliding()
     model = get_simplest_model_switch()
 
-    settings = get_default_settings()
-    settings.print_level = 1
+    opts = get_default_options()
+    opts.print_level = 1
 
-    results = solve_simplest_example(settings=settings, model=model)
+    results = solve_simplest_example(opts=opts, model=model)
 
     plot_results(results)
 

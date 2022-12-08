@@ -1,6 +1,6 @@
 from examples.simplest_example import (
     TOL,
-    get_default_settings,
+    get_default_options,
     X0,
     TSIM,
     EXACT_SWITCH_TIME,
@@ -42,8 +42,8 @@ def compute_errors(results, model) -> dict:
     }
 
 
-def test_settings(settings, model):
-    results = solve_simplest_example(settings=settings, model=model)
+def test_opts(opts, model):
+    results = solve_simplest_example(opts=opts, model=model)
     errors = compute_errors(results, model)
 
     print(errors)
@@ -57,7 +57,7 @@ def test_settings(settings, model):
 
 def test_default():
     model = get_simplest_model_sliding()
-    test_settings(get_default_settings(), model)
+    test_opts(get_default_options(), model)
 
 
 def main_test_switch():
@@ -67,18 +67,18 @@ def main_test_switch():
         for Nfe in N_FINITE_ELEMENT_VALUES:
             for pss_mode in nosnoc.PssMode:
                 for cross_comp_mode in nosnoc.CrossComplementarityMode:
-                    settings = get_default_settings()
-                    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
-                    settings.print_level = 0
-                    settings.n_s = ns
-                    settings.N_finite_elements = Nfe
-                    settings.pss_mode = pss_mode
-                    settings.cross_comp_mode = cross_comp_mode
-                    settings.print_level = 1
+                    opts = get_default_options()
+                    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
+                    opts.print_level = 0
+                    opts.n_s = ns
+                    opts.N_finite_elements = Nfe
+                    opts.pss_mode = pss_mode
+                    opts.cross_comp_mode = cross_comp_mode
+                    opts.print_level = 1
                     try:
-                        test_settings(settings, model=model)
+                        test_opts(opts, model=model)
                     except:
-                        raise Exception(f"Test failed with setting:\n {settings=} \n{model=}")
+                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_test_switch: SUCCESS")
 
 
@@ -89,17 +89,17 @@ def main_test_sliding():
         for Nfe in N_FINITE_ELEMENT_VALUES:
             for pss_mode in nosnoc.PssMode:
                 for irk_scheme in nosnoc.IRKSchemes:
-                    settings = get_default_settings()
-                    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-                    settings.irk_scheme = irk_scheme
-                    settings.print_level = 0
-                    settings.n_s = ns
-                    settings.N_finite_elements = Nfe
-                    settings.pss_mode = pss_mode
+                    opts = get_default_options()
+                    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+                    opts.irk_scheme = irk_scheme
+                    opts.print_level = 0
+                    opts.n_s = ns
+                    opts.N_finite_elements = Nfe
+                    opts.pss_mode = pss_mode
                     try:
-                        test_settings(settings, model=model)
+                        test_opts(opts, model=model)
                     except:
-                        raise Exception(f"Test failed with setting:\n {settings=} \n{model=}")
+                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_test_sliding: SUCCESS")
 
 
@@ -110,29 +110,29 @@ def main_test_discretization():
         for irk_scheme in nosnoc.IRKSchemes:
             for irk_representation in nosnoc.IrkRepresentation:
                 for lifted_irk in [True, False]:
-                    settings = get_default_settings()
-                    settings.mpcc_mode = mpcc_mode
-                    settings.irk_scheme = irk_scheme
-                    settings.print_level = 0
-                    settings.irk_representation = irk_representation
-                    settings.lift_irk_differential = lifted_irk
+                    opts = get_default_options()
+                    opts.mpcc_mode = mpcc_mode
+                    opts.irk_scheme = irk_scheme
+                    opts.print_level = 0
+                    opts.irk_representation = irk_representation
+                    opts.lift_irk_differential = lifted_irk
                     try:
-                        test_settings(settings, model=model)
+                        test_opts(opts, model=model)
                     except:
-                        raise Exception(f"Test failed with setting:\n {settings=} \n{model=}")
+                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_test_sliding: SUCCESS")
 
 
 def main_test_fesd_off():
     model = get_simplest_model_switch()
 
-    settings = get_default_settings()
-    settings.print_level = 0
-    settings.use_fesd = False
+    opts = get_default_options()
+    opts.print_level = 0
+    opts.use_fesd = False
 
     try:
         # solve
-        results = solve_simplest_example(settings=settings, model=model)
+        results = solve_simplest_example(opts=opts, model=model)
 
         errors = compute_errors(results, model)
         tol = 1e1 * TOL

@@ -4,7 +4,7 @@ from casadi import SX, vertcat, horzcat
 
 import nosnoc
 
-# example settings
+# example opts
 TERMINAL_CONSTRAINT = True
 LINEAR_CONTROL = True
 TERMINAL_TIME = 4.0
@@ -24,19 +24,19 @@ LBU = -U_MAX * np.ones((2,))
 UBU = U_MAX * np.ones((2,))
 
 
-# solver settings
-def get_default_settings() -> nosnoc.NosnocSettings:
-    settings = nosnoc.NosnocSettings()
-    settings.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
-    settings.comp_tol = 1e-9
-    settings.homotopy_update_slope = 0.1
-    settings.n_s = 2
-    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-    settings.rho_h = 1e1
-    settings.print_level = 1
-    settings.N_stages = 6
-    settings.N_finite_elements = 6
-    return settings
+# solver opts
+def get_default_options() -> nosnoc.NosnocOpts:
+    opts = nosnoc.NosnocOpts()
+    opts.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
+    opts.comp_tol = 1e-9
+    opts.homotopy_update_slope = 0.1
+    opts.n_s = 2
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.rho_h = 1e1
+    opts.print_level = 1
+    opts.N_stages = 6
+    opts.N_finite_elements = 6
+    return opts
 
 
 def get_sliding_mode_ocp_description():
@@ -108,15 +108,15 @@ def get_sliding_mode_ocp_description():
     return model, ocp
 
 
-def solve_ocp(settings=None):
-    if settings is None:
-        settings = get_default_settings()
+def solve_ocp(opts=None):
+    if opts is None:
+        opts = get_default_options()
 
     [model, ocp] = get_sliding_mode_ocp_description()
 
-    settings.terminal_time = TERMINAL_TIME
+    opts.terminal_time = TERMINAL_TIME
 
-    solver = nosnoc.NosnocSolver(settings, model, ocp)
+    solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
 

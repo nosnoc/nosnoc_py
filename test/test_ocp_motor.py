@@ -1,7 +1,7 @@
 from examples.motor_with_friction_ocp import (
     solve_ocp,
     example,
-    get_default_settings,
+    get_default_options,
     X0,
     X_TARGET,
 )
@@ -16,15 +16,15 @@ def test_default():
 
 
 def test_loop():
-    settings = get_default_settings()
+    opts = get_default_options()
 
     for step_equilibration in nosnoc.StepEquilibrationMode:
         for pss_mode in PSS_MODES:
-            settings.step_equilibration = step_equilibration
-            settings.pss_mode = pss_mode
+            opts.step_equilibration = step_equilibration
+            opts.pss_mode = pss_mode
 
-            print(f"test setting: {settings}")
-            results = solve_ocp(settings)
+            print(f"test setting: {opts}")
+            results = solve_ocp(opts)
 
             x_traj = results["x_traj"]
 

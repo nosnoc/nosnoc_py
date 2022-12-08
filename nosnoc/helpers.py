@@ -14,7 +14,7 @@ class NosnocSimLooper:
         self.theta_sim = []
         self.lambda_sim = []
 
-        self.cpu_nlp = np.zeros((Nsim, solver.settings.max_iter_homotopy))
+        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy))
 
     def run(self):
         for i in range(self.Nsim):
