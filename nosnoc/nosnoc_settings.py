@@ -1,71 +1,10 @@
 from dataclasses import dataclass, field
-from enum import Enum
 
+import numpy as np
 
-class MpccMode(Enum):
-    SCHOLTES_INEQ = 0
-    SCHOLTES_EQ = 1
-    # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
-    # NOTE: tested in simple_sim_tests
-
-
-class IRKSchemes(Enum):
-    RADAU_IIA = 0
-    GAUSS_LEGENDRE = 1
-    # NOTE: tested in simple_sim_tests
-
-
-class InitializationStrategy(Enum):
-    ALL_XCURRENT_W0_START = 0
-    OLD_SOLUTION = 1
-    # Other ideas
-    # RK4_ON_SMOOTHENED
-    # lp_initialization
-
-
-class StepEquilibrationMode(Enum):
-    HEURISTIC_MEAN = 0
-    HEURISTIC_DELTA = 1
-    L2_RELAXED_SCALED = 2
-    L2_RELAXED = 3
-    # NOTE: tested in test_ocp_motor
-
-
-class CrossComplementarityMode(Enum):
-    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = 0  # nosnoc 1
-    SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA = 1  # nosnoc 3
-    # NOTE: tested in simple_sim_tests
-
-
-class IrkRepresentation(Enum):
-    INTEGRAL = 0
-    DIFFERENTIAL = 1
-    # NOTE: tested in test_ocp
-
-
-class HomotopyUpdateRule(Enum):
-    LINEAR = 0
-    SUPERLINEAR = 1
-
-class PssMode(Enum):
-    # NOTE: tested in simple_sim_tests
-    STEWART = 0
-    """
-    basic algebraic equations and complementarity condtions of the DCS
-    lambda_i'*theta_i = 0; for all i = 1,..., n_simplex
-    lambda_i >= 0;    for all i = 1,..., n_simplex
-    theta_i >= 0;     for all i = 1,..., n_simplex
-    """
-    STEP = 1
-    """
-    c_i(x) - (lambda_p_i-lambda_n_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i'*alpha_i  = 0; for all i = 1,..., n_simplex
-    lambda_p_i'*(e-alpha_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i >= 0;    for all i = 1,..., n_simplex
-    lambda_p_i >= 0;    for all i = 1,..., n_simplex
-    alpha_i >= 0;     for all i = 1,..., n_simplex
-    """
-
+from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
+from .utils import validate
+from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
 @dataclass
 class NosnocSettings:
@@ -103,7 +42,7 @@ class NosnocSettings:
     initial_gamma: float = 1.0
 
     N_finite_elements: int = 2  # of length N_stages
-    N_finite_elements_list: list = field(default_factory=list)  # of length N_stages
+    Nfe_list: list = field(default_factory=list)  # of length N_stages
 
     # MPCC and Homotopy Settings
     comp_tol: float = 1e-8
@@ -146,6 +85,42 @@ class NosnocSettings:
         for k, v in self.__dict__.items():
             out += f"{k} : {v}\n"
         return out
+
+    def preprocess(self):
+        validate(self)
+        self.opts_ipopt['ipopt']['print_level'] = self.print_level
+
+        if self.time_freezing:
+            raise NotImplementedError()
+
+        if self.max_iter_homotopy == 0:
+            self.max_iter_homotopy = int(
+                np.ceil(
+                    np.abs(
+                        np.log(self.comp_tol / self.sigma_0) /
+                        np.log(self.homotopy_update_slope)))) + 1
+
+        if len(self.Nfe_list) == 0:
+            self.Nfe_list = self.N_stages * [self.N_finite_elements]
+
+        # Butcher Tableau
+        if self.irk_representation == IrkRepresentation.INTEGRAL:
+            B_irk, C_irk, D_irk, irk_time_points = generate_butcher_tableu_integral(
+                self.n_s, self.irk_scheme)
+            self.B_irk = B_irk
+            self.C_irk = C_irk
+            self.D_irk = D_irk
+        elif self.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
+                self.n_s, self.irk_scheme)
+            self.A_irk = A_irk
+            self.b_irk = b_irk
+
+        if np.abs(irk_time_points[-1] - 1.0) < 1e-9:
+            self.right_boundary_point_explicit = True
+        else:
+            self.right_boundary_point_explicit = False
+        return
 
     ## Options in matlab..
     # MPCC related, not implemented yet.

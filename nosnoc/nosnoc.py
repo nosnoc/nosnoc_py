@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
 
-from nosnoc.nosnoc_settings import NosnocSettings, MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_vectors, generate_butcher_tableu, generate_butcher_tableu_integral, flatten_layer, flatten, increment_indices, validate
+from nosnoc.nosnoc_settings import NosnocSettings
+from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
 
 
 @dataclass
@@ -65,15 +66,20 @@ class NosnocDims:
     n_f_simplex: list = field(default_factory=list)
 
 
-class FiniteElementBase(ABC):
+class NosnocFormulationObject(ABC):
 
     @abstractmethod
-    def __init__(self, dims: NosnocDims, settings: NosnocSettings):
-        # Finite element variables
-        self.w = SX([])
-        self.w0 = np.array([])
-        self.lbw = np.array([])
-        self.ubw = np.array([])
+    def __init__(self):
+        self.w: SX = SX([])
+        self.w0: np.array = np.array([])
+        self.lbw: np.array = np.array([])
+        self.ubw: np.array = np.array([])
+
+        self.g: SX = SX([])
+        self.lbg: np.array = np.array([])
+        self.ubg: np.array = np.array([])
+
+        self.cost: SX = SX.zeros(1)
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -84,14 +90,14 @@ class FiniteElementBase(ABC):
                      lb: np.array,
                      ub: np.array,
                      initial: np.array,
-                     stage: int,
+                     stage: Optional[int] = None,
                      simplex: Optional[int] = None):
         n = casadi_length(symbolic)
         nw = casadi_length(self.w)
 
         if len(lb) != n or len(ub) != n or len(initial) != n:
             raise Exception(
-                f'_add_primal_vector, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
+                f'add_variable, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
             )
 
         self.w = vertcat(self.w, symbolic)
@@ -99,11 +105,33 @@ class FiniteElementBase(ABC):
         self.ubw = np.concatenate((self.ubw, ub))
         self.w0 = np.concatenate((self.w0, initial))
 
-        if simplex is not None:
-            index[stage][simplex] = list(range(nw, nw + n))
+        new_indices = list(range(nw, nw + n))
+        if stage is None:
+            index.append(new_indices)
         else:
-            index[stage] = list(range(nw, nw + n))
+            if simplex is not None:
+                index[stage][simplex] = new_indices
+            else:
+                index[stage] = new_indices
         return
+
+    def add_constraint(self, symbolic: SX, lb=None, ub=None):
+        n = casadi_length(symbolic)
+        if lb is None:
+            lb = np.zeros((n,))
+        if ub is None:
+            ub = np.zeros((n,))
+        if len(lb) != n or len(ub) != n:
+            raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+
+        self.g = vertcat(self.g, symbolic)
+        self.lbg = np.concatenate((self.lbg, lb))
+        self.ubg = np.concatenate((self.ubg, ub))
+
+        return
+
+
+class FiniteElementBase(NosnocFormulationObject):
 
     def Lambda(self, stage=slice(None), simplex=slice(None)):
         return vertcat(self.w[flatten(self.ind_lam[stage][simplex])],
@@ -114,13 +142,13 @@ class FiniteElementBase(ABC):
         Lambdas = [self.Lambda(stage=ii, simplex=simplex) for ii in range(len(self.ind_lam))]
         Lambdas.append(self.prev_fe.Lambda(
             stage=-1, simplex=simplex))  # Include the last finite element's last stage lambda
-        return casadi_sum_vectors(Lambdas)
+        return casadi_sum_list(Lambdas)
 
 
 class FiniteElementZero(FiniteElementBase):
 
     def __init__(self, dims: NosnocDims, settings: NosnocSettings, model: NosnocModel):
-        super().__init__(dims, settings)
+        super().__init__()
         self.n_rkstages = 1
 
         self.ind_x = np.empty((1, 0), dtype=int).tolist()
@@ -161,14 +189,22 @@ class FiniteElement(FiniteElementBase):
                  fe_idx: int,
                  prev_fe=None):
 
-        super().__init__(dims, settings)
+        super().__init__()
         n_s = settings.n_s
+
+        # store info
         self.n_rkstages = n_s
         self.control_stage_idx = control_stage_idx
         self.fe_idx = fe_idx
+        self.dims = dims
+        self.settings = settings
+        self.model = model
 
-        create_right_boundary_point = settings.use_fesd and not settings.right_boundary_point_explicit and fe_idx < settings.N_finite_elements_list[
-            control_stage_idx] - 1
+        # right boundary
+        create_right_boundary_point = (settings.use_fesd and
+                                       not settings.right_boundary_point_explicit and
+                                       fe_idx < settings.Nfe_list[control_stage_idx] - 1)
+        end_allowance = 1 if create_right_boundary_point else 0
 
         # Initialze index vectors. Note ind_x contains an extra element
         # in order to store the end variables
@@ -177,7 +213,6 @@ class FiniteElement(FiniteElementBase):
         if settings.irk_representation == IrkRepresentation.DIFFERENTIAL and not settings.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
         self.ind_v = np.empty((n_s, 0), dtype=int).tolist()
-        end_allowance = 1 if create_right_boundary_point else 0
         self.ind_theta = np.empty((n_s, dims.n_simplex, 0), dtype=int).tolist()
         self.ind_lam = np.empty((n_s + end_allowance, dims.n_simplex, 0), dtype=int).tolist()
         self.ind_mu = np.empty((n_s + end_allowance, dims.n_simplex, 0), dtype=int).tolist()
@@ -191,8 +226,7 @@ class FiniteElement(FiniteElementBase):
         # create variables
         h = SX.sym(f'h_{control_stage_idx}_{fe_idx}')
         h_ctrl_stages = settings.terminal_time / settings.N_stages
-        h0 = np.array(
-            [h_ctrl_stages / np.array(settings.N_finite_elements_list[control_stage_idx])])
+        h0 = np.array([h_ctrl_stages / np.array(settings.Nfe_list[control_stage_idx])])
         ubh = (1 + settings.gamma_h) * h0
         lbh = (1 - settings.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
@@ -310,46 +344,134 @@ class FiniteElement(FiniteElementBase):
 
     def sum_Theta(self):
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
-        return casadi_sum_vectors(Thetas)
+        return casadi_sum_list(Thetas)
 
+    def h(self):
+        return self.w[self.ind_h]
 
-class NosnocSolver:
-
-    def __preprocess_settings(self):
+    def forward_simulation(self, ocp, Uk):
         settings = self.settings
-        validate(settings)
+        model = self.model
+        dims = self.dims
 
-        settings.opts_ipopt['ipopt']['print_level'] = settings.print_level
-
-        if settings.max_iter_homotopy == 0:
-            settings.max_iter_homotopy = int(
-                np.ceil(
-                    np.abs(
-                        np.log(settings.comp_tol / settings.sigma_0) /
-                        np.log(settings.homotopy_update_slope)))) + 1
-
-        if len(settings.N_finite_elements_list) == 0:
-            settings.N_finite_elements_list = settings.N_stages * [settings.N_finite_elements]
-
-        # Butcher Tableau
         if settings.irk_representation == IrkRepresentation.INTEGRAL:
-            B_irk, C_irk, D_irk, irk_time_points = generate_butcher_tableu_integral(
-                settings.n_s, settings.irk_scheme)
-            settings.B_irk = B_irk
-            settings.C_irk = C_irk
-            settings.D_irk = D_irk
-        elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
-                settings.n_s, settings.irk_scheme)
-            settings.A_irk = A_irk
-            settings.b_irk = b_irk
+            X_ki = [self.w[x_kij] for x_kij in self.ind_x]
+            Xk_end = settings.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
 
-        if np.abs(irk_time_points[-1] - 1.0) < 1e-9:
-            settings.right_boundary_point_explicit = True
-        else:
-            settings.right_boundary_point_explicit = False
+        if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            X_ki = []
+            for j in range(settings.n_s):  # Ignore continuity vars
+                x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(settings.n_s):
+                    x_temp += self.h() * settings.A_irk[j, r] * self.w[self.ind_v[r]]
+                if settings.lift_irk_differential:
+                    X_ki.append(self.w[self.ind_x[j]])
+                    self.add_constraint(self.w[self.ind_x[j]] - x_temp)
+                else:
+                    X_ki.append(x_temp)
+            X_ki.append(self.w[self.ind_x[-1]])
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
 
-    def __preprocess_model(self):
+        for j in range(settings.n_s):
+            # Dynamics excluding complementarities
+            fj = model.f_x_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            qj = ocp.f_q_fun(X_ki[j], Uk)
+            if settings.irk_representation == IrkRepresentation.INTEGRAL:
+                xp = settings.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r, x in enumerate(X_ki[:-1]):
+                    xp += settings.C_irk[r + 1, j + 1] * x
+                Xk_end += settings.D_irk[j + 1] * X_ki[j]
+                self.add_constraint(self.h() * fj - xp)
+                self.cost += settings.B_irk[j + 1] * self.h() * qj
+            elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
+                Xk_end += self.h() * settings.b_irk[j] * self.w[self.ind_v[j]]
+                self.add_constraint(fj - self.w[self.ind_v[j]])
+                self.cost += settings.b_irk[j] * self.h() * qj
+            self.add_constraint(gj)
+        # continuity condition: end of fe state - final stage state
+        self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
+
+        # g_z_all constraint for boundary point and continuity of algebraic variables.
+        if not settings.right_boundary_point_explicit and settings.use_fesd and (
+                self.fe_idx < settings.Nfe_list[self.control_stage_idx] - 1):
+            temp = model.g_z_all_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk)
+            self.add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
+
+        return
+
+    def create_complementarity_constraints(self, sigma_p):
+        settings = self.settings
+        dims = self.dims
+        if not settings.use_fesd:
+            g_cross_comp = casadi_vertcat_list(
+                [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(settings.n_s)])
+
+        elif settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
+            # complement within fe
+            g_cross_comp = casadi_vertcat_list([
+                diag(self.Theta(stage=j, simplex=r)) @ self.Lambda(stage=jj, simplex=r)
+                for r in range(dims.n_simplex) for j in range(settings.n_s)
+                for jj in range(settings.n_s)
+            ])
+            # complement with end of previous fe
+            g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
+                diag(self.Theta(stage=j, simplex=r)) @ self.prev_fe.Lambda(stage=-1, simplex=r)
+                for r in range(dims.n_simplex)
+                for j in range(settings.n_s)
+            ])
+        elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+            # Note: sum_Lambda contains last stage of prev_fe
+            g_cross_comp = casadi_vertcat_list([
+                diag(self.Theta(stage=j, simplex=r)) @ self.sum_Lambda(simplex=r)
+                for r in range(dims.n_simplex)
+                for j in range(settings.n_s)
+            ])
+
+        n_cross_comp = casadi_length(g_cross_comp)
+        g_cross_comp = g_cross_comp - sigma_p
+        g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
+        if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
+        elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
+            g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
+
+        self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
+
+        return
+
+    def step_equilibration(self):
+        dims = self.dims
+        settings = self.settings
+        if settings.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
+            delta_h_ki = self.h() - self.prev_fe.h()
+            if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
+                h_ctrl_stages = settings.terminal_time / settings.N_stages
+                self.cost += settings.rho_h * \
+                    (self.h() - h_ctrl_stages / settings.Nfe_list[self.control_stage_idx])**2
+            elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
+                self.cost += settings.rho_h * delta_h_ki**2
+            elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
+                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                nu_k = 1
+                for jjj in range(dims.n_theta):
+                    nu_k = nu_k * eta_k[jjj]
+                self.cost += settings.rho_h * tanh(
+                    nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
+            elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
+                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                nu_k = 1
+                for jjj in range(dims.n_theta):
+                    nu_k = nu_k * eta_k[jjj]
+                self.cost += settings.rho_h * nu_k * delta_h_ki**2
+        return
+
+
+class NosnocSolver(NosnocFormulationObject):
+
+    def preprocess_model(self):
         # Note: checks ommitted for now.
         settings = self.settings
         dims = self.dims
@@ -476,14 +598,15 @@ class NosnocSolver:
         # CasADi functions for indicator and region constraint functions
         x = model.x
         u = model.u
+        model.z = z
         model.g_Stewart_fun = Function('g_Stewart_fun', [x], [g_Stewart])
         model.c_fun = Function('c_fun', [x], [c_all])
 
+        # dynamics
         model.f_x_fun = Function('f_x_fun', [x, z, u], [f_x])
-        model.g_z_all_fun = Function(
-            'g_z_all_fun', [x, z, u], [g_z_all]
-        )  # lp kkt conditions without bilinear complementarity term (it is treated with the other c.c. conditions)
-        model.z = z
+
+        # lp kkt conditions without bilinear complementarity terms
+        model.g_z_all_fun = Function('g_z_all_fun', [x, z, u], [g_z_all])
         model.lambda00_fun = Function('lambda00_fun', [model.x], [lambda00_expr])
 
         model.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
@@ -494,14 +617,12 @@ class NosnocSolver:
 
     def __create_control_stage(self, control_stage_idx, prev_fe):
         # Create control vars
-        w_len = casadi_length(self.w)
         Uk = SX.sym(f'U_{control_stage_idx}', self.dims.nu)
-        self._add_primal_vector(Uk, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
-        self.ind_u.append(list(range(w_len, w_len + self.dims.nu)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
 
         # Create Finite elements in this control stage
         control_stage = []
-        for ii in range(self.settings.N_finite_elements_list[control_stage_idx]):
+        for ii in range(self.settings.Nfe_list[control_stage_idx]):
             fe = FiniteElement(self.dims,
                                self.settings,
                                self.model,
@@ -514,12 +635,6 @@ class NosnocSolver:
         return control_stage
 
     def __create_primal_variables(self):
-        # start empty
-        self.w = SX.zeros(0, 1)
-        self.lbw = np.zeros((0,))
-        self.ubw = np.zeros((0,))
-        self.w0 = np.zeros((0,))
-
         # Initial
         self.fe0 = FiniteElementZero(self.dims, self.settings, self.model)
 
@@ -527,12 +642,11 @@ class NosnocSolver:
         self.p = vertcat(self.p, self.fe0.Lambda())
 
         # X0 is variable
-        self._add_primal_vector(self.fe0.w[self.fe0.ind_x[0]], self.fe0.lbw[self.fe0.ind_x[0]],
-                                self.fe0.ubw[self.fe0.ind_x[0]], self.fe0.w0[self.fe0.ind_x[0]])
-        self.ind_x.append(self.fe0.ind_x[0])
+        self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x,
+                          self.fe0.lbw[self.fe0.ind_x[0]], self.fe0.ubw[self.fe0.ind_x[0]],
+                          self.fe0.w0[self.fe0.ind_x[0]])
 
         # Generate control_stages
-        self.stages = []
         prev_fe = self.fe0
         for ii in range(self.settings.N_stages):
             stage = self.__create_control_stage(ii, prev_fe=prev_fe)
@@ -555,6 +669,7 @@ class NosnocSolver:
         self.ind_lambda_n.append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p.append(increment_indices(fe.ind_lambda_p, w_len))
 
+    # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
         n = casadi_length(symbolic)
 
@@ -569,49 +684,22 @@ class NosnocSolver:
         self.w0 = np.concatenate((self.w0, initial))
         return
 
-    def _add_constraint(self, symbolic: SX, lb=None, ub=None):
-        n = casadi_length(symbolic)
-        if lb is None:
-            lb = np.zeros((n,))
-        if ub is None:
-            ub = np.zeros((n,))
-        if len(lb) != n or len(ub) != n:
-            raise Exception(f'_add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
-
-        self.g = vertcat(self.g, symbolic)
-        self.lbg = np.concatenate((self.lbg, lb))
-        self.ubg = np.concatenate((self.ubg, ub))
-
-        return
-
     def __init__(self, settings: NosnocSettings, model: NosnocModel, ocp=None):
+
+        super().__init__()
 
         if ocp is None:
             ocp = NosnocOcp()
         self.model = model
-        self.settings = settings
         self.ocp = ocp
         self.dims = NosnocDims()
 
-        self.__preprocess_settings()
-        self.__preprocess_model()
+        self.settings = settings
+        settings.preprocess()
+        self.preprocess_model()
 
-        dims = self.dims
-
-        # Initialization and bounds for step-size
         h_ctrl_stages = settings.terminal_time / settings.N_stages
-
-        # Formulate NLP - Start with an empty NLP
-        # objective
-        self.objective = 0
-        J_comp = 0
-        J_comp_std = 0
-        J_comp_fesd = 0
-
-        # constraints
-        self.g = SX.zeros(0, 1)
-        self.lbg = np.zeros((0,))
-        self.ubg = np.zeros((0,))
+        self.stages: list(list(FiniteElementBase)) = []
 
         # Index vectors
         self.ind_x = []
@@ -626,192 +714,65 @@ class NosnocSolver:
         self.ind_lambda_p = []
         self.ind_u = []
         self.ind_h = []
-        self.ind_boundary = []  # index of bundary value lambda and mu
-
-        nu_vector = []
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
         self.p = sigma_p
 
-        # initialize
-        cross_comp_all = 0.0
-
         # Generate all the variables we need
         self.__create_primal_variables()
 
+        fe: FiniteElement
+        stage: list(FiniteElementBase)
         for k, stage in enumerate(self.stages):
-            # TODO: maybe make stage an object
             Uk = self.w[self.ind_u[k]]
-            for i, fe in enumerate(stage):
-                if settings.use_fesd:
-                    if i > 0:
-                        delta_h_ki = fe.w[fe.ind_h] - fe.prev_fe.w[fe.prev_fe.ind_h]
-                    else:
-                        delta_h_ki = 0
+            for _, fe in enumerate(stage):
 
-                # update standard complementarites
-                for j in range(settings.n_s):
-                    J_comp_std += model.J_cc_fun(fe.rk_stage_z(j))
+                # 1) Stewart Runge-Kutta discretization
+                fe.forward_simulation(ocp, Uk)
 
-                # lifted differential vars
-                if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                    X_ki = [fe.w[x_kij] for x_kij in fe.ind_x]
-                if settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                    X_ki = []
-                    for j in range(settings.n_s):  # Ignore continuity vars
-                        x_temp = fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
-                        for r in range(settings.n_s):
-                            x_temp += fe.w[fe.ind_h] * settings.A_irk[j, r] * fe.w[fe.ind_v[r]]
-                        if settings.lift_irk_differential:
-                            X_ki.append(fe.w[fe.ind_x[j]])
-                            self._add_constraint(fe.w[fe.ind_x[j]] - x_temp)
-                        else:
-                            X_ki.append(x_temp)
-                    X_ki.append(fe.w[fe.ind_x[-1]])
+                # 2) Complementarity Constraints
+                fe.create_complementarity_constraints(sigma_p)
 
-                sum_Lambda_ki = fe.sum_Lambda()
+                # 3) Step Equilibration
+                fe.step_equilibration()
 
-                # TODO: Move this to within each finite element, in and provide an
-                #       interface `get_integration_constraints` to generate the
-                #       the necessary implicit integrator constraints.
-                # Do RK steps
-                if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                    Xk_end = settings.D_irk[0] * fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
-                    # Note that the polynomial is initialized with the previous value
-                    # X_k+1 = X_k0 + sum_{j=1}^{n_s} D[j]*X_kj; Xk0 = D(1)*Xk
-                elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                    Xk_end = fe.prev_fe.w[fe.prev_fe.ind_x[-1]]  # initialize
-
-                for j in range(settings.n_s):
-                    fj = model.f_x_fun(X_ki[j], fe.rk_stage_z(j), Uk)
-                    gj = model.g_z_all_fun(X_ki[j], fe.rk_stage_z(j), Uk)
-                    qj = ocp.f_q_fun(X_ki[j], Uk)
-                    if settings.irk_representation == IrkRepresentation.INTEGRAL:
-                        xp = settings.C_irk[0, j + 1] * fe.prev_fe.w[fe.prev_fe.ind_x[-1]]
-                        for r, x in enumerate(X_ki[:-1]):
-                            xp += settings.C_irk[r + 1, j + 1] * x
-                        Xk_end += settings.D_irk[j + 1] * X_ki[j]
-                        self._add_constraint(fe.w[fe.ind_h] * fj - xp)
-                        self.objective += settings.B_irk[j + 1] * fe.w[fe.ind_h] * qj
-                    elif settings.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                        Xk_end += fe.w[fe.ind_h] * settings.b_irk[j] * fe.w[fe.ind_v[j]]
-                        self._add_constraint(fj - fe.w[fe.ind_v[j]])
-                        self.objective += settings.b_irk[j] * fe.w[fe.ind_h] * qj
-                    self._add_constraint(gj)
-
-                    # complementarity constraints
-                    if settings.use_fesd:
-                        g_cross_comp_j = SX.zeros((0, 1))
-                        # update vector valued sumes over control interval
-                        if j == self.settings.n_s - 1:
-                            # update only once per finite element
-                            cross_comp_all += diag(fe.sum_Theta()) @ sum_Lambda_ki
-                        for r in range(dims.n_simplex):
-                            # for different subsystems the lambdas and thetas are decoupled and should be treated as such.
-                            # sum of all cross-complementarities (vector-valued) --> later put into scalar value for the complementarity residual
-                            if settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-                                g_cross_comp_j = vertcat(
-                                    g_cross_comp_j,
-                                    diag(fe.Theta(stage=j, simplex=r)) @ (fe.prev_fe.Lambda(
-                                        stage=-1, simplex=r)))
-                                for jj in range(settings.n_s):
-                                    g_cross_comp_j = vertcat(
-                                        g_cross_comp_j,
-                                        diag(fe.Theta(stage=j, simplex=r)) @ (fe.Lambda(stage=jj,
-                                                                                        simplex=r)))
-
-                            elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
-                                # For every stage point one vector-valued constraint via sum of all \lambda
-                                g_cross_comp_j = vertcat(
-                                    g_cross_comp_j,
-                                    diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r))
-
-                            else:
-                                raise Exception('cross_comp_mode not implemented.')
-                    else:
-                        g_cross_comp_j = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
-
-                    # reformulate_mpcc_constraints
-                    n_cross_comp_j = casadi_length(g_cross_comp_j)
-                    g_cross_comp = g_cross_comp_j - sigma_p
-                    g_cross_comp_ub = 0 * np.ones((n_cross_comp_j,))
-                    if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-                        g_cross_comp_lb = -np.inf * np.ones((n_cross_comp_j,))
-                    elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
-                        g_cross_comp_lb = 0 * np.ones((n_cross_comp_j,))
-
-                    self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
-                # continuity condition: end of fe state - final stage state
-                self._add_constraint(Xk_end - fe.w[fe.ind_x[-1]])
-
-                # g_z_all constraint for boundary point and continuity of algebraic variables.
-                if not settings.right_boundary_point_explicit and settings.use_fesd and (
-                        i < settings.N_finite_elements_list[k] - 1):
-                    temp = model.g_z_all_fun(fe.w[fe.ind_x[-1]], fe.rk_stage_z(-1), Uk)
-                    self._add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
-
-                # Do step equilibration
-                if settings.use_fesd and i > 0:  # TODO: is the I > 0 constraint here right?
-                    if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                        self.objective += settings.rho_h * (
-                            fe.w[fe.ind_h] - h_ctrl_stages / settings.N_finite_elements_list[k])**2
-                    elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
-                        self.objective += settings.rho_h * delta_h_ki**2
-                    elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-                        eta_k = fe.prev_fe.sum_Lambda() * fe.sum_Lambda() + fe.prev_fe.sum_Theta(
-                        ) * fe.sum_Theta()
-                        nu_k = 1
-                        for jjj in range(dims.n_theta):
-                            nu_k = nu_k * eta_k[jjj]
-                        nu_vector = vertcat(nu_vector, nu_k)
-                        self.objective += settings.rho_h * tanh(
-                            nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
-                    elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                        eta_k = fe.prev_fe.sum_Lambda() * sum_Lambda_ki + fe.prev_fe.sum_Theta(
-                        ) * fe.sum_Theta()
-                        nu_k = 1
-                        for jjj in range(dims.n_theta):
-                            nu_k = nu_k * eta_k[jjj]
-                        nu_vector = vertcat(nu_vector, nu_k)
-                        self.objective = settings.rho_h * (nu_k) * delta_h_ki**2
+                # 4) add cost and constraints from FE to problem
+                self.cost += fe.cost
+                self.add_constraint(fe.g, fe.lbg, fe.ubg)
 
             if settings.use_fesd and settings.equidistant_control_grid:
-                h_FE = sum([fe.w[fe.ind_h] for fe in stage])
-                self._add_constraint(h_FE - h_ctrl_stages)
+                h_FE = sum([fe.h() for fe in stage])
+                self.add_constraint(h_FE - h_ctrl_stages)
 
         # Scalar-valued complementarity residual
         if settings.use_fesd:
-            # sum of all possible cross complementarities
-            J_comp_fesd = sum1(cross_comp_all)
-            J_comp = J_comp_fesd
+            J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
-            # no additional complementarites than the standard ones
-            J_comp_fesd = J_comp_std
-            J_comp = J_comp_std
+            J_comp = casadi_sum_list([
+                model.J_cc_fun(fe.rk_stage_z(j))
+                for j in range(settings.n_s)
+                for fe in flatten(self.stages)
+            ])
 
         # terminal constraint
-        g_terminal = ocp.g_terminal_fun(Xk_end)
-        self._add_constraint(g_terminal)
+        # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
+        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
+        self.add_constraint(g_terminal)
 
         # Terminal numerical Time
-        if settings.time_freezing:
-            raise NotImplementedError()
         if settings.use_fesd:
-            all_h = [fe.w[fe.ind_h] for stage in self.stages for fe in stage]
-            self._add_constraint(sum(all_h) - settings.terminal_time)
-
-        if settings.print_level > 1:
-            self.print_problem()
+            all_h = [fe.h() for stage in self.stages for fe in stage]
+            self.add_constraint(sum(all_h) - settings.terminal_time)
 
         # CasADi Functions
-        self.objective_fun = Function('objective_fun', [self.w], [self.objective])
+        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
         self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
         # NLP Solver
         try:
-            prob = {'f': self.objective, 'x': self.w, 'g': self.g, 'p': self.p}
+            prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, settings.opts_ipopt)
         except Exception as err:
             self.print_problem()
@@ -885,7 +846,10 @@ class NosnocSolver:
             if settings.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
                 sigma_k = settings.homotopy_update_slope * sigma_k
             elif settings.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
-                sigma_k = max(settings.sigma_N, min(settings.homotopy_update_slope * sigma_k, sigma_k**settings.homotopy_update_exponent))
+                sigma_k = max(
+                    settings.sigma_N,
+                    min(settings.homotopy_update_slope * sigma_k,
+                        sigma_k**settings.homotopy_update_exponent))
 
         # collect results
         results = dict()
@@ -906,7 +870,7 @@ class NosnocSolver:
             time_steps = w_opt[self.ind_h]
         else:
             t_stages = settings.terminal_time / settings.N_stages
-            for Nfe in settings.N_finite_elements_list:
+            for Nfe in settings.Nfe_list:
                 time_steps = Nfe * [t_stages / Nfe]
         results["time_steps"] = time_steps
         # stats
@@ -918,7 +882,7 @@ class NosnocSolver:
         results["u_traj"] = results["u_list"]  # duplicate name
         t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
         results["t_grid"] = t_grid
-        u_grid = [0] + np.cumsum(settings.N_finite_elements_list).tolist()
+        u_grid = [0] + np.cumsum(settings.Nfe_list).tolist()
         results["t_grid_u"] = [t_grid[i] for i in u_grid]
 
         return results
@@ -946,4 +910,4 @@ class NosnocSolver:
         print("w0")
         for xx in self.w0:
             print(xx)
-        print(f"objective:\n{self.objective}")
+        print(f"cost:\n{self.cost}")
