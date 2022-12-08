@@ -51,6 +51,7 @@ class HomotopyUpdateRule(Enum):
     LINEAR = 0
     SUPERLINEAR = 1
 
+
 class PssMode(Enum):
     # NOTE: tested in simple_sim_tests
     STEWART = 0
@@ -158,7 +159,7 @@ class NosnocSettings:
         validate(self)
         self.opts_ipopt['ipopt']['print_level'] = self.print_level
 
-        if settings.time_freezing:
+        if self.time_freezing:
             raise NotImplementedError()
 
         if self.max_iter_homotopy == 0:

@@ -399,7 +399,6 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-
     def create_complementarity_constraints(self, sigma_p):
         settings = self.settings
         dims = self.dims
@@ -467,6 +466,7 @@ class FiniteElement(FiniteElementBase):
                     nu_k = nu_k * eta_k[jjj]
                 self.cost += settings.rho_h * nu_k * delta_h_ki**2
         return
+
 
 class NosnocSolver(NosnocFormulationObject):
 
@@ -748,7 +748,11 @@ class NosnocSolver(NosnocFormulationObject):
         if settings.use_fesd:
             J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
-            J_comp = casadi_sum_list([model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s) for fe in flatten(self.stages)])
+            J_comp = casadi_sum_list([
+                model.J_cc_fun(fe.rk_stage_z(j))
+                for j in range(settings.n_s)
+                for fe in flatten(self.stages)
+            ])
 
         # terminal constraint
         # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
@@ -759,9 +763,6 @@ class NosnocSolver(NosnocFormulationObject):
         if settings.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - settings.terminal_time)
-
-        if settings.print_level > 1:
-            self.print_problem()
 
         # CasADi Functions
         self.cost_fun = Function('cost_fun', [self.w], [self.cost])
@@ -844,7 +845,10 @@ class NosnocSolver(NosnocFormulationObject):
             if settings.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
                 sigma_k = settings.homotopy_update_slope * sigma_k
             elif settings.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
-                sigma_k = max(settings.sigma_N, min(settings.homotopy_update_slope * sigma_k, sigma_k**settings.homotopy_update_exponent))
+                sigma_k = max(
+                    settings.sigma_N,
+                    min(settings.homotopy_update_slope * sigma_k,
+                        sigma_k**settings.homotopy_update_exponent))
 
         # collect results
         results = dict()
