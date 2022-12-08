@@ -438,6 +438,36 @@ class FiniteElement(FiniteElementBase):
 
         self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
+        return
+
+    def step_equilibration(self):
+        dims = self.dims
+        settings = self.settings
+        if settings.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
+            delta_h_ki = self.h() - self.prev_fe.h()
+            if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
+                h_ctrl_stages = settings.terminal_time / settings.N_stages
+                self.cost += settings.rho_h * \
+                    (self.h() - h_ctrl_stages / settings.Nfe_list[self.control_stage_idx])**2
+            elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
+                self.cost += settings.rho_h * delta_h_ki**2
+            elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
+                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                nu_k = 1
+                for jjj in range(dims.n_theta):
+                    nu_k = nu_k * eta_k[jjj]
+                self.cost += settings.rho_h * tanh(
+                    nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
+            elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
+                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                nu_k = 1
+                for jjj in range(dims.n_theta):
+                    nu_k = nu_k * eta_k[jjj]
+                self.cost += settings.rho_h * nu_k * delta_h_ki**2
+        return
+
 class NosnocSolver(NosnocFormulationObject):
 
     def preprocess_model(self):
@@ -668,9 +698,6 @@ class NosnocSolver(NosnocFormulationObject):
         settings.preprocess()
         self.preprocess_model()
 
-        dims = self.dims
-
-        # Initialization and bounds for step-size
         h_ctrl_stages = settings.terminal_time / settings.N_stages
         self.stages: list(FiniteElementBase) = []
 
@@ -710,37 +737,17 @@ class NosnocSolver(NosnocFormulationObject):
                 # 2) Complementarity Constraints
                 fe.create_complementarity_constraints(sigma_p)
 
-                self.cost += fe.cost
-                self.add_constraint(fe.g, fe.lbg, fe.ubg)
-
                 # TODO: move this somewhere
                 J_comp_std = casadi_sum_list(
                     [model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
                 cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
 
                 # 3) Step Equilibration
-                if settings.use_fesd and i > 0:  # step equilibration only within control stages.
-                    delta_h_ki = fe.h() - prev_fe.h()
-                    if settings.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                        self.cost += settings.rho_h * \
-                            (fe.h() - h_ctrl_stages / settings.Nfe_list[k])**2
-                    elif settings.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
-                        self.cost += settings.rho_h * delta_h_ki**2
-                    elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-                        eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
-                                prev_fe.sum_Theta() * fe.sum_Theta()
-                        nu_k = 1
-                        for jjj in range(dims.n_theta):
-                            nu_k = nu_k * eta_k[jjj]
-                        self.cost += settings.rho_h * tanh(
-                            nu_k / settings.step_equilibration_sigma) * delta_h_ki**2
-                    elif settings.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                        eta_k = prev_fe.sum_Lambda() * fe.sum_Lambda() + \
-                                prev_fe.sum_Theta() * fe.sum_Theta()
-                        nu_k = 1
-                        for jjj in range(dims.n_theta):
-                            nu_k = nu_k * eta_k[jjj]
-                        self.cost = settings.rho_h * nu_k * delta_h_ki**2
+                fe.step_equilibration()
+
+                # 4) add cost and constraints from FE to problem
+                self.cost += fe.cost
+                self.add_constraint(fe.g, fe.lbg, fe.ubg)
 
             if settings.use_fesd and settings.equidistant_control_grid:
                 h_FE = sum([fe.h() for fe in stage])
