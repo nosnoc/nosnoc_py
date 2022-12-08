@@ -69,16 +69,16 @@ class NosnocFormulationObject(ABC):
 
     @abstractmethod
     def __init__(self):
-        self.w = SX([])
-        self.w0 = np.array([])
-        self.lbw = np.array([])
-        self.ubw = np.array([])
+        self.w: SX = SX([])
+        self.w0: np.array = np.array([])
+        self.lbw: np.array = np.array([])
+        self.ubw: np.array = np.array([])
 
-        self.g = SX([])
-        self.lbg = np.array([])
-        self.ubg = np.array([])
+        self.g: SX = SX([])
+        self.lbg: np.array = np.array([])
+        self.ubg: np.array = np.array([])
 
-        self.cost: float = 0.0
+        self.cost: SX = SX.zeros(1)
 
     def __repr__(self):
         return repr(self.__dict__)
