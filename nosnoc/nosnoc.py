@@ -697,6 +697,7 @@ class NosnocSolver(NosnocFormulationObject):
                         for j in range(settings.n_s)
                     ])
                 elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+                    # Note: sum_Lambda contains last stage of prev_fe
                     g_cross_comp = casadi_vertcat_list([
                         diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r)
                         for r in range(dims.n_simplex)

@@ -135,7 +135,7 @@ def main_test_fesd_off():
         results = solve_simplest_example(settings=settings, model=model)
 
         errors = compute_errors(results, model)
-        tol = 1e1*TOL
+        tol = 1e1 * TOL
         # these should be off
         assert errors["x_end"] > 0.01
         assert errors["t_switch"] > 0.01
