@@ -690,7 +690,6 @@ class NosnocSolver(NosnocFormulationObject):
         if ocp is None:
             ocp = NosnocOcp()
         self.model = model
-        self.settings = settings
         self.ocp = ocp
         self.dims = NosnocDims()
 
@@ -699,10 +698,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.preprocess_model()
 
         h_ctrl_stages = settings.terminal_time / settings.N_stages
-        self.stages: list(FiniteElementBase) = []
-
-        # Formulate NLP - Start with an empty NLP
-        cross_comp_all = 0.0
+        self.stages: list(list(FiniteElementBase)) = []
 
         # Index vectors
         self.ind_x = []
@@ -726,21 +722,16 @@ class NosnocSolver(NosnocFormulationObject):
         self.__create_primal_variables()
 
         fe: FiniteElement
+        stage: list(FiniteElementBase)
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
-            for i, fe in enumerate(stage):
-                prev_fe: FiniteElement = fe.prev_fe
+            for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
                 fe.create_complementarity_constraints(sigma_p)
-
-                # TODO: move this somewhere
-                J_comp_std = casadi_sum_list(
-                    [model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
-                cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
 
                 # 3) Step Equilibration
                 fe.step_equilibration()
@@ -755,10 +746,9 @@ class NosnocSolver(NosnocFormulationObject):
 
         # Scalar-valued complementarity residual
         if settings.use_fesd:
-            J_comp = cross_comp_all
+            J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
-            # no additional complementarites than the standard ones
-            J_comp = J_comp_std
+            J_comp = casadi_sum_list([model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s) for fe in flatten(self.stages)])
 
         # terminal constraint
         # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
@@ -766,8 +756,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.add_constraint(g_terminal)
 
         # Terminal numerical Time
-        if settings.time_freezing:
-            raise NotImplementedError()
         if settings.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - settings.terminal_time)

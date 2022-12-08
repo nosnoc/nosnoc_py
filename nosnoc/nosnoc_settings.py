@@ -158,6 +158,9 @@ class NosnocSettings:
         validate(self)
         self.opts_ipopt['ipopt']['print_level'] = self.print_level
 
+        if settings.time_freezing:
+            raise NotImplementedError()
+
         if self.max_iter_homotopy == 0:
             self.max_iter_homotopy = int(
                 np.ceil(
