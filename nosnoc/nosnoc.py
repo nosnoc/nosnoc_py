@@ -682,18 +682,20 @@ class NosnocSolver(NosnocFormulationObject):
                 if not settings.use_fesd:
                     g_cross_comp = casadi_vertcat_list(
                         [diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j) for j in range(settings.n_s)])
+
                 elif settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
+                    # complement within fe
                     g_cross_comp = casadi_vertcat_list([
                         diag(fe.Theta(stage=j, simplex=r)) @ fe.Lambda(stage=jj, simplex=r)
                         for r in range(dims.n_simplex) for j in range(settings.n_s)
                         for jj in range(settings.n_s)
                     ])
-                    g_cross_comp = casadi_vertcat_list([g_cross_comp] +
-                        [
-                            diag(fe.Theta(stage=j, simplex=r)) @ prev_fe.Lambda(stage=-1, simplex=r)
-                            for r in range(dims.n_simplex)
-                            for j in range(settings.n_s)
-                        ])
+                    # complement with end of previous fe
+                    g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
+                        diag(fe.Theta(stage=j, simplex=r)) @ prev_fe.Lambda(stage=-1, simplex=r)
+                        for r in range(dims.n_simplex)
+                        for j in range(settings.n_s)
+                    ])
                 elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
                     g_cross_comp = casadi_vertcat_list([
                         diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r)
