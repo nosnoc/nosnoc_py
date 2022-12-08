@@ -1068,9 +1068,9 @@ def casadi_vertcat_list(x):
     return result
 
 
-def casadi_sum_vectors(vectors):
-    result = vectors[0]
-    for v in vectors[1:]:
+def casadi_sum_list(list):
+    result = list[0]
+    for v in list[1:]:
         result += v
     return result
 

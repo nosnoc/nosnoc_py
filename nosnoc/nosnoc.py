@@ -7,7 +7,7 @@ import numpy as np
 from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
 
 from nosnoc.nosnoc_settings import NosnocSettings, MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_vectors, flatten_layer, flatten, increment_indices
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
 
 
 @dataclass
@@ -126,7 +126,7 @@ class FiniteElementBase(NosnocFormulationObject):
         Lambdas = [self.Lambda(stage=ii, simplex=simplex) for ii in range(len(self.ind_lam))]
         Lambdas.append(self.prev_fe.Lambda(
             stage=-1, simplex=simplex))  # Include the last finite element's last stage lambda
-        return casadi_sum_vectors(Lambdas)
+        return casadi_sum_list(Lambdas)
 
 
 class FiniteElementZero(FiniteElementBase):
@@ -328,7 +328,7 @@ class FiniteElement(FiniteElementBase):
 
     def sum_Theta(self):
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
-        return casadi_sum_vectors(Thetas)
+        return casadi_sum_list(Thetas)
 
     def h(self):
         return self.w[self.ind_h]
@@ -675,7 +675,7 @@ class NosnocSolver(NosnocFormulationObject):
 
                 # 2) Complementarity Constraints
                 # fe.create_cross_complemententarities()
-                J_comp_std = casadi_sum_vectors(
+                J_comp_std = casadi_sum_list(
                     [model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
 
                 cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
