@@ -1,79 +1,10 @@
 from dataclasses import dataclass, field
-from enum import Enum
 
 import numpy as np
 
-from .utils import generate_butcher_tableu, generate_butcher_tableu_integral, validate
-
-
-class MpccMode(Enum):
-    SCHOLTES_INEQ = 0
-    SCHOLTES_EQ = 1
-    # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
-    # NOTE: tested in simple_sim_tests
-
-
-class IRKSchemes(Enum):
-    RADAU_IIA = 0
-    GAUSS_LEGENDRE = 1
-    # NOTE: tested in simple_sim_tests
-
-
-class InitializationStrategy(Enum):
-    ALL_XCURRENT_W0_START = 0
-    OLD_SOLUTION = 1
-    # Other ideas
-    # RK4_ON_SMOOTHENED
-    # lp_initialization
-
-
-class StepEquilibrationMode(Enum):
-    HEURISTIC_MEAN = 0
-    HEURISTIC_DELTA = 1
-    L2_RELAXED_SCALED = 2
-    L2_RELAXED = 3
-    # NOTE: tested in test_ocp_motor
-
-
-class CrossComplementarityMode(Enum):
-    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = 0  # nosnoc 1
-    SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA = 1  # nosnoc 3
-    # NOTE: tested in simple_sim_tests
-
-
-class IrkRepresentation(Enum):
-    INTEGRAL = 0
-    DIFFERENTIAL = 1
-    # NOTE: tested in test_ocp
-
-
-class HomotopyUpdateRule(Enum):
-    LINEAR = 0
-    SUPERLINEAR = 1
-
-
-class PssMode(Enum):
-    # NOTE: tested in simple_sim_tests
-    STEWART = 0
-    """
-    basic algebraic equations and complementarity condtions of the DCS
-    lambda_i'*theta_i = 0; for all i = 1,..., n_simplex
-    lambda_i >= 0;    for all i = 1,..., n_simplex
-    theta_i >= 0;     for all i = 1,..., n_simplex
-    """
-    STEP = 1
-    """
-    c_i(x) - (lambda_p_i-lambda_n_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i'*alpha_i  = 0; for all i = 1,..., n_simplex
-    lambda_p_i'*(e-alpha_i)  = 0; for all i = 1,..., n_simplex
-    lambda_n_i >= 0;    for all i = 1,..., n_simplex
-    lambda_p_i >= 0;    for all i = 1,..., n_simplex
-    alpha_i >= 0;     for all i = 1,..., n_simplex
-    """
-
-
-IRK_SCHEME_TO_STRING = {IRKSchemes.GAUSS_LEGENDRE: "legendre", IRKSchemes.RADAU_IIA: "radau"}
-
+from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
+from .utils import validate
+from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
 @dataclass
 class NosnocSettings:
@@ -175,13 +106,13 @@ class NosnocSettings:
         # Butcher Tableau
         if self.irk_representation == IrkRepresentation.INTEGRAL:
             B_irk, C_irk, D_irk, irk_time_points = generate_butcher_tableu_integral(
-                self.n_s, IRK_SCHEME_TO_STRING[self.irk_scheme])
+                self.n_s, self.irk_scheme)
             self.B_irk = B_irk
             self.C_irk = C_irk
             self.D_irk = D_irk
         elif self.irk_representation == IrkRepresentation.DIFFERENTIAL:
             A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
-                self.n_s, IRK_SCHEME_TO_STRING[self.irk_scheme])
+                self.n_s, self.irk_scheme)
             self.A_irk = A_irk
             self.b_irk = b_irk
 
