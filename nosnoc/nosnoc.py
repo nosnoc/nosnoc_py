@@ -185,7 +185,7 @@ class FiniteElement(FiniteElementBase):
                  dims: NosnocDims,
                  opts: NosnocOpts,
                  model: NosnocModel,
-                 control_stage_idx: int,
+                 ctrl_idx: int,
                  fe_idx: int,
                  prev_fe=None):
 
@@ -194,7 +194,7 @@ class FiniteElement(FiniteElementBase):
 
         # store info
         self.n_rkstages = n_s
-        self.control_stage_idx = control_stage_idx
+        self.ctrl_idx = ctrl_idx
         self.fe_idx = fe_idx
         self.dims = dims
         self.opts = opts
@@ -203,7 +203,7 @@ class FiniteElement(FiniteElementBase):
         # right boundary
         create_right_boundary_point = (opts.use_fesd and
                                        not opts.right_boundary_point_explicit and
-                                       fe_idx < opts.Nfe_list[control_stage_idx] - 1)
+                                       fe_idx < opts.Nfe_list[ctrl_idx] - 1)
         end_allowance = 1 if create_right_boundary_point else 0
 
         # Initialze index vectors. Note ind_x contains an extra element
@@ -224,9 +224,9 @@ class FiniteElement(FiniteElementBase):
         self.prev_fe = prev_fe
 
         # create variables
-        h = SX.sym(f'h_{control_stage_idx}_{fe_idx}')
+        h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
         h_ctrl_stages = opts.terminal_time / opts.N_stages
-        h0 = np.array([h_ctrl_stages / np.array(opts.Nfe_list[control_stage_idx])])
+        h0 = np.array([h_ctrl_stages / np.array(opts.Nfe_list[ctrl_idx])])
         ubh = (1 + opts.gamma_h) * h0
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
@@ -235,11 +235,11 @@ class FiniteElement(FiniteElementBase):
         for ii in range(opts.n_s):
             # state / state derivative variables
             if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                self.add_variable(SX.sym(f'V_{control_stage_idx}_{fe_idx}_{ii+1}', dims.nx),
+                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx),
                                   self.ind_v, -inf * np.ones(dims.nx), inf * np.ones(dims.nx),
                                   np.zeros(dims.nx), ii)
             if opts.irk_representation == IrkRepresentation.INTEGRAL or opts.lift_irk_differential:
-                self.add_variable(SX.sym(f'X_{control_stage_idx}_{fe_idx}_{ii+1}',
+                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}',
                                          dims.nx), self.ind_x, -inf * np.ones(dims.nx),
                                   inf * np.ones(dims.nx), model.x0, ii)
             # algebraic variables
@@ -247,41 +247,41 @@ class FiniteElement(FiniteElementBase):
                 # add thetas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'theta_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_theta,
                         np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
                         inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
-                    self.add_variable(SX.sym(f'mu_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
+                    self.add_variable(SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
                                       opts.init_mu * np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'alpha_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_alpha,
                         np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
                         opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_n_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_p_{control_stage_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
@@ -292,32 +292,32 @@ class FiniteElement(FiniteElementBase):
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{control_stage_idx}_{fe_idx}_end_{ij+1}',
+                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_f_sys[ij]), self.ind_lam, np.zeros(dims.n_f_sys[ij]),
                         inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
-                    self.add_variable(SX.sym(f'mu_{control_stage_idx}_{fe_idx}_end_{ij+1}', 1),
+                    self.add_variable(SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
                                       self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
                                       opts.init_mu * np.ones(1), opts.n_s, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_n_{control_stage_idx}_{fe_idx}_end_{ij+1}',
+                        SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_p_{control_stage_idx}_{fe_idx}_end_{ij+1}',
+                        SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p,
                         np.zeros(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_mu * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
         # add final X variables
-        self.add_variable(SX.sym(f'X_end_{control_stage_idx}_{fe_idx+1}', dims.nx), self.ind_x,
+        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.nx), self.ind_x,
                           -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
@@ -394,7 +394,7 @@ class FiniteElement(FiniteElementBase):
 
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
-                self.fe_idx < opts.Nfe_list[self.control_stage_idx] - 1):
+                self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
             temp = model.g_z_all_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk)
             self.add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
 
@@ -448,7 +448,7 @@ class FiniteElement(FiniteElementBase):
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                 h_ctrl_stages = opts.terminal_time / opts.N_stages
                 self.cost += opts.rho_h * \
-                    (self.h() - h_ctrl_stages / opts.Nfe_list[self.control_stage_idx])**2
+                    (self.h() - h_ctrl_stages / opts.Nfe_list[self.ctrl_idx])**2
             elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                 self.cost += opts.rho_h * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
@@ -522,7 +522,7 @@ class NosnocSolver(NosnocFormulationObject):
 
         # create dummy finite element.
         # only use first stage
-        fe = FiniteElement(dims, opts, model, control_stage_idx=0, fe_idx=0, prev_fe=None)
+        fe = FiniteElement(dims, opts, model, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
         if opts.pss_mode == PssMode.STEP:
             # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
@@ -614,18 +614,18 @@ class NosnocSolver(NosnocFormulationObject):
         self.ocp.g_terminal_fun = Function('g_terminal_fun', [x], [self.ocp.g_terminal])
         self.ocp.f_q_fun = Function('f_q_fun', [x, u], [self.ocp.f_q])
 
-    def __create_control_stage(self, control_stage_idx, prev_fe):
+    def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
-        Uk = SX.sym(f'U_{control_stage_idx}', self.dims.nu)
+        Uk = SX.sym(f'U_{ctrl_idx}', self.dims.nu)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
 
         # Create Finite elements in this control stage
         control_stage = []
-        for ii in range(self.opts.Nfe_list[control_stage_idx]):
+        for ii in range(self.opts.Nfe_list[ctrl_idx]):
             fe = FiniteElement(self.dims,
                                self.opts,
                                self.model,
-                               control_stage_idx,
+                               ctrl_idx,
                                fe_idx=ii,
                                prev_fe=prev_fe)
             self._add_finite_element(fe)
