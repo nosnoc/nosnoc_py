@@ -11,6 +11,12 @@ def validate(obj: object) -> bool:
             )
     return
 
+def print_dict(input: dict):
+    out = ''
+    for k, v in input.items():
+        out += f"{k} : {v}\n"
+    print(out)
+    return
 
 def generate_butcher_tableu(n_s, irk_string):
     if irk_string == "radau":

@@ -96,7 +96,7 @@ class NosnocFormulationObject(ABC):
 
         if len(lb) != n or len(ub) != n or len(initial) != n:
             raise Exception(
-                f'_add_primal_vector, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
+                f'add_variable, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
             )
 
         self.w = vertcat(self.w, symbolic)
