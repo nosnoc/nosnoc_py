@@ -5,6 +5,7 @@ import numpy as np
 
 from .utils import generate_butcher_tableu, generate_butcher_tableu_integral, validate
 
+
 class MpccMode(Enum):
     SCHOLTES_INEQ = 0
     SCHOLTES_EQ = 1
@@ -69,8 +70,10 @@ class PssMode(Enum):
     alpha_i >= 0;     for all i = 1,..., n_simplex
     """
 
-IRK_SCHEME_TO_STRING = {IRKSchemes.GAUSS_LEGENDRE: "legendre",
-                        IRKSchemes.RADAU_IIA: "radau"}
+
+IRK_SCHEME_TO_STRING = {IRKSchemes.GAUSS_LEGENDRE: "legendre", IRKSchemes.RADAU_IIA: "radau"}
+
+
 @dataclass
 class NosnocSettings:
 
@@ -183,6 +186,7 @@ class NosnocSettings:
         else:
             self.right_boundary_point_explicit = False
         return
+
     ## Options in matlab..
     # MPCC related, not implemented yet.
     # s_elastic_0 = 1

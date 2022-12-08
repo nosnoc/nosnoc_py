@@ -114,6 +114,7 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
+
 class FiniteElementBase(NosnocFormulationObject):
 
     def Lambda(self, stage=slice(None), simplex=slice(None)):
@@ -331,7 +332,6 @@ class FiniteElement(FiniteElementBase):
 
     def h(self):
         return self.w[self.ind_h]
-
 
     def forward_simulation(self, ocp, Uk):
         settings = self.settings
@@ -560,8 +560,9 @@ class NosnocSolver(NosnocFormulationObject):
         self.p = vertcat(self.p, self.fe0.Lambda())
 
         # X0 is variable
-        self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x, self.fe0.lbw[self.fe0.ind_x[0]],
-                                self.fe0.ubw[self.fe0.ind_x[0]], self.fe0.w0[self.fe0.ind_x[0]])
+        self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x,
+                          self.fe0.lbw[self.fe0.ind_x[0]], self.fe0.ubw[self.fe0.ind_x[0]],
+                          self.fe0.w0[self.fe0.ind_x[0]])
 
         # Generate control_stages
         prev_fe = self.fe0
@@ -665,7 +666,7 @@ class NosnocSolver(NosnocFormulationObject):
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for i, fe in enumerate(stage):
-                prev_fe = fe.prev_fe
+                prev_fe: FiniteElement = fe.prev_fe
 
                 # 1) Stewart Runge-Kutta discretization
                 fe_cost, fe_equalities = fe.forward_simulation(ocp, Uk)
@@ -674,39 +675,41 @@ class NosnocSolver(NosnocFormulationObject):
 
                 # 2) Complementarity Constraints
                 # fe.create_cross_complemententarities()
-                J_comp_std = casadi_sum_vectors([model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
+                J_comp_std = casadi_sum_vectors(
+                    [model.J_cc_fun(fe.rk_stage_z(j)) for j in range(settings.n_s)])
 
                 cross_comp_all += diag(fe.sum_Theta()) @ fe.sum_Lambda()
-                for j in range(settings.n_s):
-                    if not settings.use_fesd:
-                        g_cross_comp = diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j)
-                    else:
-                        g_cross_comp = SX.zeros((0, 1))
-                        for r in range(dims.n_simplex):
-                            if settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-                                g_cross_comp = vertcat(g_cross_comp,
-                                    diag(fe.Theta(stage=j, simplex=r)) @ (prev_fe.Lambda(
-                                        stage=-1, simplex=r)))
-                                for jj in range(settings.n_s):
-                                    g_cross_comp = vertcat(g_cross_comp,
-                                        diag(fe.Theta(stage=j, simplex=r)) @
-                                            (fe.Lambda(stage=jj, simplex=r)))
+                if not settings.use_fesd:
+                    g_cross_comp = casadi_vertcat_list(
+                        [diag(fe.Lambda(stage=j)) @ fe.Theta(stage=j) for j in range(settings.n_s)])
+                elif settings.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
+                    g_cross_comp = casadi_vertcat_list([
+                        diag(fe.Theta(stage=j, simplex=r)) @ fe.Lambda(stage=jj, simplex=r)
+                        for r in range(dims.n_simplex) for j in range(settings.n_s)
+                        for jj in range(settings.n_s)
+                    ])
+                    g_cross_comp = casadi_vertcat_list([g_cross_comp] +
+                        [
+                            diag(fe.Theta(stage=j, simplex=r)) @ prev_fe.Lambda(stage=-1, simplex=r)
+                            for r in range(dims.n_simplex)
+                            for j in range(settings.n_s)
+                        ])
+                elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+                    g_cross_comp = casadi_vertcat_list([
+                        diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r)
+                        for r in range(dims.n_simplex)
+                        for j in range(settings.n_s)
+                    ])
 
-                            elif settings.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
-                                # For every stage point one vector-valued constraint via sum of all \lambda
-                                g_cross_comp = vertcat(
-                                    g_cross_comp,
-                                    diag(fe.Theta(stage=j, simplex=r)) @ fe.sum_Lambda(simplex=r))
+                n_cross_comp = casadi_length(g_cross_comp)
+                g_cross_comp = g_cross_comp - sigma_p
+                g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
+                if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+                    g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
+                elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
+                    g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
 
-                    n_cross_comp = casadi_length(g_cross_comp)
-                    g_cross_comp = g_cross_comp - sigma_p
-                    g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
-                    if settings.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-                        g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
-                    elif settings.mpcc_mode == MpccMode.SCHOLTES_EQ:
-                        g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
-
-                    self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
+                self._add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
                 # 3) Step Equilibration
                 if settings.use_fesd and i > 0:  # step equilibration only within control stages.

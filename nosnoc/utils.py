@@ -1,6 +1,7 @@
 import numpy as np
 import casadi as ca
 
+
 def validate(obj: object) -> bool:
     for attr, expected_type in obj.__annotations__.items():
         value = getattr(obj, attr)
