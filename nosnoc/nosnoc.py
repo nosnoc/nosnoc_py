@@ -22,9 +22,9 @@ class NosnocModel:
     """
     # TODO: extend docu for n_sys > 1
     x: SX
-    F: list
-    c: list
-    S: list
+    F: list[SX]
+    c: list[SX]
+    S: list[np.ndarray]
     x0: np.ndarray
     u: SX = SX.sym('u_dummy', 0, 1)
     name: str = 'nosnoc'
@@ -220,8 +220,8 @@ class FiniteElement(FiniteElementBase):
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
-        h_ctrl_stages = opts.terminal_time / opts.N_stages
-        h0 = np.array([h_ctrl_stages / np.array(opts.Nfe_list[ctrl_idx])])
+        h_ctrl_stage = opts.terminal_time / opts.N_stages
+        h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
         ubh = (1 + opts.gamma_h) * h0
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
@@ -435,9 +435,8 @@ class FiniteElement(FiniteElementBase):
         if opts.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
             delta_h_ki = self.h() - self.prev_fe.h()
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                h_ctrl_stages = opts.terminal_time / opts.N_stages
-                self.cost += opts.rho_h * \
-                    (self.h() - h_ctrl_stages / opts.Nfe_list[self.ctrl_idx])**2
+                h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
+                self.cost += opts.rho_h * (self.h() -h_fe)**2
             elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                 self.cost += opts.rho_h * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
@@ -550,16 +549,11 @@ class NosnocSolver(NosnocFormulationObject):
             n_lift_eq = casadi_length(g_lift)
 
         # Reformulate the Filippov ODE into a DCS
-        f_x = np.zeros((dims.nx, 1))
-        # rhs of ODE
-        for ii in range(dims.n_sys):
-            if opts.pss_mode == PssMode.STEWART:
-                f_x = f_x + model.F[ii] @ fe.w[fe.ind_theta[0][ii]]
-            elif opts.pss_mode == PssMode.STEP:
-                f_x = f_x + model.F[ii] @ upsilon[:, ii]
+        f_x = SX.zeros((dims.nx, 1))
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(dims.n_sys):
+                f_x = f_x + model.F[ii] @ fe.w[fe.ind_theta[0][ii]]
                 g_switching = vertcat(
                     g_switching,
                     g_Stewart_list[ii] - fe.w[fe.ind_lam[0][ii]] + fe.w[fe.ind_mu[0][ii]])
@@ -569,6 +563,7 @@ class NosnocSolver(NosnocFormulationObject):
                                         g_Stewart_list[ii] - mmin(g_Stewart_list[ii]))
         elif opts.pss_mode == PssMode.STEP:
             for ii in range(dims.n_sys):
+                f_x = f_x + model.F[ii] @ upsilon[:, ii]
                 g_switching = vertcat(
                     g_switching,
                     model.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
@@ -685,8 +680,8 @@ class NosnocSolver(NosnocFormulationObject):
         opts.preprocess()
         self.preprocess_model()
 
-        h_ctrl_stages = opts.terminal_time / opts.N_stages
-        self.stages: list(list(FiniteElementBase)) = []
+        h_ctrl_stage = opts.terminal_time / opts.N_stages
+        self.stages: list[list[FiniteElementBase]] = []
 
         # Index vectors
         self.ind_x = []
@@ -710,7 +705,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.__create_primal_variables()
 
         fe: FiniteElement
-        stage: list(FiniteElementBase)
+        stage: list[FiniteElementBase]
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
@@ -730,7 +725,7 @@ class NosnocSolver(NosnocFormulationObject):
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 h_FE = sum([fe.h() for fe in stage])
-                self.add_constraint(h_FE - h_ctrl_stages)
+                self.add_constraint(h_FE - h_ctrl_stage)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
