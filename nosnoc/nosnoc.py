@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 import numpy as np
 from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
 
-from nosnoc.nosnoc_settings import NosnocSettings, MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation
+from nosnoc.nosnoc_settings import NosnocSettings, MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_vectors, generate_butcher_tableu, generate_butcher_tableu_integral, flatten_layer, flatten, increment_indices, validate
 
 
 @dataclass
 class NosnocModel:
-    """
+    r"""
     \dot{x} \in f_i(x, u) if x(t) in R_i \subset \R^{n_x}
 
     with R_i = {x \in \R^{n_x} | diag(S_i,\dot) * c(x) > 0}
@@ -834,7 +834,7 @@ class NosnocSolver:
             print('sigma \t\t compl_res \t CPU time \t iter \t status')
 
         w0 = self.w0
-        sigma_k = settings.sigma_0 / settings.homotopy_update_slope
+        sigma_k = settings.sigma_0
 
         # lambda00 initialization
         x0 = w0[self.ind_x[0]]
@@ -843,7 +843,6 @@ class NosnocSolver:
 
         # homotopy loop
         for ii in range(settings.max_iter_homotopy):
-            sigma_k = settings.homotopy_update_slope * sigma_k
             p_val[0] = sigma_k
 
             # solve NLP
@@ -878,6 +877,15 @@ class NosnocSolver:
 
             if complementarity_residual < settings.comp_tol:
                 break
+
+            if sigma_k <= settings.sigma_N:
+                break
+
+            # Update the homotopy parameter.
+            if settings.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
+                sigma_k = settings.homotopy_update_slope * sigma_k
+            elif settings.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
+                sigma_k = max(settings.sigma_N, min(settings.homotopy_update_slope * sigma_k, sigma_k**settings.homotopy_update_exponent))
 
         # collect results
         results = dict()
