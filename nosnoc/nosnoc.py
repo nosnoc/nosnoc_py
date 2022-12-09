@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from abc import ABC, abstractmethod
 import time
 from dataclasses import dataclass, field
@@ -22,9 +22,9 @@ class NosnocModel:
     """
     # TODO: extend docu for n_sys > 1
     x: SX
-    F: list[SX]
-    c: list[SX]
-    S: list[np.ndarray]
+    F: List[SX]
+    c: List[SX]
+    S: List[np.ndarray]
     x0: np.ndarray
     u: SX = SX.sym('u_dummy', 0, 1)
     name: str = 'nosnoc'
@@ -705,7 +705,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.__create_primal_variables()
 
         fe: FiniteElement
-        stage: list[FiniteElementBase]
+        stage: List[FiniteElementBase]
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
