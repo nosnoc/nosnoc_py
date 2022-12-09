@@ -843,10 +843,10 @@ class NosnocSolver(NosnocFormulationObject):
         results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lam]
         results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_mu]
 
-        if opts.pss_mode == PssMode.STEP:
-            results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_alpha]
-            results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_n]
-            results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_p]
+        # if opts.pss_mode == PssMode.STEP:
+        results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_alpha]
+        results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_n]
+        results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_p]
 
         if opts.use_fesd:
             time_steps = w_opt[self.ind_h]
