@@ -92,6 +92,7 @@ class NosnocOpts:
         self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
         # TODO: clean this up: only do this if not set by user.
         # IPOPT tol should be smaller than outer tol, but not too much
+        # Note IPOPT option list: https://coin-or.github.io/Ipopt/OPTIONS.html
         tol_ipopt = self.comp_tol * 1e-2
         self.opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
         self.opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
