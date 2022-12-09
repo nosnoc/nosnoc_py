@@ -458,8 +458,10 @@ class FiniteElement(FiniteElementBase):
 
 class NosnocSolver(NosnocFormulationObject):
 
+    # TODO: move this out of model
+    # NOTE: maybe dims can become part of model and are added in the preprocess function.
     def preprocess_model(self):
-        # Note: checks ommitted for now.
+        # TODO: validate model
         opts = self.opts
         dims = self.dims
         model = self.model
@@ -474,9 +476,7 @@ class NosnocSolver(NosnocFormulationObject):
         dims.n_f_sys = [model.F[i].shape[1] for i in range(dims.n_sys)]
 
         g_Stewart_list = [-model.S[i] @ model.c[i] for i in range(dims.n_sys)]
-
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
-        c_all = casadi_vertcat_list(self.model.c)
 
         if opts.pss_mode == PssMode.STEP:
             # double the size of the vectors, since alpha, 1-alpha treated at same time
@@ -535,7 +535,7 @@ class NosnocSolver(NosnocFormulationObject):
         g_switching = SX.zeros((0, 1))
         g_convex = SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
         lambda00_expr = SX.zeros(0, 0)
-        f_comp_residual = 0  # the orthogonality conditions diag(\theta) \lambda = 0.
+        f_comp_residual = SX.zeros(1)  # the orthogonality conditions diag(\theta) \lambda = 0.
 
         z = fe.rk_stage_z(0)
         if opts.pss_mode == PssMode.STEWART:
@@ -582,7 +582,7 @@ class NosnocSolver(NosnocFormulationObject):
         u = model.u
         model.z = z
         model.g_Stewart_fun = Function('g_Stewart_fun', [x], [g_Stewart])
-        model.c_fun = Function('c_fun', [x], [c_all])
+        model.c_fun = Function('c_fun', [x], [casadi_vertcat_list(self.model.c)])
 
         # dynamics
         model.f_x_fun = Function('f_x_fun', [x, z, u], [f_x])

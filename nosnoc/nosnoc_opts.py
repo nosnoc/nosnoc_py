@@ -74,7 +74,6 @@ class NosnocOpts:
     tol_ipopt = 1e-10
     opts_ipopt['ipopt']['tol'] = tol_ipopt
     opts_ipopt['ipopt']['dual_inf_tol'] = tol_ipopt
-    opts_ipopt['ipopt']['dual_inf_tol'] = tol_ipopt
     opts_ipopt['ipopt']['compl_inf_tol'] = tol_ipopt
     opts_ipopt['ipopt']['mu_strategy'] = 'adaptive'
     opts_ipopt['ipopt']['mu_oracle'] = 'quality-function'
@@ -89,7 +88,14 @@ class NosnocOpts:
 
     def preprocess(self):
         validate(self)
+
         self.opts_ipopt['ipopt']['print_level'] = self.print_level
+        # TODO: clean this up: only do this if not set by user.
+        # IPOPT tol should be smaller than outer tol, but not too much
+        tol_ipopt = self.comp_tol * 1e-2
+        self.opts_ipopt['ipopt']['tol'] = tol_ipopt
+        self.opts_ipopt['ipopt']['dual_inf_tol'] = tol_ipopt
+        self.opts_ipopt['ipopt']['compl_inf_tol'] = tol_ipopt
 
         if self.time_freezing:
             raise NotImplementedError()
