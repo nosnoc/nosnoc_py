@@ -45,5 +45,4 @@ def plot_timings(timings, latexify=True, title='', figure_filename=''):
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 
-
     plt.show()

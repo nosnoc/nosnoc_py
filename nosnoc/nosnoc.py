@@ -436,7 +436,7 @@ class FiniteElement(FiniteElementBase):
             delta_h_ki = self.h() - self.prev_fe.h()
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                 h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
-                self.cost += opts.rho_h * (self.h() -h_fe)**2
+                self.cost += opts.rho_h * (self.h() - h_fe)**2
             elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                 self.cost += opts.rho_h * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
@@ -458,7 +458,7 @@ class FiniteElement(FiniteElementBase):
 
 class NosnocSolver(NosnocFormulationObject):
 
-    # TODO: move this out of model
+    # TODO: move this out of solver.
     # NOTE: maybe dims can become part of model and are added in the preprocess function.
     def preprocess_model(self):
         # TODO: validate model
@@ -666,7 +666,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.w0 = np.concatenate((self.w0, initial))
         return
 
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp]=None):
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         super().__init__()
 

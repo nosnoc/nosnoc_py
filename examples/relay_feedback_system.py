@@ -87,7 +87,6 @@ def main():
     nosnoc.plot_timings(results["cpu_nlp"], figure_filename=filename)
 
 
-
 def plot_system_3d(results):
     nosnoc.latexify_plot()
 
@@ -106,6 +105,7 @@ def plot_system_3d(results):
     ax.grid()
     plt.show()
 
+
 def plot_system(results):
     nosnoc.latexify_plot()
     X_sim = results["X_sim"]
@@ -114,7 +114,7 @@ def plot_system(results):
     # state trajectory plot
     plt.figure()
     for i in range(NX):
-        plt.subplot(1, NX, i+1)
+        plt.subplot(1, NX, i + 1)
         plt.plot(t_grid, [x[i] for x in X_sim])
         plt.grid()
         plt.xlabel("$t$")
@@ -123,10 +123,10 @@ def plot_system(results):
     # algebraic variables
     plt.figure()
     plt.subplot(2, 1, 1)
-    lambdas = [results["lambda_sim"][0][0]
-              ] + [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
-    thetas = [results["theta_sim"][0][0]
-             ] + [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
+    lambdas = [results["lambda_sim"][0][0]] + \
+              [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
+    thetas = [results["theta_sim"][0][0]] + \
+             [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
     n_lam = len(lambdas[0])
     for i in range(n_lam):
         plt.plot(results["t_grid"], [x[i] for x in lambdas], label=f'$\lambda_{i+1}$')
