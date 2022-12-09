@@ -96,6 +96,7 @@ class NosnocOpts:
         self.opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
         self.opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
         self.opts_casadi_nlp['ipopt']['compl_inf_tol'] = tol_ipopt
+        self.opts_casadi_nlp['ipopt']['mu_target'] = tol_ipopt
 
         if self.time_freezing:
             raise NotImplementedError()
