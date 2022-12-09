@@ -92,10 +92,10 @@ def plot_results(results):
     plt.grid()
 
     # algebraic variables
-    lambdas = [results["lambda_sim"][0][0]
-              ] + [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
-    thetas = [results["theta_sim"][0][0]
-             ] + [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
+    lambdas = [results["lambda_sim"][0][0]] + \
+              [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
+    thetas = [results["theta_sim"][0][0]] + \
+             [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
     plt.subplot(3, 1, 2)
     n_lam = len(lambdas[0])
     for i in range(n_lam):

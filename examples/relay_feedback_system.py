@@ -1,12 +1,26 @@
 import nosnoc
 from casadi import SX, horzcat
+from datetime import datetime
+
 import numpy as np
-from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 
 OMEGA = 25
 XI = 0.05
 SIGMA = 1
+NX = 3
+
+## Info
+# Simulation example from
+
+# Piiroinen, Petri T., and Yuri A. Kuznetsov. "An event-driven method to simulate Filippov systems with
+# accurate computing of sliding motions." ACM Transactions on Mathematical Software (TOMS) 34.3 (2008): 1-24.
+# Equation (32)
+
+# see also:
+# M. di Bernardo, K. H. Johansson, and F. Vasca. Self-oscillations and sliding in
+# relay feedback systems: Symmetry and bifurcations. International Journal of
+# Bifurcations and Chaos, 11(4):1121-1140, 2001
 
 
 def get_relay_feedback_system_model():
@@ -45,11 +59,15 @@ def main():
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.comp_tol = 1e-6
-    opts.equidistant_control_grid = False
     opts.print_level = 1
+    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
+    opts.homotopy_update_exponent = 1.4
 
     Tsim = 10
     Nsim = 200
+
+    # Tsim = 1
+    # Nsim = 20
     Tstep = Tsim / Nsim
     opts.terminal_time = Tstep
 
@@ -61,11 +79,18 @@ def main():
     looper.run()
     results = looper.get_results()
 
-    plot_system(results["X_sim"], results["t_grid"])
-    nosnoc.plot_timings(results["cpu_nlp"])
+    plot_system(results)
+    # plot_system_3d(results)
+
+    filename = ""
+    filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
+    nosnoc.plot_timings(results["cpu_nlp"], figure_filename=filename)
 
 
-def plot_system(X_sim, t_grid):
+def plot_system_3d(results):
+    nosnoc.latexify_plot()
+
+    X_sim = results["X_sim"]
     x1 = [x[0] for x in X_sim]
     x2 = [x[1] for x in X_sim]
     x3 = [x[2] for x in X_sim]
@@ -78,18 +103,41 @@ def plot_system(X_sim, t_grid):
     ax.set_ylabel("$x_2$")
     ax.set_zlabel("$x_3$")
     ax.grid()
+    plt.show()
+
+
+def plot_system(results):
+    nosnoc.latexify_plot()
+    X_sim = results["X_sim"]
+    t_grid = results["t_grid"]
 
     # state trajectory plot
     plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.plot(t_grid, x1)
-    plt.plot(t_grid, x2)
-    plt.plot(t_grid, x3)
-    plt.xlabel("$t$")
-    plt.ylabel("$x(t)$")
+    for i in range(NX):
+        plt.subplot(1, NX, i + 1)
+        plt.plot(t_grid, [x[i] for x in X_sim])
+        plt.grid()
+        plt.xlabel("$t$")
+        plt.ylabel(f"$x_{i+1}(t)$")
+
+    # algebraic variables
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    lambdas = [results["lambda_sim"][0][0]] + \
+              [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
+    thetas = [results["theta_sim"][0][0]] + \
+             [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
+    n_lam = len(lambdas[0])
+    for i in range(n_lam):
+        plt.plot(results["t_grid"], [x[i] for x in lambdas], label=f'$\lambda_{i+1}$')
     plt.grid()
-    plt.legend(["$x_1(t)$", "$x_2(t)$", "$x_3(t)$"])
-    # TODO figure for theta/alpha
+    plt.legend()
+
+    plt.subplot(2, 1, 2)
+    for i in range(n_lam):
+        plt.plot(results["t_grid"], [x[i] for x in thetas], label=r'$\theta_' + f'{i+1}$')
+    plt.grid()
+    plt.legend()
 
     plt.show()
 

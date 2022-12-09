@@ -20,7 +20,7 @@ def latexify_plot():
     matplotlib.rcParams.update(params)
 
 
-def plot_timings(timings, latexify=True, title=''):
+def plot_timings(timings, latexify=True, title='', figure_filename=''):
     # latexify plot
     if latexify:
         latexify_plot()
@@ -41,4 +41,8 @@ def plot_timings(timings, latexify=True, title=''):
     plt.xlim([-.5, Nsim - .5])
     plt.grid()
     plt.title(title)
+    if figure_filename != '':
+        plt.savefig(figure_filename)
+        print(f'stored figure as {figure_filename}')
+
     plt.show()
