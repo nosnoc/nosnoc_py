@@ -63,20 +63,20 @@ class NosnocOpts:
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
 
     # IPOPT opts
-    opts_ipopt = dict()
-    opts_ipopt['print_time'] = 0
-    opts_ipopt['verbose'] = False
-    opts_ipopt['ipopt'] = dict()
-    opts_ipopt['ipopt']['sb'] = 'yes'
-    opts_ipopt['ipopt']['max_iter'] = 500
-    opts_ipopt['ipopt']['print_level'] = 0
-    opts_ipopt['ipopt']['bound_relax_factor'] = 0
+    opts_casadi_nlp = dict()
+    opts_casadi_nlp['print_time'] = 0
+    opts_casadi_nlp['verbose'] = False
+    opts_casadi_nlp['ipopt'] = dict()
+    opts_casadi_nlp['ipopt']['sb'] = 'yes'
+    opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts_casadi_nlp['ipopt']['print_level'] = 0
+    opts_casadi_nlp['ipopt']['bound_relax_factor'] = 0
     tol_ipopt = 1e-10
-    opts_ipopt['ipopt']['tol'] = tol_ipopt
-    opts_ipopt['ipopt']['dual_inf_tol'] = tol_ipopt
-    opts_ipopt['ipopt']['compl_inf_tol'] = tol_ipopt
-    opts_ipopt['ipopt']['mu_strategy'] = 'adaptive'
-    opts_ipopt['ipopt']['mu_oracle'] = 'quality-function'
+    opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
+    opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
+    opts_casadi_nlp['ipopt']['compl_inf_tol'] = tol_ipopt
+    opts_casadi_nlp['ipopt']['mu_strategy'] = 'adaptive'
+    opts_casadi_nlp['ipopt']['mu_oracle'] = 'quality-function'
 
     time_freezing: bool = False
 
@@ -89,13 +89,13 @@ class NosnocOpts:
     def preprocess(self):
         validate(self)
 
-        self.opts_ipopt['ipopt']['print_level'] = self.print_level
+        self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
         # TODO: clean this up: only do this if not set by user.
         # IPOPT tol should be smaller than outer tol, but not too much
         tol_ipopt = self.comp_tol * 1e-2
-        self.opts_ipopt['ipopt']['tol'] = tol_ipopt
-        self.opts_ipopt['ipopt']['dual_inf_tol'] = tol_ipopt
-        self.opts_ipopt['ipopt']['compl_inf_tol'] = tol_ipopt
+        self.opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
+        self.opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
+        self.opts_casadi_nlp['ipopt']['compl_inf_tol'] = tol_ipopt
 
         if self.time_freezing:
             raise NotImplementedError()

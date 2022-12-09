@@ -755,7 +755,7 @@ class NosnocSolver(NosnocFormulationObject):
         # NLP Solver
         try:
             prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
-            self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_ipopt)
+            self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
