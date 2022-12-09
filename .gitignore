@@ -3,6 +3,8 @@ env
 .vscode
 *.egg-info
 
+*.pdf
+
 private*
 external
 *~
