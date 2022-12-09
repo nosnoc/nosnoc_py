@@ -3,7 +3,7 @@ from casadi import SX, vertcat, horzcat
 import numpy as np
 import matplotlib.pyplot as plt
 
-# example settings
+# example opts
 illustrate_regions = True
 TERMINAL_CONSTRAINT = True
 LINEAR_CONTROL = True
@@ -78,31 +78,31 @@ def get_motor_with_friction_ocp_description():
     return model, ocp
 
 
-def get_default_settings():
-    settings = nosnoc.NosnocSettings()
-    # settings.pss_mode = nosnoc.PssMode.STEP
-    settings.use_fesd = True
+def get_default_options():
+    opts = nosnoc.NosnocOpts()
+    # opts.pss_mode = nosnoc.PssMode.STEP
+    opts.use_fesd = True
     comp_tol = 1e-6
-    settings.comp_tol = comp_tol
-    settings.homotopy_update_slope = 0.1
-    settings.n_s = 2
-    settings.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
-    settings.print_level = 1
+    opts.comp_tol = comp_tol
+    opts.homotopy_update_slope = 0.1
+    opts.n_s = 2
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
+    opts.print_level = 1
 
-    settings.N_stages = 30
-    settings.N_finite_elements = 2
-    return settings
+    opts.N_stages = 30
+    opts.N_finite_elements = 2
+    return opts
 
 
-def solve_ocp(settings=None):
-    if settings is None:
-        settings = get_default_settings()
+def solve_ocp(opts=None):
+    if opts is None:
+        opts = get_default_options()
 
     [model, ocp] = get_motor_with_friction_ocp_description()
 
-    settings.terminal_time = 0.08
+    opts.terminal_time = 0.08
 
-    solver = nosnoc.NosnocSolver(settings, model, ocp)
+    solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
     print(f"{results['u_traj']=}")

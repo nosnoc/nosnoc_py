@@ -1,5 +1,5 @@
 from examples.simplest_example import (
-    get_default_settings,
+    get_default_options,
     get_simplest_model_sliding,
 )
 import nosnoc
@@ -16,13 +16,13 @@ def main_w_test():
         for Nfe in N_FINITE_ELEMENT_VALUES:
             for pss_mode in nosnoc.PssMode:
                 for irk in nosnoc.IRKSchemes:
-                    settings = get_default_settings()
-                    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-                    settings.print_level = 0
-                    settings.n_s = ns
-                    settings.N_finite_elements = Nfe
-                    settings.irk_scheme = irk
-                    settings.pss_mode = pss_mode
+                    opts = get_default_options()
+                    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+                    opts.print_level = 0
+                    opts.n_s = ns
+                    opts.N_finite_elements = Nfe
+                    opts.irk_scheme = irk
+                    opts.pss_mode = pss_mode
 
                     if pss_mode == nosnoc.PssMode.STEWART:
                         nx = 1
@@ -43,10 +43,10 @@ def main_w_test():
 
                     nw_expected = nx + Nfe * (ns * (nx + nz) + nh + nx) + (Nfe - 1) * (n_end)
                     try:
-                        solver = nosnoc.NosnocSolver(settings, model)
+                        solver = nosnoc.NosnocSolver(opts, model)
                         assert (solver.w.shape[0] == nw_expected)
                     except AssertionError:
-                        raise Exception(f"Test failed with setting:\n {settings=} \n{model=}")
+                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_w_test: SUCCESS")
 
 

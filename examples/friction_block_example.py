@@ -17,8 +17,8 @@ def get_blocks_with_friction_model():
     x0 = np.array([-1, 1, -1, -1, 1, 1, 0])
     # u0 = 0 # guess for control variables
     ## Numer of ODE layers
-    # n_simplex = 3;# number of Cartesian products in the model ("independet switches"), we call this layer
-    # # number of modes in every simplex
+    # n_sys = 3;# number of Cartesian products in the model ("independet switches"), we call this layer
+    # # number of modes in every sys
     # m_1 = 2
     # m_2 = 2
     # m_3 = 2
@@ -48,7 +48,7 @@ def get_blocks_with_friction_model():
     # ubu  = 20*0;
 
     ## Switching Functions
-    # every constraint function corresponds to a simplex (note that the c_i might be vector valued)
+    # every constraint function corresponds to a sys (note that the c_i might be vector valued)
     c1 = v1
     c2 = v2
     c3 = v3
@@ -60,7 +60,7 @@ def get_blocks_with_friction_model():
     S = [S1, S2, S3]
     c = [c1, c2, c3]
 
-    ## Modes of the ODEs layers (for all  i = 1,...,n_simplex)
+    ## Modes of the ODEs layers (for all  i = 1,...,n_sys)
     # part independet of the nonsmoothness
     F_external = 0
     # external force, e.g., control
@@ -93,25 +93,25 @@ def get_blocks_with_friction_model():
 def main():
 
     # Simulation setings
-    settings = nosnoc.NosnocSettings()
-    settings.n_s = 2
-    settings.comp_tol = 1e-6
-    settings.homotopy_update_slope = .1
+    opts = nosnoc.NosnocOpts()
+    opts.n_s = 2
+    opts.comp_tol = 1e-6
+    opts.homotopy_update_slope = .1
 
-    settings.N_finite_elements = 3
+    opts.N_finite_elements = 3
     Tsim = 5
     Nsim = 120
     T_step = Tsim / Nsim
 
-    settings.terminal_time = T_step
-    settings.pss_mode = nosnoc.PssMode.STEWART
-    settings.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
+    opts.terminal_time = T_step
+    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
 
     # model
     model = get_blocks_with_friction_model()
 
     # solver
-    solver = nosnoc.NosnocSolver(settings, model)
+    solver = nosnoc.NosnocSolver(opts, model)
 
     n_exec = 1
     for i in range(n_exec):
@@ -129,7 +129,7 @@ def main():
     print(f"mean timing solver call {mean_timing:.5f} s")
 
     # plots
-    nosnoc.plot_timings(timings, title=settings.irk_representation)
+    nosnoc.plot_timings(timings, title=opts.irk_representation)
     plot_blocks(results["X_sim"], results["t_grid"])
     import pdb
     pdb.set_trace()

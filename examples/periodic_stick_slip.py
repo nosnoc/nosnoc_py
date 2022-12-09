@@ -45,28 +45,28 @@ def get_periodic_slip_stick_model_codim2():
 
 
 def main_codim1():
-    settings = nosnoc.NosnocSettings()
+    opts = nosnoc.NosnocOpts()
 
-    settings.use_fesd = True
-    settings.pss_mode = nosnoc.PssMode.STEWART
-    settings.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
-    settings.N_finite_elements = 2
-    settings.n_s = 2
-    settings.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
-    settings.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
-    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-    settings.comp_tol = 1e-6
-    settings.equidistant_control_grid = False
-    settings.print_level = 1
+    opts.use_fesd = True
+    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
+    opts.N_finite_elements = 2
+    opts.n_s = 2
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.comp_tol = 1e-6
+    opts.equidistant_control_grid = False
+    opts.print_level = 1
 
     Tsim = 40
     Nsim = 100
     Tstep = Tsim / Nsim
-    settings.terminal_time = Tstep
+    opts.terminal_time = Tstep
 
     model = get_periodic_slip_stick_model_codim1()
 
-    solver = nosnoc.NosnocSolver(settings, model)
+    solver = nosnoc.NosnocSolver(opts, model)
 
     looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
     looper.run()
@@ -77,28 +77,28 @@ def main_codim1():
 
 
 def main_codim2():
-    settings = nosnoc.NosnocSettings()
+    opts = nosnoc.NosnocOpts()
 
-    settings.use_fesd = True
-    settings.pss_mode = nosnoc.PssMode.STEWART
-    settings.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
-    settings.N_finite_elements = 3
-    settings.n_s = 4
-    settings.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
-    settings.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
-    settings.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-    settings.comp_tol = 1e-9
-    settings.equidistant_control_grid = False
-    settings.print_level = 1
+    opts.use_fesd = True
+    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
+    opts.N_finite_elements = 3
+    opts.n_s = 4
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.comp_tol = 1e-9
+    opts.equidistant_control_grid = False
+    opts.print_level = 1
 
     Tsim = 20
     Nsim = 100
     Tstep = Tsim / Nsim
-    settings.terminal_time = Tstep
+    opts.terminal_time = Tstep
 
     model = get_periodic_slip_stick_model_codim2()
 
-    solver = nosnoc.NosnocSolver(settings, model)
+    solver = nosnoc.NosnocSolver(opts, model)
 
     looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
     looper.run()

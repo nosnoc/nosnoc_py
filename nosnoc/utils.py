@@ -11,6 +11,7 @@ def validate(obj: object) -> bool:
             )
     return
 
+
 def print_dict(input: dict):
     out = ''
     for k, v in input.items():
@@ -19,7 +20,7 @@ def print_dict(input: dict):
     return
 
 
-def casadi_length(x):
+def casadi_length(x) -> int:
     return x.shape[0]
 
 
@@ -35,9 +36,9 @@ def casadi_vertcat_list(x):
     return result
 
 
-def casadi_sum_list(list):
-    result = list[0]
-    for v in list[1:]:
+def casadi_sum_list(input: list):
+    result = input[0]
+    for v in input[1:]:
         result += v
     return result
 

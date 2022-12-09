@@ -6,8 +6,9 @@ from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
 from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
+
 @dataclass
-class NosnocSettings:
+class NosnocOpts:
 
     # discretization
     terminal_time: float = 1.0  # TODO: make param?
@@ -20,7 +21,7 @@ class NosnocSettings:
 
     irk_representation: IrkRepresentation = IrkRepresentation.INTEGRAL
 
-    # IRK and FESD Settings
+    # IRK and FESD opts
     n_s: int = 2  # Number of IRK stages
     irk_scheme: IRKSchemes = IRKSchemes.RADAU_IIA
     cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
@@ -31,20 +32,20 @@ class NosnocSettings:
     gamma_h: float = 1.0
 
     # initialization - Stewart
-    initial_theta: float = 1.0
-    initial_lambda: float = 1.0
-    initial_mu: float = 1.0
+    init_theta: float = 1.0
+    init_lambda: float = 1.0
+    init_mu: float = 1.0
     # initialization - Step
-    initial_alpha: float = 1.0  # for step only
-    initial_lambda_0: float = 1.0
-    initial_lambda_1: float = 1.0
-    initial_beta: float = 1.0
-    initial_gamma: float = 1.0
+    init_alpha: float = 1.0  # for step only
+    init_lambda_0: float = 1.0
+    init_lambda_1: float = 1.0
+    init_beta: float = 1.0
+    init_gamma: float = 1.0
 
     N_finite_elements: int = 2  # of length N_stages
     Nfe_list: list = field(default_factory=list)  # of length N_stages
 
-    # MPCC and Homotopy Settings
+    # MPCC and Homotopy opts
     comp_tol: float = 1e-8
     sigma_0: float = 1.0
     sigma_N: float = 1e-8
@@ -61,7 +62,7 @@ class NosnocSettings:
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
 
-    # IPOPT Settings
+    # IPOPT opts
     opts_ipopt = dict()
     opts_ipopt['print_time'] = 0
     opts_ipopt['verbose'] = False
@@ -111,8 +112,7 @@ class NosnocSettings:
             self.C_irk = C_irk
             self.D_irk = D_irk
         elif self.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(
-                self.n_s, self.irk_scheme)
+            A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(self.n_s, self.irk_scheme)
             self.A_irk = A_irk
             self.b_irk = b_irk
 
@@ -151,7 +151,7 @@ class NosnocSettings:
     ## Some Nosnoc options that are not relevant here (yet)
     # n_depth_step_lifting = 2; # it is not recomended to change this (increase nonlinearity and harms convergenc), depth is number of multilinar terms to wich a lifting variables is equated to.
 
-    # # Default settings for the barrier tuned penalty/slack variables for mpcc modes 8 do 10.
+    # # Default opts for the barrier tuned penalty/slack variables for mpcc modes 8 do 10.
     # rho_penalty = 1e1;
     # sigma_penalty = 0;
 

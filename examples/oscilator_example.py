@@ -18,7 +18,7 @@ def get_oscilator_model():
     x1 = SX.sym("x1")
     x2 = SX.sym("x2")
     x = vertcat(x1, x2)
-    # every constraint function corresponds to a simplex (note that the c_i might be vector valued)
+    # every constraint function corresponds to a sys (note that the c_i might be vector valued)
     c = [x1**2 + x2**2 - R_OSC**2]
     # sign matrix for the modes
     S = [np.array([[1], [-1]])]
@@ -33,15 +33,15 @@ def get_oscilator_model():
 
 
 def main():
-    settings = nosnoc.NosnocSettings()
-    # settings.irk_representation = "differential"
-    settings.use_fesd = True
+    opts = nosnoc.NosnocOpts()
+    # opts.irk_representation = "differential"
+    opts.use_fesd = True
     comp_tol = 1e-6
-    settings.comp_tol = comp_tol
-    settings.homotopy_update_slope = 0.1  # decrease rate
-    settings.N_finite_elements = 2
-    settings.n_s = 2
-    settings.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
+    opts.comp_tol = comp_tol
+    opts.homotopy_update_slope = 0.1  # decrease rate
+    opts.N_finite_elements = 2
+    opts.n_s = 2
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
 
     model = get_oscilator_model()
 
@@ -49,9 +49,9 @@ def main():
     Nsim = 29
     Tstep = Tsim / Nsim
 
-    settings.terminal_time = Tstep
+    opts.terminal_time = Tstep
 
-    solver = nosnoc.NosnocSolver(settings, model)
+    solver = nosnoc.NosnocSolver(opts, model)
 
     # loop
     looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
