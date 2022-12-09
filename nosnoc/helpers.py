@@ -16,7 +16,7 @@ class NosnocSimLooper:
 
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy))
 
-    def run(self):
+    def run(self) -> None:
         for i in range(self.Nsim):
             self.solver.set("x", self.xcurrent)
             results = self.solver.solve()
@@ -28,7 +28,7 @@ class NosnocSimLooper:
             self.theta_sim += results["theta_list"]
             self.lambda_sim += results["lambda_list"]
 
-    def get_results(self):
+    def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))
 
         results = {

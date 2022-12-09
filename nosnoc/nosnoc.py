@@ -339,7 +339,7 @@ class FiniteElement(FiniteElementBase):
     def h(self):
         return self.w[self.ind_h]
 
-    def forward_simulation(self, ocp, Uk):
+    def forward_simulation(self, ocp: NosnocOcp, Uk: SX):
         opts = self.opts
         model = self.model
         dims = self.dims
@@ -390,7 +390,7 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p):
+    def create_complementarity_constraints(self, sigma_p: SX):
         opts = self.opts
         dims = self.dims
         if not opts.use_fesd:
@@ -666,7 +666,7 @@ class NosnocSolver(NosnocFormulationObject):
         self.w0 = np.concatenate((self.w0, initial))
         return
 
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp=None):
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp]=None):
 
         super().__init__()
 
@@ -764,7 +764,7 @@ class NosnocSolver(NosnocFormulationObject):
             import pdb
             pdb.set_trace()
 
-    def solve(self):
+    def solve(self) -> dict:
         opts = self.opts
         w_all = []
 
