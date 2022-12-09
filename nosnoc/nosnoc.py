@@ -11,7 +11,6 @@ from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplemen
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
 
 
-@dataclass
 class NosnocModel:
     r"""
     \dot{x} \in f_i(x, u) if x(t) in R_i \subset \R^{n_x}
@@ -22,14 +21,23 @@ class NosnocModel:
     """
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
-    x: SX
-    F: List[SX]
-    c: List[SX]
-    S: List[np.ndarray]
-    x0: np.ndarray
-    u: SX = SX.sym('u_dummy', 0, 1)
-    name: str = 'nosnoc'
 
+    def __init__(self, x: SX, F: List[SX], c: List[SX], S: List[np.ndarray], x0: np.ndarray, u: SX = SX.sym('u_dummy', 0, 1), name: str = 'nosnoc'):
+        self.x: SX = x
+        self.F: List[SX] = F
+        self.c: List[SX] = c
+        self.S: List[np.ndarray] = x
+        self.x0: np.ndarray = x0
+        self.u: SX = u
+        self.name: str = name
+
+        self.dims: NosnocDims = NosnocDims(nx=casadi_length(x),
+                                           nu=casadi_length(u),
+                                           nz=0,  # TODO calculate these
+                                           n_theta=0,
+                                           N_sys=len(F),
+                                           n_c_sys=[casadi_length(x) for x in c],
+                                           n_f_sys=[casadi_length(f) for f in F])
 
 @dataclass
 class NosnocOcp:
