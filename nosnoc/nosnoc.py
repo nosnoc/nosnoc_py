@@ -37,7 +37,6 @@ class NosnocModel:
         nx = casadi_length(self.x)
         nu = casadi_length(self.u)
         n_sys = len(self.F)
-        print(n_sys)
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
@@ -47,7 +46,7 @@ class NosnocModel:
         if opts.pss_mode == PssMode.STEP:
             # double the size of the vectors, since alpha, 1-alpha treated at same time
             # TODO: Is this correct? it does give an integer, not a list!
-            self.dims.n_f_sys = np.sum(n_c_sys, axis=0) * 2
+            n_f_sys = np.sum(n_c_sys, axis=0) * 2
 
         # dimensions
         if opts.pss_mode == PssMode.STEWART:
@@ -126,8 +125,6 @@ class NosnocModel:
         # collect all algebraic equations
         g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
 
-        print(lambda00_expr)
-        print(g_Stewart_list)
         # CasADi functions for indicator and region constraint functions
         self.z = z
         self.g_Stewart_fun = Function('g_Stewart_fun', [self.x], [g_Stewart])
@@ -740,8 +737,6 @@ class NosnocSolver(NosnocFormulationObject):
         try:
             prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
-            self.print_problem()
-            print(self.p)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
@@ -768,7 +763,6 @@ class NosnocSolver(NosnocFormulationObject):
         # lambda00 initialization
         x0 = w0[self.ind_x[0]]
         lambda00 = self.model.lambda00_fun(x0).full().flatten()
-        print(lambda00)
         p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
 
         # homotopy loop
