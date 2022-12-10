@@ -26,18 +26,122 @@ class NosnocModel:
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
-        self.S: List[np.ndarray] = x
+        self.S: List[np.ndarray] = S
         self.x0: np.ndarray = x0
         self.u: SX = u
         self.name: str = name
 
-        self.dims: NosnocDims = NosnocDims(nx=casadi_length(x),
-                                           nu=casadi_length(u),
-                                           nz=0,  # TODO calculate these
-                                           n_theta=0,
-                                           N_sys=len(F),
-                                           n_c_sys=[casadi_length(x) for x in c],
-                                           n_f_sys=[casadi_length(f) for f in F])
+        self.dims: NosnocDims = None
+
+    def preprocess_model(self, opts: NosnocOpts):
+        nx = casadi_length(self.x)
+        nu = casadi_length(self.u)
+        n_sys = len(self.F)
+        print(n_sys)
+        n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+        n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
+
+        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        g_Stewart = casadi_vertcat_list(g_Stewart_list)
+
+        if opts.pss_mode == PssMode.STEP:
+            # double the size of the vectors, since alpha, 1-alpha treated at same time
+            # TODO: Is this correct? it does give an integer, not a list!
+            self.dims.n_f_sys = np.sum(n_c_sys, axis=0) * 2
+
+        # dimensions
+        if opts.pss_mode == PssMode.STEWART:
+            n_theta = sum(n_f_sys)  # number of modes
+            n_lambda = n_theta
+            nz = n_theta + n_lambda + n_sys
+        elif opts.pss_mode == PssMode.STEP:
+            n_alpha = np.sum(n_c_sys)
+            n_lambda_n = np.sum(n_c_sys)
+            n_lambda_p = np.sum(n_c_sys)
+            n_theta = 2 * n_alpha
+            nz = n_alpha + n_lambda_n + n_lambda_p
+        self.dims = NosnocDims(nx=nx,
+                               nu=nu,
+                               nz=nz,
+                               n_theta=n_theta,
+                               n_sys=n_sys,
+                               n_c_sys=n_c_sys,
+                               n_f_sys=n_f_sys)
+
+        # create dummy finite element.
+        # only use first stage
+        fe = FiniteElement(opts, self, ctrl_idx=0, fe_idx=0, prev_fe=None)
+
+        upsilon = []
+        if opts.pss_mode == PssMode.STEP:
+            # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
+            # terms or gamma from lifting
+            for ii in range(self.dims.n_sys):
+                upsilon_temp = []
+                S_temp = self.S[ii]
+                for j in range(len(S_temp)):
+                    upsilon_ij = 1
+                    for k in range(len(S_temp[0, :])):
+                        # create multiafine term
+                        if S_temp[j, k] != 0:
+                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) +
+                                                       S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
+                    upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
+                upsilon = horzcat(upsilon, upsilon_temp)
+
+        # start empty
+        g_lift = SX.zeros((0, 1))
+        g_switching = SX.zeros((0, 1))
+        g_convex = SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
+        lambda00_expr = SX.zeros(0, 0)
+        f_comp_residual = SX.zeros(1)  # the orthogonality conditions diag(\theta) \lambda = 0.
+
+        z = fe.rk_stage_z(0)
+
+        # Reformulate the Filippov ODE into a DCS
+        f_x = SX.zeros((nx, 1))
+
+        if opts.pss_mode == PssMode.STEWART:
+            for ii in range(n_sys):
+                f_x = f_x + self.F[ii] @ fe.w[fe.ind_theta[0][ii]]
+                g_switching = vertcat(
+                    g_switching,
+                    g_Stewart_list[ii] - fe.w[fe.ind_lam[0][ii]] + fe.w[fe.ind_mu[0][ii]])
+                g_convex = vertcat(g_convex, sum1(fe.w[fe.ind_theta[0][ii]]) - 1)
+                f_comp_residual += fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
+                lambda00_expr = vertcat(lambda00_expr,
+                                        g_Stewart_list[ii] - mmin(g_Stewart_list[ii]))
+        elif opts.pss_mode == PssMode.STEP:
+            for ii in range(n_sys):
+                f_x = f_x + self.F[ii] @ upsilon[:, ii]
+                g_switching = vertcat(
+                    g_switching,
+                    self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
+                f_comp_residual += transpose(
+                    fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
+                f_comp_residual += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
+                    np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
+                lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
+
+        # collect all algebraic equations
+        g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
+
+        print(lambda00_expr)
+        print(g_Stewart_list)
+        # CasADi functions for indicator and region constraint functions
+        self.z = z
+        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x], [g_Stewart])
+        self.c_fun = Function('c_fun', [self.x], [casadi_vertcat_list(self.c)])
+
+        # dynamics
+        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u], [f_x])
+
+        # lp kkt conditions without bilinear complementarity terms
+        self.g_z_switching_fun = Function('g_z_switching_fun', [z], [g_switching])
+        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u], [g_z_all])
+        self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
+
+        self.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
 
 @dataclass
 class NosnocOcp:
@@ -53,11 +157,21 @@ class NosnocOcp:
     +
     f_q_T(x_terminal) -- evaluated at the end
     """
-    lbu: np.ndarray = np.ones((0,))
-    ubu: np.ndarray = np.ones((0,))
-    f_q: SX = SX.zeros(1)
-    f_q_T: SX = SX.zeros(1)
-    g_terminal: SX = SX.zeros(0)
+
+    def __init__(self, lbu: np.ndarray = np.ones((0,)),
+                 ubu: np.ndarray = np.ones((0,)),
+                 f_q: SX = SX.zeros(1),
+                 f_q_T: SX = SX.zeros(1),
+                 g_terminal: SX = SX.zeros(0)):
+        self.lbu: np.ndarray = lbu
+        self.ubu: np.ndarray = ubu
+        self.f_q: SX = f_q
+        self.f_q_T: SX = f_q_T
+        self.g_terminal: SX = g_terminal
+
+    def preprocess_ocp(self, x: SX, u: SX):
+        self.g_terminal_fun = Function('g_terminal_fun', [x], [self.g_terminal])
+        self.f_q_fun = Function('f_q_fun', [x, u], [self.f_q])
 
 
 @dataclass
@@ -155,8 +269,9 @@ class FiniteElementBase(NosnocFormulationObject):
 
 class FiniteElementZero(FiniteElementBase):
 
-    def __init__(self, dims: NosnocDims, opts: NosnocOpts, model: NosnocModel):
+    def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
+        dims = model.dims
         self.n_rkstages = 1
 
         self.ind_x = np.empty((1, 0), dtype=int).tolist()
@@ -187,7 +302,6 @@ class FiniteElementZero(FiniteElementBase):
 class FiniteElement(FiniteElementBase):
 
     def __init__(self,
-                 dims: NosnocDims,
                  opts: NosnocOpts,
                  model: NosnocModel,
                  ctrl_idx: int,
@@ -201,9 +315,10 @@ class FiniteElement(FiniteElementBase):
         self.n_rkstages = n_s
         self.ctrl_idx = ctrl_idx
         self.fe_idx = fe_idx
-        self.dims = dims
         self.opts = opts
         self.model = model
+
+        dims = self.model.dims
 
         # right boundary
         create_right_boundary_point = (opts.use_fesd and not opts.right_boundary_point_explicit and
@@ -351,7 +466,7 @@ class FiniteElement(FiniteElementBase):
     def forward_simulation(self, ocp: NosnocOcp, Uk: SX) -> None:
         opts = self.opts
         model = self.model
-        dims = self.dims
+        dims = self.model.dims
 
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             X_ki = [self.w[x_kij] for x_kij in self.ind_x]
@@ -401,7 +516,7 @@ class FiniteElement(FiniteElementBase):
 
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
         opts = self.opts
-        dims = self.dims
+        dims = self.model.dims
         if not opts.use_fesd:
             g_cross_comp = casadi_vertcat_list(
                 [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(opts.n_s)])
@@ -467,154 +582,15 @@ class FiniteElement(FiniteElementBase):
 
 class NosnocSolver(NosnocFormulationObject):
 
-    # TODO: move this out of solver.
-    # NOTE: maybe dims can become part of model and are added in the preprocess function.
-    def preprocess_model(self):
-        # TODO: validate model
-        opts = self.opts
-        dims = self.dims
-        model = self.model
-
-        dims.nx = casadi_length(self.model.x)
-        dims.nu = casadi_length(self.model.u)
-        dims.n_sys = len(self.model.F)
-
-        upsilon = []
-
-        dims.n_c_sys = [casadi_length(model.c[i]) for i in range(dims.n_sys)]
-        dims.n_f_sys = [model.F[i].shape[1] for i in range(dims.n_sys)]
-
-        g_Stewart_list = [-model.S[i] @ model.c[i] for i in range(dims.n_sys)]
-        g_Stewart = casadi_vertcat_list(g_Stewart_list)
-
-        if opts.pss_mode == PssMode.STEP:
-            # double the size of the vectors, since alpha, 1-alpha treated at same time
-            # TODO: Is this correct? it does give an integer, not a list!
-            dims.n_f_sys = np.sum(dims.n_c_sys, axis=0) * 2
-
-        if max(dims.n_c_sys) < 2 and opts.pss_mode == PssMode.STEP:
-            pss_lift_step_functions = 0
-            # pss_lift_step_functions = 1; # lift the multilinear terms in the step functions;
-            if opts.print_level >= 1:
-                print(
-                    'Info: opts.pss_lift_step_functions set to 0, as are step function selections are already entering the ODE linearly.\n'
-                )
-
-        # dimensions
-        if opts.pss_mode == PssMode.STEWART:
-            n_theta = sum(dims.n_f_sys)  # number of modes
-            n_lambda = n_theta
-            nz = n_theta + n_lambda + dims.n_sys
-        elif opts.pss_mode == PssMode.STEP:
-            n_alpha = np.sum(dims.n_c_sys)
-            n_lambda_n = np.sum(dims.n_c_sys)
-            n_lambda_p = np.sum(dims.n_c_sys)
-            n_theta = 2 * n_alpha
-            nz = n_alpha + n_lambda_n + n_lambda_p
-        # NOTE: these are not used anymore. Remove?
-        dims.nz = nz
-        dims.n_theta = n_theta
-
-        # create dummy finite element.
-        # only use first stage
-        fe = FiniteElement(dims, opts, model, ctrl_idx=0, fe_idx=0, prev_fe=None)
-
-        if opts.pss_mode == PssMode.STEP:
-            # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
-            # terms or gamma from lifting
-            if pss_lift_step_functions:
-                raise NotImplementedError
-            for ii in range(self.dims.n_sys):
-                upsilon_temp = []
-                S_temp = model.S[ii]
-                for j in range(len(S_temp)):
-                    upsilon_ij = 1
-                    for k in range(len(S_temp[0, :])):
-                        # create multiafine term
-                        if S_temp[j, k] != 0:
-                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) +
-                                                       S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
-                    upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
-                upsilon = horzcat(upsilon, upsilon_temp)
-            # prepare for time freezing lifting and co, not implemented
-
-        # start empty
-        g_lift = SX.zeros((0, 1))
-        g_switching = SX.zeros((0, 1))
-        g_convex = SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
-        lambda00_expr = SX.zeros(0, 0)
-        f_comp_residual = SX.zeros(1)  # the orthogonality conditions diag(\theta) \lambda = 0.
-
-        z = fe.rk_stage_z(0)
-        if opts.pss_mode == PssMode.STEWART:
-            # NOTE: In MATLAB, we do n_lift_eq = 1 here, but the following should be correct.
-            n_lift_eq = dims.n_sys
-            # n_lift_eq = 0
-        elif opts.pss_mode == PssMode.STEP:
-            if pss_lift_step_functions:
-                raise NotImplementedError
-            # eval functions for gamma and beta?
-            n_lift_eq = casadi_length(g_lift)
-
-        # Reformulate the Filippov ODE into a DCS
-        f_x = SX.zeros((dims.nx, 1))
-
-        if opts.pss_mode == PssMode.STEWART:
-            for ii in range(dims.n_sys):
-                f_x = f_x + model.F[ii] @ fe.w[fe.ind_theta[0][ii]]
-                g_switching = vertcat(
-                    g_switching,
-                    g_Stewart_list[ii] - fe.w[fe.ind_lam[0][ii]] + fe.w[fe.ind_mu[0][ii]])
-                g_convex = vertcat(g_convex, sum1(fe.w[fe.ind_theta[0][ii]]) - 1)
-                f_comp_residual += fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
-                lambda00_expr = vertcat(lambda00_expr,
-                                        g_Stewart_list[ii] - mmin(g_Stewart_list[ii]))
-        elif opts.pss_mode == PssMode.STEP:
-            for ii in range(dims.n_sys):
-                f_x = f_x + model.F[ii] @ upsilon[:, ii]
-                g_switching = vertcat(
-                    g_switching,
-                    model.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
-                f_comp_residual += transpose(
-                    fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
-                f_comp_residual += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
-                    np.ones(dims.n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
-                lambda00_expr = vertcat(lambda00_expr, -fmin(model.c[ii], 0), fmax(model.c[ii], 0))
-
-        # collect all algebraic equations
-        g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
-        dims.n_lift_eq = n_lift_eq
-
-        # CasADi functions for indicator and region constraint functions
-        x = model.x
-        u = model.u
-        model.z = z
-        model.g_Stewart_fun = Function('g_Stewart_fun', [x], [g_Stewart])
-        model.c_fun = Function('c_fun', [x], [casadi_vertcat_list(self.model.c)])
-
-        # dynamics
-        model.f_x_fun = Function('f_x_fun', [x, z, u], [f_x])
-
-        # lp kkt conditions without bilinear complementarity terms
-        model.g_z_all_fun = Function('g_z_all_fun', [x, z, u], [g_z_all])
-        model.lambda00_fun = Function('lambda00_fun', [model.x], [lambda00_expr])
-
-        model.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
-
-        # OCP
-        self.ocp.g_terminal_fun = Function('g_terminal_fun', [x], [self.ocp.g_terminal])
-        self.ocp.f_q_fun = Function('f_q_fun', [x, u], [self.ocp.f_q])
-
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
-        Uk = SX.sym(f'U_{ctrl_idx}', self.dims.nu)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.dims.nu,)))
+        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.nu)
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.model.dims.nu,)))
 
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
-            fe = FiniteElement(self.dims,
-                               self.opts,
+            fe = FiniteElement(self.opts,
                                self.model,
                                ctrl_idx,
                                fe_idx=ii,
@@ -626,7 +602,7 @@ class NosnocSolver(NosnocFormulationObject):
 
     def __create_primal_variables(self):
         # Initial
-        self.fe0 = FiniteElementZero(self.dims, self.opts, self.model)
+        self.fe0 = FiniteElementZero(self.opts, self.model)
 
         # lambda00 is parameter
         self.p = vertcat(self.p, self.fe0.Lambda())
@@ -682,11 +658,11 @@ class NosnocSolver(NosnocFormulationObject):
             ocp = NosnocOcp()
         self.model = model
         self.ocp = ocp
-        self.dims = NosnocDims()
-
         self.opts = opts
+
         opts.preprocess()
-        self.preprocess_model()
+        model.preprocess_model(opts)
+        ocp.preprocess_ocp(model.x, model.u)
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
@@ -764,6 +740,8 @@ class NosnocSolver(NosnocFormulationObject):
         try:
             prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
+            self.print_problem()
+            print(self.p)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
@@ -790,6 +768,7 @@ class NosnocSolver(NosnocFormulationObject):
         # lambda00 initialization
         x0 = w0[self.ind_x[0]]
         lambda00 = self.model.lambda00_fun(x0).full().flatten()
+        print(lambda00)
         p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
 
         # homotopy loop
@@ -879,7 +858,7 @@ class NosnocSolver(NosnocFormulationObject):
 
     def set(self, field: str, value):
         if field == 'x':
-            ind_x0 = range(self.dims.nx)
+            ind_x0 = range(self.model.dims.nx)
             self.w0[ind_x0] = value
             self.lbw[ind_x0] = value
             self.ubw[ind_x0] = value
