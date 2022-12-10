@@ -48,7 +48,7 @@ class HomotopyUpdateRule(Enum):
 
 
 class PssMode(Enum):
-    # NOTE: tested in simple_sim_tests
+    # NOTE: tested in simple_sim_tests, test_ocp_motor
     STEWART = 0
     """
     basic algebraic equations and complementarity condtions of the DCS

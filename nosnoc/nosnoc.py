@@ -216,7 +216,7 @@ class FiniteElement(FiniteElementBase):
         self.ind_lambda_p = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
         self.ind_h = []
 
-        self.prev_fe = prev_fe
+        self.prev_fe: FiniteElementBase = prev_fe
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -319,27 +319,27 @@ class FiniteElement(FiniteElementBase):
         self.w0 = np.append(self.w0, initial)
         return
 
-    def rk_stage_z(self, stage):
+    def rk_stage_z(self, stage) -> SX:
         idx = np.concatenate((flatten(self.ind_theta[stage]), flatten(self.ind_lam[stage]),
                               flatten(self.ind_mu[stage]), flatten(self.ind_alpha[stage]),
                               flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage])))
         return self.w[idx]
 
-    def Theta(self, stage=slice(None), sys=slice(None)):
+    def Theta(self, stage=slice(None), sys=slice(None)) -> SX:
         return vertcat(
             self.w[flatten(self.ind_theta[stage][sys])],
             self.w[flatten(self.ind_alpha[stage][sys])],
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
             self.w[flatten(self.ind_alpha[stage][sys])])
 
-    def sum_Theta(self):
+    def sum_Theta(self) -> SX:
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
         return casadi_sum_list(Thetas)
 
-    def h(self):
+    def h(self) -> SX:
         return self.w[self.ind_h]
 
-    def forward_simulation(self, ocp: NosnocOcp, Uk: SX):
+    def forward_simulation(self, ocp: NosnocOcp, Uk: SX) -> None:
         opts = self.opts
         model = self.model
         dims = self.dims
@@ -390,7 +390,7 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: SX):
+    def create_complementarity_constraints(self, sigma_p: SX) -> None:
         opts = self.opts
         dims = self.dims
         if not opts.use_fesd:
