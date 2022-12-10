@@ -429,28 +429,28 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def step_equilibration(self):
-        dims = self.dims
+    def step_equilibration(self) -> None:
         opts = self.opts
+        prev_fe = self.prev_fe
         if opts.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
-            delta_h_ki = self.h() - self.prev_fe.h()
+            delta_h_ki = self.h() - prev_fe.h()
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                 h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
                 self.cost += opts.rho_h * (self.h() - h_fe)**2
             elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
                 self.cost += opts.rho_h * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        prev_fe.sum_Theta() * self.sum_Theta()
                 nu_k = 1
-                for jjj in range(dims.n_theta):
+                for jjj in range(casadi_length(eta_k)):
                     nu_k = nu_k * eta_k[jjj]
                 self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
             elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                eta_k = self.prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                        self.prev_fe.sum_Theta() * self.sum_Theta()
+                eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                        prev_fe.sum_Theta() * self.sum_Theta()
                 nu_k = 1
-                for jjj in range(dims.n_theta):
+                for jjj in range(casadi_length(eta_k)):
                     nu_k = nu_k * eta_k[jjj]
                 self.cost += opts.rho_h * nu_k * delta_h_ki**2
         return
