@@ -21,6 +21,7 @@ class NosnocModel:
     where S_i denotes the rows of S.
     """
     # TODO: extend docu for n_sys > 1
+    # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
     x: SX
     F: List[SX]
     c: List[SX]
@@ -493,7 +494,6 @@ class NosnocSolver(NosnocFormulationObject):
 
         # dimensions
         if opts.pss_mode == PssMode.STEWART:
-            # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
             n_theta = sum(dims.n_f_sys)  # number of modes
             n_lambda = n_theta
             nz = n_theta + n_lambda + dims.n_sys
@@ -503,7 +503,7 @@ class NosnocSolver(NosnocFormulationObject):
             n_lambda_p = np.sum(dims.n_c_sys)
             n_theta = 2 * n_alpha
             nz = n_alpha + n_lambda_n + n_lambda_p
-
+        # NOTE: these are not used anymore. Remove?
         dims.nz = nz
         dims.n_theta = n_theta
 
