@@ -121,13 +121,13 @@ class NosnocModel:
         self.f_x_fun = Function('f_x_fun', [self.x, z, self.u], [f_x])
 
         # lp kkt conditions without bilinear complementarity terms
-        self.g_z_switching_fun = Function('g_z_switching_fun', [z], [g_switching])
+        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u], [g_switching])
         self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u], [g_z_all])
         self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
 
         self.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
 
-@dataclass
+
 class NosnocOcp:
     """
     allows to specify
@@ -166,7 +166,6 @@ class NosnocDims:
     nx: int = 0
     nu: int = 0
     n_sys: int = 0
-    n_lift_eq: int = 0
     n_c_sys: list = field(default_factory=list)
     n_f_sys: list = field(default_factory=list)
 
@@ -491,8 +490,7 @@ class FiniteElement(FiniteElementBase):
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
                 self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
-            temp = model.g_z_all_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk)
-            self.add_constraint(temp[:casadi_length(temp) - dims.n_lift_eq])
+            self.add_constraint(model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
 
         return
 
