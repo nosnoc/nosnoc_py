@@ -124,7 +124,7 @@ def example(plot=True):
 
 
 def plot_motor_with_friction(x_traj, u_traj, t_grid, t_grid_u, latexify=True):
-
+    x_traj = np.array(x_traj)
     if latexify:
         nosnoc.latexify_plot()
     plt.figure()
