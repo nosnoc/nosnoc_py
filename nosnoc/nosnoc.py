@@ -48,18 +48,8 @@ class NosnocModel:
             # TODO: Is this correct? it does give an integer, not a list!
             n_f_sys = np.sum(n_c_sys, axis=0) * 2
 
-        # dimensions
-        if opts.pss_mode == PssMode.STEWART:
-            n_theta = sum(n_f_sys)  # number of modes
-            n_lambda = n_theta
-        elif opts.pss_mode == PssMode.STEP:
-            n_alpha = np.sum(n_c_sys)
-            n_lambda_n = np.sum(n_c_sys)
-            n_lambda_p = np.sum(n_c_sys)
-            n_theta = 2 * n_alpha
         self.dims = NosnocDims(nx=nx,
                                nu=nu,
-                               n_theta=n_theta,
                                n_sys=n_sys,
                                n_c_sys=n_c_sys,
                                n_f_sys=n_f_sys)
@@ -175,7 +165,6 @@ class NosnocDims:
     """
     nx: int = 0
     nu: int = 0
-    n_theta: int = 0
     n_sys: int = 0
     n_lift_eq: int = 0
     n_c_sys: list = field(default_factory=list)
