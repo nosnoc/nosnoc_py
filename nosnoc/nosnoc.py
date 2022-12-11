@@ -447,7 +447,6 @@ class FiniteElement(FiniteElementBase):
     def forward_simulation(self, ocp: NosnocOcp, Uk: SX) -> None:
         opts = self.opts
         model = self.model
-        dims = self.model.dims
 
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             X_ki = [self.w[x_kij] for x_kij in self.ind_x]
