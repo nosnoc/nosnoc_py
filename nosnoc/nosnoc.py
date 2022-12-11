@@ -52,16 +52,13 @@ class NosnocModel:
         if opts.pss_mode == PssMode.STEWART:
             n_theta = sum(n_f_sys)  # number of modes
             n_lambda = n_theta
-            nz = n_theta + n_lambda + n_sys
         elif opts.pss_mode == PssMode.STEP:
             n_alpha = np.sum(n_c_sys)
             n_lambda_n = np.sum(n_c_sys)
             n_lambda_p = np.sum(n_c_sys)
             n_theta = 2 * n_alpha
-            nz = n_alpha + n_lambda_n + n_lambda_p
         self.dims = NosnocDims(nx=nx,
                                nu=nu,
-                               nz=nz,
                                n_theta=n_theta,
                                n_sys=n_sys,
                                n_c_sys=n_c_sys,
@@ -178,7 +175,6 @@ class NosnocDims:
     """
     nx: int = 0
     nu: int = 0
-    nz: int = 0
     n_theta: int = 0
     n_sys: int = 0
     n_lift_eq: int = 0
