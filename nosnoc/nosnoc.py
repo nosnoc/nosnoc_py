@@ -121,6 +121,29 @@ class NosnocModel:
 
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
 
+    def add_smooth_step_representation(self, smoothing_parameter = 1e4):
+        y = SX.sym('y')
+        dims = self.dims
+        smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
+        theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
+        f_x_smooth = SX.zeros((dims.nx, 1))
+
+        for s in range(dims.n_sys):
+            n_c: int = dims.n_c_sys[s]
+            alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
+            for i in range(dims.n_f_sys[s]):
+                n_Ri = sum(np.abs(self.S[s][i,:]))
+                theta_list[s][i] = 2 ** (n_c -n_Ri)
+                for j in range(n_c):
+                    theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
+            f_x_smooth += self.F[s] @ theta_list[s]
+
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
+        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], theta_list)
+        # xdot_test = f_x_smooth_fun(self.x0)
+        # theta_test = theta_smooth_fun(self.x0)
+        # print(f"{xdot_test=}")
+        # print(f"{theta_test=}")
 
 class NosnocOcp:
     """
