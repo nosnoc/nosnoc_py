@@ -34,18 +34,12 @@ class NosnocModel:
         self.dims: NosnocDims = None
 
     def preprocess_model(self, opts: NosnocOpts):
+        # detect dimensions
         nx = casadi_length(self.x)
         nu = casadi_length(self.u)
         n_sys = len(self.F)
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
-
-        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
-        g_Stewart = casadi_vertcat_list(g_Stewart_list)
-
-        # if opts.pss_mode == PssMode.STEP:
-            # double the size of the vectors, since alpha, 1-alpha treated at same time
-            # n_f_sys = np.sum(n_c_sys, axis=0) * 2
 
         self.dims = NosnocDims(nx=nx,
                                nu=nu,
@@ -53,14 +47,15 @@ class NosnocModel:
                                n_c_sys=n_c_sys,
                                n_f_sys=n_f_sys)
 
-        # create dummy finite element.
-        # only use first stage
+        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        g_Stewart = casadi_vertcat_list(g_Stewart_list)
+
+        # create dummy finite element - only use first stage
         fe = FiniteElement(opts, self, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
+        # setup upsilon
         upsilon = []
         if opts.pss_mode == PssMode.STEP:
-            # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
-            # terms or gamma from lifting
             for ii in range(self.dims.n_sys):
                 upsilon_temp = []
                 S_temp = self.S[ii]
