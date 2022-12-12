@@ -9,7 +9,8 @@ OMEGA = 25
 XI = 0.05
 SIGMA = 1
 NX = 3
-
+# Initial value
+X0 = np.array([0, -0.001, -0.02])
 ## Info
 # Simulation example from
 
@@ -24,9 +25,6 @@ NX = 3
 
 
 def get_relay_feedback_system_model():
-
-    # Initial value
-    x0 = np.array([0, -0.001, -0.02])
 
     # Variables
     x = SX.sym("x", 3)
@@ -44,7 +42,7 @@ def get_relay_feedback_system_model():
     f_12 = A @ x - b
 
     F = [horzcat(f_11, f_12)]
-    return nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0)
+    return nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0)
 
 
 def main():
@@ -86,6 +84,32 @@ def main():
     filename = ""
     filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
     nosnoc.plot_timings(results["cpu_nlp"], figure_filename=filename)
+
+
+def main_rk4_simulation():
+    opts = nosnoc.NosnocOpts()
+    opts.use_fesd = True
+    opts.pss_mode = nosnoc.PssMode.STEWART
+
+    Tsim = 10
+    Nsim = 200
+    Nsim = 20000
+
+    # Tsim = 1
+    # Nsim = 20
+    Tstep = Tsim / Nsim
+    opts.terminal_time = Tstep
+
+    model = get_relay_feedback_system_model()
+    opts.preprocess()
+    model.preprocess_model(opts)
+    model.add_smooth_step_representation()
+
+    # smooth dynamics based on STEP
+    X_sim, t_grid = nosnoc.rk4(model.f_x_smooth_fun, model.x0, Tsim, Nsim)
+
+    #
+    plot_system_trajectory(X_sim, t_grid)
 
 
 def plot_system_3d(results):
@@ -147,4 +171,5 @@ def plot_algebraic_variables(results):
 
 
 if __name__ == "__main__":
+    main_rk4_simulation()
     main()
