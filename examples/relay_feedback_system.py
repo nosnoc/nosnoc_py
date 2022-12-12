@@ -74,12 +74,13 @@ def main():
     model = get_relay_feedback_system_model()
 
     solver = nosnoc.NosnocSolver(opts, model)
-
     looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
     looper.run()
     results = looper.get_results()
 
-    plot_system(results)
+    X_sim = results["X_sim"]
+    t_grid = results["t_grid"]
+    plot_system_trajectory(X_sim, t_grid=t_grid)
     # plot_system_3d(results)
 
     filename = ""
@@ -106,10 +107,8 @@ def plot_system_3d(results):
     plt.show()
 
 
-def plot_system(results):
+def plot_system_trajectory(X_sim, t_grid):
     nosnoc.latexify_plot()
-    X_sim = results["X_sim"]
-    t_grid = results["t_grid"]
 
     # state trajectory plot
     plt.figure()
@@ -119,6 +118,11 @@ def plot_system(results):
         plt.grid()
         plt.xlabel("$t$")
         plt.ylabel(f"$x_{i+1}(t)$")
+    plt.show()
+
+
+def plot_algebraic_variables(results):
+    nosnoc.latexify_plot()
 
     # algebraic variables
     plt.figure()
