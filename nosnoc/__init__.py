@@ -4,3 +4,4 @@ from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComp
 from .helpers import NosnocSimLooper
 from .utils import casadi_length, print_casadi_vector
 from .plot_utils import plot_timings, latexify_plot
+from .rk_utils import rk4
