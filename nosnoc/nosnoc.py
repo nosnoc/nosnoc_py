@@ -43,10 +43,9 @@ class NosnocModel:
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
-        if opts.pss_mode == PssMode.STEP:
+        # if opts.pss_mode == PssMode.STEP:
             # double the size of the vectors, since alpha, 1-alpha treated at same time
-            # TODO: Is this correct? it does give an integer, not a list!
-            n_f_sys = np.sum(n_c_sys, axis=0) * 2
+            # n_f_sys = np.sum(n_c_sys, axis=0) * 2
 
         self.dims = NosnocDims(nx=nx,
                                nu=nu,
