@@ -8,18 +8,16 @@ from examples.motor_with_friction_ocp import (
 import nosnoc
 import numpy as np
 
-PSS_MODES = nosnoc.PssMode
-
 
 def test_default():
     example(plot=False)
 
 
 def test_loop():
-    opts = get_default_options()
 
     for step_equilibration in nosnoc.StepEquilibrationMode:
-        for pss_mode in PSS_MODES:
+        for pss_mode in nosnoc.PssMode:
+            opts = get_default_options()
             opts.step_equilibration = step_equilibration
             opts.pss_mode = pss_mode
 

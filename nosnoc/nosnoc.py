@@ -34,19 +34,12 @@ class NosnocModel:
         self.dims: NosnocDims = None
 
     def preprocess_model(self, opts: NosnocOpts):
+        # detect dimensions
         nx = casadi_length(self.x)
         nu = casadi_length(self.u)
         n_sys = len(self.F)
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
-
-        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
-        g_Stewart = casadi_vertcat_list(g_Stewart_list)
-
-        if opts.pss_mode == PssMode.STEP:
-            # double the size of the vectors, since alpha, 1-alpha treated at same time
-            # TODO: Is this correct? it does give an integer, not a list!
-            n_f_sys = np.sum(n_c_sys, axis=0) * 2
 
         self.dims = NosnocDims(nx=nx,
                                nu=nu,
@@ -54,14 +47,15 @@ class NosnocModel:
                                n_c_sys=n_c_sys,
                                n_f_sys=n_f_sys)
 
-        # create dummy finite element.
-        # only use first stage
+        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        g_Stewart = casadi_vertcat_list(g_Stewart_list)
+
+        # create dummy finite element - only use first stage
         fe = FiniteElement(opts, self, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
+        # setup upsilon
         upsilon = []
         if opts.pss_mode == PssMode.STEP:
-            # Upsilon collects the vector for dotx = F(x)Upsilon, it is either multiaffine
-            # terms or gamma from lifting
             for ii in range(self.dims.n_sys):
                 upsilon_temp = []
                 S_temp = self.S[ii]
@@ -80,7 +74,7 @@ class NosnocModel:
         g_switching = SX.zeros((0, 1))
         g_convex = SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
         lambda00_expr = SX.zeros(0, 0)
-        f_comp_residual = SX.zeros(1)  # the orthogonality conditions diag(\theta) \lambda = 0.
+        std_compl_res = SX.zeros(1)  # residual of standard complementarity
 
         z = fe.rk_stage_z(0)
 
@@ -94,7 +88,7 @@ class NosnocModel:
                     g_switching,
                     g_Stewart_list[ii] - fe.w[fe.ind_lam[0][ii]] + fe.w[fe.ind_mu[0][ii]])
                 g_convex = vertcat(g_convex, sum1(fe.w[fe.ind_theta[0][ii]]) - 1)
-                f_comp_residual += fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
+                std_compl_res += fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr,
                                         g_Stewart_list[ii] - mmin(g_Stewart_list[ii]))
         elif opts.pss_mode == PssMode.STEP:
@@ -103,9 +97,9 @@ class NosnocModel:
                 g_switching = vertcat(
                     g_switching,
                     self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
-                f_comp_residual += transpose(
+                std_compl_res += transpose(
                     fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
-                f_comp_residual += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
+                std_compl_res += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
 
@@ -125,7 +119,7 @@ class NosnocModel:
         self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u], [g_z_all])
         self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
 
-        self.J_cc_fun = Function('J_cc_fun', [z], [f_comp_residual])
+        self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
 
 
 class NosnocOcp:
@@ -695,7 +689,7 @@ class NosnocSolver(NosnocFormulationObject):
             J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
             J_comp = casadi_sum_list([
-                model.J_cc_fun(fe.rk_stage_z(j))
+                model.std_compl_res_fun(fe.rk_stage_z(j))
                 for j in range(opts.n_s)
                 for fe in flatten(self.stages)
             ])
