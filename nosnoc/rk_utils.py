@@ -26,6 +26,25 @@ def rk4(f, x0, tf: float, n_steps: int = 1):
     x = x.tolist()
     return x, t
 
+def rk4_on_timegrid(f, x0, t_grid: np.ndarray) -> list:
+
+    x = np.zeros((len(t_grid)+1, len(x0)))
+    x[0, :] = x0
+
+    # Runge-Kutta 4th order method
+    for i in range(len(t_grid)):
+        # TODO: multiple steps?
+        dt = t_grid[i]
+        k1 = f(x[i, :])
+        k2 = f(x[i, :] + dt * k1 / 2)
+        k3 = f(x[i, :] + dt * k2 / 2)
+        k4 = f(x[i, :] + dt * k3)
+        x[i+1, :] = x[i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4).full().flatten()
+
+    x = x.tolist()
+    return x
+
+
 def generate_butcher_tableu(n_s, irk_scheme):
     if irk_scheme == IRKSchemes.RADAU_IIA:
         order = 2 * n_s - 1
