@@ -9,6 +9,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
+from nosnoc.rk_utils import rk4_on_timegrid
 
 
 class NosnocModel:
@@ -103,6 +104,8 @@ class NosnocModel:
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
 
+        mu00_stewart = casadi_vertcat_list([mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
+
         # collect all algebraic equations
         g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
 
@@ -120,8 +123,9 @@ class NosnocModel:
         self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
 
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
+        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter = 1e4):
+    def add_smooth_step_representation(self, smoothing_parameter = 1e2):
         y = SX.sym('y')
         dims = self.dims
         smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
@@ -133,17 +137,13 @@ class NosnocModel:
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
             for i in range(dims.n_f_sys[s]):
                 n_Ri = sum(np.abs(self.S[s][i,:]))
-                theta_list[s][i] = 2 ** (n_c -n_Ri)
+                theta_list[s][i] = 2 ** (n_c - n_Ri)
                 for j in range(n_c):
                     theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
             f_x_smooth += self.F[s] @ theta_list[s]
-
+        theta_smooth = casadi_vertcat_list(theta_list)
         self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
-        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], theta_list)
-        # xdot_test = f_x_smooth_fun(self.x0)
-        # theta_test = theta_smooth_fun(self.x0)
-        # print(f"{xdot_test=}")
-        # print(f"{theta_test=}")
+        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
 
 class NosnocOcp:
     """
@@ -661,6 +661,9 @@ class NosnocSolver(NosnocFormulationObject):
         model.preprocess_model(opts)
         ocp.preprocess_ocp(model.x, model.u)
 
+        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            self.model.add_smooth_step_representation()
+
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
 
@@ -751,7 +754,50 @@ class NosnocSolver(NosnocFormulationObject):
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
             for ind in self.ind_x:
                 self.w0[ind] = x0
+        elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            # print(f"updating w0 with RK4 smoothened")
+            # NOTE: assume N_stages = 1 and STEWART
+            dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
+            irk_time_grid = np.array([opts.irk_time_points[0]] + [opts.irk_time_points[k] - opts.irk_time_points[k-1] for k in range(1, opts.n_s)])
+            rk4_t_grid = dt_fe * irk_time_grid
 
+            # if opts.irk_representation != IrkRepresentation.DIFFERENTIAL:
+            #     raise NotImplementedError
+
+            x_rk4_current = x0
+            db_updated_indices = list(ind_x0)
+            for i in range(opts.N_finite_elements):
+                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun, x0=x_rk4_current, t_grid=rk4_t_grid)
+                x_rk4_current = Xrk4[-1]
+                # print(f"{Xrk4=}")
+                for k in range(opts.n_s):
+                    x_ki = Xrk4[k+1]
+                    self.w0[self.ind_x[i+1][k]] = x_ki
+                    lam_ki = self.model.lambda00_fun(x_ki)
+                    mu_ki = self.model.mu00_stewart_fun(x_ki)
+                    theta_ki = self.model.theta_smooth_fun(x_ki)
+                    # print(f"{theta_ki=}")
+                    # print(f"{mu_ki=}")
+                    # print(f"{x_ki=}")
+                    # print(f"{lam_ki=}")
+                    for s in range(self.model.dims.n_sys):
+                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
+                        self.w0[self.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[self.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[self.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                    db_updated_indices += self.ind_theta[i][k][s] + self.ind_lam[i][k][s] + self.ind_mu[i][k][s] + self.ind_x[i+1][k] + self.ind_h
+                if opts.irk_time_points[-1] != 1.0:
+                    raise NotImplementedError
+                else:
+                    # Xk_end
+                    self.w0[self.ind_x[i+1][-1]] = x_ki
+                    db_updated_indices += self.ind_x[i+1][-1]
+
+            # print("w0 after RK4 init:")
+            # print(self.w0)
+            missing_indices = sorted(set(range(len(self.w0))) - set(db_updated_indices))
+            # print(f"{missing_indices=}")
+            # import pdb; pdb.set_trace()
 
     def solve(self) -> dict:
 
