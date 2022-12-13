@@ -124,6 +124,7 @@ class NosnocOpts:
             self.A_irk = A_irk
             self.b_irk = b_irk
 
+        self.irk_time_points = irk_time_points
         if np.abs(irk_time_points[-1] - 1.0) < 1e-9:
             self.right_boundary_point_explicit = True
         else:

@@ -302,7 +302,8 @@ class FiniteElement(FiniteElementBase):
 
         # Initialze index vectors. Note ind_x contains an extra element
         # in order to store the end variables
-        # create_list_mat(n_s+1, 0)
+        # TODO: add helper: create_list_mat(n_s+1, 0)
+        # TODO: if irk tableau contains end point, we should only use n_s state variables!
         self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
@@ -644,7 +645,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.ind_x = []
         self.ind_x_cont = []
         self.ind_v = []
-        self.ind_z = []
         self.ind_theta = []
         self.ind_lam = []
         self.ind_mu = []
@@ -681,8 +681,7 @@ class NosnocSolver(NosnocFormulationObject):
                 self.add_constraint(fe.g, fe.lbg, fe.ubg)
 
             if opts.use_fesd and opts.equidistant_control_grid:
-                h_FE = sum([fe.h() for fe in stage])
-                self.add_constraint(h_FE - h_ctrl_stage)
+                self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
@@ -772,8 +771,6 @@ class NosnocSolver(NosnocFormulationObject):
                 )
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
-            if status == "Infeasible_Problem_Detected":
-                print(f"WARNING: status {status}")
 
             if complementarity_residual < opts.comp_tol:
                 break
