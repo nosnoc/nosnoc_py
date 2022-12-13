@@ -754,6 +754,7 @@ class NosnocSolver(NosnocFormulationObject):
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
             for ind in self.ind_x:
                 self.w0[ind] = x0
+        # This is experimental
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             # print(f"updating w0 with RK4 smoothened")
             # NOTE: assume N_stages = 1 and STEWART
