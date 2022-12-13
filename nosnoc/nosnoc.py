@@ -720,7 +720,19 @@ class NosnocSolver(NosnocFormulationObject):
             import pdb
             pdb.set_trace()
 
+    def initialize(self):
+        opts = self.opts
+        ind_x0 = self.ind_x[0]
+        x0 = self.w0[ind_x0]
+
+        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
+            for ind in self.ind_x:
+                self.w0[ind] = x0
+
+
     def solve(self) -> dict:
+
+        self.initialize()
         opts = self.opts
         w_all = []
 
@@ -820,19 +832,16 @@ class NosnocSolver(NosnocFormulationObject):
         results["t_grid"] = t_grid
         u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
         results["t_grid_u"] = [t_grid[i] for i in u_grid]
+        results["w_sol"] = w_opt
 
         return results
 
     def set(self, field: str, value):
         if field == 'x':
-            ind_x0 = range(self.model.dims.nx)
+            ind_x0 = self.ind_x[0]
             self.w0[ind_x0] = value
             self.lbw[ind_x0] = value
             self.ubw[ind_x0] = value
-
-            if self.opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
-                for ind in self.ind_x:
-                    self.w0[ind] = value
         else:
             raise NotImplementedError()
 
