@@ -126,12 +126,15 @@ class NosnocModel:
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
     def add_smooth_step_representation(self, smoothing_parameter = 1e2):
-        y = SX.sym('y')
         dims = self.dims
+
+        # smooth step function
+        y = SX.sym('y')
         smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
+
+        # create theta_smooth, f_x_smooth
         theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
         f_x_smooth = SX.zeros((dims.nx, 1))
-
         for s in range(dims.n_sys):
             n_c: int = dims.n_c_sys[s]
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
@@ -762,9 +765,6 @@ class NosnocSolver(NosnocFormulationObject):
             irk_time_grid = np.array([opts.irk_time_points[0]] + [opts.irk_time_points[k] - opts.irk_time_points[k-1] for k in range(1, opts.n_s)])
             rk4_t_grid = dt_fe * irk_time_grid
 
-            # if opts.irk_representation != IrkRepresentation.DIFFERENTIAL:
-            #     raise NotImplementedError
-
             x_rk4_current = x0
             db_updated_indices = list(ind_x0)
             for i in range(opts.N_finite_elements):
@@ -786,6 +786,7 @@ class NosnocSolver(NosnocFormulationObject):
                         self.w0[self.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
                         self.w0[self.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
                         self.w0[self.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        # TODO: ind_v
                     db_updated_indices += self.ind_theta[i][k][s] + self.ind_lam[i][k][s] + self.ind_mu[i][k][s] + self.ind_x[i+1][k] + self.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
