@@ -698,8 +698,8 @@ class NosnocSolver(NosnocFormulationObject):
         g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
         self.add_constraint(g_terminal)
 
-        # Terminal numerical Time
-        if opts.use_fesd:
+        # Terminal numerical time
+        if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
