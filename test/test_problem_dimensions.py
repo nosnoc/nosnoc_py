@@ -44,7 +44,7 @@ def main_w_test():
                     nw_expected = nx + Nfe * (ns * (nx + nz) + nh + nx) + (Nfe - 1) * (n_end)
                     try:
                         solver = nosnoc.NosnocSolver(opts, model)
-                        assert (solver.w.shape[0] == nw_expected)
+                        assert (solver.problem.w.shape[0] == nw_expected)
                     except AssertionError:
                         raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_w_test: SUCCESS")
