@@ -9,6 +9,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
+from nosnoc.rk_utils import rk4_on_timegrid
 
 
 class NosnocModel:
@@ -103,6 +104,8 @@ class NosnocModel:
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
 
+        mu00_stewart = casadi_vertcat_list([mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
+
         # collect all algebraic equations
         g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
 
@@ -120,7 +123,30 @@ class NosnocModel:
         self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
 
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
+        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
+    def add_smooth_step_representation(self, smoothing_parameter = 1e2):
+        dims = self.dims
+
+        # smooth step function
+        y = SX.sym('y')
+        smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
+
+        # create theta_smooth, f_x_smooth
+        theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
+        f_x_smooth = SX.zeros((dims.nx, 1))
+        for s in range(dims.n_sys):
+            n_c: int = dims.n_c_sys[s]
+            alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
+            for i in range(dims.n_f_sys[s]):
+                n_Ri = sum(np.abs(self.S[s][i,:]))
+                theta_list[s][i] = 2 ** (n_c - n_Ri)
+                for j in range(n_c):
+                    theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
+            f_x_smooth += self.F[s] @ theta_list[s]
+        theta_smooth = casadi_vertcat_list(theta_list)
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
+        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
 
 class NosnocOcp:
     """
@@ -302,7 +328,8 @@ class FiniteElement(FiniteElementBase):
 
         # Initialze index vectors. Note ind_x contains an extra element
         # in order to store the end variables
-        # create_list_mat(n_s+1, 0)
+        # TODO: add helper: create_list_mat(n_s+1, 0)
+        # TODO: if irk tableau contains end point, we should only use n_s state variables!
         self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
@@ -637,6 +664,9 @@ class NosnocSolver(NosnocFormulationObject):
         model.preprocess_model(opts)
         ocp.preprocess_ocp(model.x, model.u)
 
+        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            self.model.add_smooth_step_representation()
+
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
 
@@ -644,7 +674,6 @@ class NosnocSolver(NosnocFormulationObject):
         self.ind_x = []
         self.ind_x_cont = []
         self.ind_v = []
-        self.ind_z = []
         self.ind_theta = []
         self.ind_lam = []
         self.ind_mu = []
@@ -681,8 +710,7 @@ class NosnocSolver(NosnocFormulationObject):
                 self.add_constraint(fe.g, fe.lbg, fe.ubg)
 
             if opts.use_fesd and opts.equidistant_control_grid:
-                h_FE = sum([fe.h() for fe in stage])
-                self.add_constraint(h_FE - h_ctrl_stage)
+                self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
@@ -699,8 +727,8 @@ class NosnocSolver(NosnocFormulationObject):
         g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
         self.add_constraint(g_terminal)
 
-        # Terminal numerical Time
-        if opts.use_fesd:
+        # Terminal numerical time
+        if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
@@ -721,7 +749,61 @@ class NosnocSolver(NosnocFormulationObject):
             import pdb
             pdb.set_trace()
 
+    def initialize(self):
+        opts = self.opts
+        ind_x0 = self.ind_x[0]
+        x0 = self.w0[ind_x0]
+
+        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
+            for ind in self.ind_x:
+                self.w0[ind] = x0
+        # This is experimental
+        elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            # print(f"updating w0 with RK4 smoothened")
+            # NOTE: assume N_stages = 1 and STEWART
+            dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
+            irk_time_grid = np.array([opts.irk_time_points[0]] + [opts.irk_time_points[k] - opts.irk_time_points[k-1] for k in range(1, opts.n_s)])
+            rk4_t_grid = dt_fe * irk_time_grid
+
+            x_rk4_current = x0
+            db_updated_indices = list(ind_x0)
+            for i in range(opts.N_finite_elements):
+                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun, x0=x_rk4_current, t_grid=rk4_t_grid)
+                x_rk4_current = Xrk4[-1]
+                # print(f"{Xrk4=}")
+                for k in range(opts.n_s):
+                    x_ki = Xrk4[k+1]
+                    self.w0[self.ind_x[i+1][k]] = x_ki
+                    lam_ki = self.model.lambda00_fun(x_ki)
+                    mu_ki = self.model.mu00_stewart_fun(x_ki)
+                    theta_ki = self.model.theta_smooth_fun(x_ki)
+                    # print(f"{theta_ki=}")
+                    # print(f"{mu_ki=}")
+                    # print(f"{x_ki=}")
+                    # print(f"{lam_ki=}")
+                    for s in range(self.model.dims.n_sys):
+                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
+                        self.w0[self.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[self.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[self.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        # TODO: ind_v
+                    db_updated_indices += self.ind_theta[i][k][s] + self.ind_lam[i][k][s] + self.ind_mu[i][k][s] + self.ind_x[i+1][k] + self.ind_h
+                if opts.irk_time_points[-1] != 1.0:
+                    raise NotImplementedError
+                else:
+                    # Xk_end
+                    self.w0[self.ind_x[i+1][-1]] = x_ki
+                    db_updated_indices += self.ind_x[i+1][-1]
+
+            # print("w0 after RK4 init:")
+            # print(self.w0)
+            missing_indices = sorted(set(range(len(self.w0))) - set(db_updated_indices))
+            # print(f"{missing_indices=}")
+            # import pdb; pdb.set_trace()
+
     def solve(self) -> dict:
+
+        self.initialize()
         opts = self.opts
         w_all = []
 
@@ -772,8 +854,6 @@ class NosnocSolver(NosnocFormulationObject):
                 )
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
-            if status == "Infeasible_Problem_Detected":
-                print(f"WARNING: status {status}")
 
             if complementarity_residual < opts.comp_tol:
                 break
@@ -823,19 +903,16 @@ class NosnocSolver(NosnocFormulationObject):
         results["t_grid"] = t_grid
         u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
         results["t_grid_u"] = [t_grid[i] for i in u_grid]
+        results["w_sol"] = w_opt
 
         return results
 
     def set(self, field: str, value):
         if field == 'x':
-            ind_x0 = range(self.model.dims.nx)
+            ind_x0 = self.ind_x[0]
             self.w0[ind_x0] = value
             self.lbw[ind_x0] = value
             self.ubw[ind_x0] = value
-
-            if self.opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
-                for ind in self.ind_x:
-                    self.w0[ind] = value
         else:
             raise NotImplementedError()
 

@@ -16,9 +16,9 @@ class IRKSchemes(Enum):
 
 class InitializationStrategy(Enum):
     ALL_XCURRENT_W0_START = 0
-    OLD_SOLUTION = 1
+    RK4_SMOOTHENED = 1 # experimental
     # Other ideas
-    # RK4_ON_SMOOTHENED
+    # OLD_SOLUTION = 1
     # lp_initialization
 
 
