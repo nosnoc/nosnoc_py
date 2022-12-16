@@ -580,7 +580,7 @@ class FiniteElement(FiniteElementBase):
         return
 
 
-class NosnocSolver(NosnocFormulationObject):
+class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
@@ -654,18 +654,9 @@ class NosnocSolver(NosnocFormulationObject):
 
         super().__init__()
 
-        if ocp is None:
-            ocp = NosnocOcp()
         self.model = model
         self.ocp = ocp
         self.opts = opts
-
-        opts.preprocess()
-        model.preprocess_model(opts)
-        ocp.preprocess_ocp(model.x, model.u)
-
-        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
-            self.model.add_smooth_step_representation()
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
@@ -737,9 +728,44 @@ class NosnocSolver(NosnocFormulationObject):
         self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
-        # NLP Solver
+    def print(self):
+        print("g:")
+        print_casadi_vector(self.g)
+        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
+        print("w:")
+        print_casadi_vector(self.w)
+        print(f"lbw, ubw\n{np.vstack((self.lbw, self.ubw)).T}")
+        print("w0")
+        for xx in self.w0:
+            print(xx)
+        print(f"cost:\n{self.cost}")
+
+class NosnocSolver():
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+
+        # preprocess inputs
+        if ocp is None:
+            ocp = NosnocOcp()
+        opts.preprocess()
+        model.preprocess_model(opts)
+        ocp.preprocess_ocp(model.x, model.u)
+
+        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            model.add_smooth_step_representation()
+
+        # store references
+        self.model = model
+        self.ocp = ocp
+        self.opts = opts
+
+        # create problem
+        problem = NosnocProblem(opts, model, ocp)
+        self.problem = problem
+        self.w0 = problem.w0
+
+        # create NLP Solver
         try:
-            prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
+            prob = {'f': problem.cost, 'x': problem.w, 'g': problem.g, 'p': problem.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
@@ -751,11 +777,12 @@ class NosnocSolver(NosnocFormulationObject):
 
     def initialize(self):
         opts = self.opts
-        ind_x0 = self.ind_x[0]
+        prob = self.problem
+        ind_x0 = prob.ind_x[0]
         x0 = self.w0[ind_x0]
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
-            for ind in self.ind_x:
+            for ind in prob.ind_x:
                 self.w0[ind] = x0
         # This is experimental
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
@@ -773,7 +800,7 @@ class NosnocSolver(NosnocFormulationObject):
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k+1]
-                    self.w0[self.ind_x[i+1][k]] = x_ki
+                    self.w0[prob.ind_x[i+1][k]] = x_ki
                     lam_ki = self.model.lambda00_fun(x_ki)
                     mu_ki = self.model.mu00_stewart_fun(x_ki)
                     theta_ki = self.model.theta_smooth_fun(x_ki)
@@ -783,17 +810,17 @@ class NosnocSolver(NosnocFormulationObject):
                     # print(f"{lam_ki=}")
                     for s in range(self.model.dims.n_sys):
                         ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
-                        self.w0[self.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
-                        self.w0[self.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
-                        self.w0[self.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
-                    db_updated_indices += self.ind_theta[i][k][s] + self.ind_lam[i][k][s] + self.ind_mu[i][k][s] + self.ind_x[i+1][k] + self.ind_h
+                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][s] + prob.ind_mu[i][k][s] + prob.ind_x[i+1][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[self.ind_x[i+1][-1]] = x_ki
-                    db_updated_indices += self.ind_x[i+1][-1]
+                    self.w0[prob.ind_x[i+1][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[i+1][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)
@@ -805,6 +832,7 @@ class NosnocSolver(NosnocFormulationObject):
 
         self.initialize()
         opts = self.opts
+        prob = self.problem
         w_all = []
 
         complementarity_stats = opts.max_iter_homotopy * [None]
@@ -819,7 +847,7 @@ class NosnocSolver(NosnocFormulationObject):
         sigma_k = opts.sigma_0
 
         # lambda00 initialization
-        x0 = w0[self.ind_x[0]]
+        x0 = w0[prob.ind_x[0]]
         lambda00 = self.model.lambda00_fun(x0).full().flatten()
         p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
 
@@ -830,10 +858,10 @@ class NosnocSolver(NosnocFormulationObject):
             # solve NLP
             t = time.time()
             sol = self.solver(x0=w0,
-                              lbg=self.lbg,
-                              ubg=self.ubg,
-                              lbx=self.lbw,
-                              ubx=self.ubw,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
+                              lbx=prob.lbw,
+                              ubx=prob.ubw,
                               p=p_val)
             cpu_time_nlp[ii] = time.time() - t
 
@@ -845,7 +873,7 @@ class NosnocSolver(NosnocFormulationObject):
             w0 = w_opt
             w_all.append(w_opt)
 
-            complementarity_residual = self.comp_res(w_opt, p_val).full()[0][0]
+            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
@@ -872,21 +900,21 @@ class NosnocSolver(NosnocFormulationObject):
 
         # collect results
         results = dict()
-        results["x_out"] = w_opt[self.ind_x[-1][-1]]
-        results["x_list"] = [w_opt[ind] for ind in self.ind_x_cont]
-        results["u_list"] = [w_opt[ind] for ind in self.ind_u]
-        results["v_list"] = [w_opt[ind] for ind in self.ind_v]
-        results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_theta]
-        results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lam]
-        results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_mu]
+        results["x_out"] = w_opt[prob.ind_x[-1][-1]]
+        results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
+        results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+        results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
+        results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
+        results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lam]
+        results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_mu]
 
         # if opts.pss_mode == PssMode.STEP:
-        results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_alpha]
-        results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_n]
-        results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_p]
+        results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_alpha]
+        results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_n]
+        results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_p]
 
         if opts.use_fesd:
-            time_steps = w_opt[self.ind_h]
+            time_steps = w_opt[prob.ind_h]
         else:
             t_stages = opts.terminal_time / opts.N_stages
             for Nfe in opts.Nfe_list:
@@ -907,23 +935,16 @@ class NosnocSolver(NosnocFormulationObject):
 
         return results
 
+    # TODO: move this to problem?
     def set(self, field: str, value):
+        prob = self.problem
         if field == 'x':
-            ind_x0 = self.ind_x[0]
-            self.w0[ind_x0] = value
-            self.lbw[ind_x0] = value
-            self.ubw[ind_x0] = value
+            ind_x0 = prob.ind_x[0]
+            prob.w0[ind_x0] = value
+            prob.lbw[ind_x0] = value
+            prob.ubw[ind_x0] = value
         else:
             raise NotImplementedError()
 
     def print_problem(self):
-        print("g:")
-        print_casadi_vector(self.g)
-        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
-        print("w:")
-        print_casadi_vector(self.w)
-        print(f"lbw, ubw\n{np.vstack((self.lbw, self.ubw)).T}")
-        print("w0")
-        for xx in self.w0:
-            print(xx)
-        print(f"cost:\n{self.cost}")
+        self.problem.print()
