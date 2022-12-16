@@ -106,6 +106,7 @@ def main():
     opts.terminal_time = T_step
     opts.pss_mode = nosnoc.PssMode.STEWART
     opts.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
+    # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
 
     # model
     model = get_blocks_with_friction_model()
@@ -128,8 +129,11 @@ def main():
     mean_timing = np.mean(np.sum(timings, axis=1))
     print(f"mean timing solver call {mean_timing:.5f} s")
 
-    # plots
-    nosnoc.plot_timings(timings, title=opts.irk_representation)
+    # plot timings
+    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"# {opts.homotopy_update_rule.name}"
+    nosnoc.plot_timings(timings, title=plot_title)
+
+    # plot trajectory
     plot_blocks(results["X_sim"], results["t_grid"])
     import pdb
     pdb.set_trace()
