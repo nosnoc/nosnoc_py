@@ -125,7 +125,7 @@ class NosnocModel:
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter = 1e2):
+    def add_smooth_step_representation(self, smoothing_parameter = 1e-1):
         dims = self.dims
 
         # smooth step function
