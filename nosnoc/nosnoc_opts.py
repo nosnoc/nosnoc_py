@@ -24,7 +24,7 @@ class NosnocOpts:
     # IRK and FESD opts
     n_s: int = 2  # Number of IRK stages
     irk_scheme: IRKSchemes = IRKSchemes.RADAU_IIA
-    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
 
     lift_irk_differential: bool = True  # NOTE: tested in simple_sim_tests

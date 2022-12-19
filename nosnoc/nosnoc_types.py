@@ -32,7 +32,7 @@ class StepEquilibrationMode(Enum):
 
 class CrossComplementarityMode(Enum):
     COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = 0  # nosnoc 1
-    SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA = 1  # nosnoc 3
+    SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = 1  # nosnoc 3
     # NOTE: tested in simple_sim_tests
 
 

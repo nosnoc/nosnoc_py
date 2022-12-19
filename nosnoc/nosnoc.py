@@ -533,7 +533,7 @@ class FiniteElement(FiniteElementBase):
                 for r in range(dims.n_sys)
                 for j in range(opts.n_s)
             ])
-        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             # Note: sum_Lambda contains last stage of prev_fe
             g_cross_comp = casadi_vertcat_list([
                 diag(self.Theta(stage=j, sys=r)) @ self.sum_Lambda(sys=r)
