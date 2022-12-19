@@ -740,6 +740,44 @@ class NosnocProblem(NosnocFormulationObject):
             print(xx)
         print(f"cost:\n{self.cost}")
 
+
+def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
+    opts = prob.opts
+
+    results = dict()
+    results["x_out"] = w_opt[prob.ind_x[-1][-1]]
+    results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
+    results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+    results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
+    results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
+    results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lam]
+    results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_mu]
+
+    # if opts.pss_mode == PssMode.STEP:
+    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_alpha]
+    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_n]
+    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_p]
+
+    if opts.use_fesd:
+        time_steps = w_opt[prob.ind_h]
+    else:
+        t_stages = opts.terminal_time / opts.N_stages
+        for Nfe in opts.Nfe_list:
+            time_steps = Nfe * [t_stages / Nfe]
+    results["time_steps"] = time_steps
+
+    # results relevant for OCP:
+    x0 = prob.w0[prob.ind_x[0]]
+    results["x_traj"] = [x0] + results["x_list"]
+    results["u_traj"] = results["u_list"]  # duplicate name
+    t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
+    results["t_grid"] = t_grid
+    u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
+    results["t_grid_u"] = [t_grid[i] for i in u_grid]
+
+    return results
+
+
 class NosnocSolver():
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
@@ -833,8 +871,9 @@ class NosnocSolver():
         self.initialize()
         opts = self.opts
         prob = self.problem
-        w_all = []
+        w0 = self.w0
 
+        w_all = [w0]
         complementarity_stats = opts.max_iter_homotopy * [None]
         cpu_time_nlp = opts.max_iter_homotopy * [None]
         nlp_iter = opts.max_iter_homotopy * [None]
@@ -843,7 +882,6 @@ class NosnocSolver():
             print('-------------------------------------------')
             print('sigma \t\t compl_res \t CPU time \t iter \t status')
 
-        w0 = self.w0
         sigma_k = opts.sigma_0
 
         # lambda00 initialization
@@ -899,38 +937,12 @@ class NosnocSolver():
                         sigma_k**opts.homotopy_update_exponent))
 
         # collect results
-        results = dict()
-        results["x_out"] = w_opt[prob.ind_x[-1][-1]]
-        results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
-        results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
-        results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
-        results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
-        results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lam]
-        results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_mu]
+        results = get_results_from_primal_vector(prob, w_opt)
 
-        # if opts.pss_mode == PssMode.STEP:
-        results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_alpha]
-        results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_n]
-        results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_p]
-
-        if opts.use_fesd:
-            time_steps = w_opt[prob.ind_h]
-        else:
-            t_stages = opts.terminal_time / opts.N_stages
-            for Nfe in opts.Nfe_list:
-                time_steps = Nfe * [t_stages / Nfe]
-        results["time_steps"] = time_steps
         # stats
         results["cpu_time_nlp"] = cpu_time_nlp
         results["nlp_iter"] = nlp_iter
-
-        # results relevant for OCP:
-        results["x_traj"] = [self.model.x0] + results["x_list"]
-        results["u_traj"] = results["u_list"]  # duplicate name
-        t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
-        results["t_grid"] = t_grid
-        u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
-        results["t_grid_u"] = [t_grid[i] for i in u_grid]
+        results["w_all"] = w_all
         results["w_sol"] = w_opt
 
         return results
