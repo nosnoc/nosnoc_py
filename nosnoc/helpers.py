@@ -15,6 +15,7 @@ class NosnocSimLooper:
         self.lambda_sim = []
         self.alpha_sim = []
         self.w_sim = []
+        self.w_all = []
 
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy))
 
@@ -31,6 +32,7 @@ class NosnocSimLooper:
             self.lambda_sim += results["lambda_list"]
             self.alpha_sim += results["alpha_list"]
             self.w_sim += [results["w_sol"]]
+            self.w_all += [results["w_all"]]
 
     def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))
@@ -43,5 +45,6 @@ class NosnocSimLooper:
             "theta_sim": self.theta_sim,
             "lambda_sim": self.lambda_sim,
             "w_sim": self.w_sim,
+            "w_all": self.w_all,
         }
         return results
