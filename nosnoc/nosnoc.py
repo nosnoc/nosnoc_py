@@ -130,7 +130,7 @@ class NosnocModel:
 
         # smooth step function
         y = SX.sym('y')
-        smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
+        smooth_step_fun = Function('smooth_step_fun', [y], [(tanh(smoothing_parameter*y)+1)/2])
 
         # create theta_smooth, f_x_smooth
         theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
