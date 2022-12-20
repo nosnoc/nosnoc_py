@@ -876,9 +876,9 @@ class NosnocSolver():
         self.initialize()
         opts = self.opts
         prob = self.problem
-        w0 = self.w0
+        w0 = self.w0.copy()
 
-        w_all = [w0]
+        w_all = [w0.copy()]
         complementarity_stats = opts.max_iter_homotopy * [None]
         cpu_time_nlp = opts.max_iter_homotopy * [None]
         nlp_iter = opts.max_iter_homotopy * [None]
