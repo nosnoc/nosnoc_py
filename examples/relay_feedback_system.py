@@ -103,10 +103,11 @@ def main():
     # plot timings
     filename = ""
     filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
-    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"# {opts.homotopy_update_rule.name}"
+    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"  # {opts.homotopy_update_rule.name}"
     nosnoc.plot_timings(results["cpu_nlp"], title=plot_title, figure_filename=filename)
 
     plt.show()
+
 
 def main_rk4_simulation():
     """
@@ -173,6 +174,7 @@ def plot_system_trajectory(X_sim, t_grid, figure_filename=''):
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 
+
 def plot_algebraic_variables(results, figure_filename=''):
     nosnoc.latexify_plot()
 
@@ -198,6 +200,7 @@ def plot_algebraic_variables(results, figure_filename=''):
     if figure_filename != '':
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
+
 
 if __name__ == "__main__":
     main()

@@ -20,10 +20,18 @@ class NosnocModel:
 
     where S_i denotes the rows of S.
     """
+
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
 
-    def __init__(self, x: SX, F: List[SX], c: List[SX], S: List[np.ndarray], x0: np.ndarray, u: SX = SX.sym('u_dummy', 0, 1), name: str = 'nosnoc'):
+    def __init__(self,
+                 x: SX,
+                 F: List[SX],
+                 c: List[SX],
+                 S: List[np.ndarray],
+                 x0: np.ndarray,
+                 u: SX = SX.sym('u_dummy', 0, 1),
+                 name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
@@ -42,11 +50,7 @@ class NosnocModel:
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
-        self.dims = NosnocDims(nx=nx,
-                               nu=nu,
-                               n_sys=n_sys,
-                               n_c_sys=n_c_sys,
-                               n_f_sys=n_f_sys)
+        self.dims = NosnocDims(nx=nx, nu=nu, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
 
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
@@ -98,8 +102,7 @@ class NosnocModel:
                 g_switching = vertcat(
                     g_switching,
                     self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
-                std_compl_res += transpose(
-                    fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
+                std_compl_res += transpose(fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
                 std_compl_res += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
@@ -125,12 +128,13 @@ class NosnocModel:
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter = 1e-1):
+    def add_smooth_step_representation(self, smoothing_parameter=1e-1):
         dims = self.dims
 
         # smooth step function
         y = SX.sym('y')
-        smooth_step_fun = Function('smooth_step_fun', [y], [(tanh(smoothing_parameter*y)+1)/2])
+        smooth_step_fun = Function('smooth_step_fun', [y],
+                                   [(tanh(smoothing_parameter * y) + 1) / 2])
 
         lambda_smooth = []
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
@@ -151,10 +155,11 @@ class NosnocModel:
                                     g_Stewart_list[s] - smooth_min_fun(g_Stewart_list[s]))
 
             for i in range(dims.n_f_sys[s]):
-                n_Ri = sum(np.abs(self.S[s][i,:]))
-                theta_list[s][i] = 2 ** (n_c - n_Ri)
+                n_Ri = sum(np.abs(self.S[s][i, :]))
+                theta_list[s][i] = 2**(n_c - n_Ri)
                 for j in range(n_c):
-                    theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
+                    theta_list[s][i] *= ((1 - self.S[s][i, j]) / 2 +
+                                         self.S[s][i, j] * alpha_expr_s[j])
             f_x_smooth += self.F[s] @ theta_list[s]
 
         theta_smooth = casadi_vertcat_list(theta_list)
@@ -164,6 +169,7 @@ class NosnocModel:
         self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
         self.mu_smooth_fun = Function('mu_smooth_fun', [self.x], [mu_smooth])
         self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x], [lambda_smooth])
+
 
 class NosnocOcp:
     """
@@ -179,7 +185,8 @@ class NosnocOcp:
     f_q_T(x_terminal) -- evaluated at the end
     """
 
-    def __init__(self, lbu: np.ndarray = np.ones((0,)),
+    def __init__(self,
+                 lbu: np.ndarray = np.ones((0,)),
                  ubu: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
                  f_q_T: SX = SX.zeros(1),
@@ -527,7 +534,8 @@ class FiniteElement(FiniteElementBase):
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
                 self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
-            self.add_constraint(model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
+            self.add_constraint(
+                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
 
         return
 
@@ -602,16 +610,13 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
         Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.nu)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.model.dims.nu,)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros(
+            (self.model.dims.nu,)))
 
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
-            fe = FiniteElement(self.opts,
-                               self.model,
-                               ctrl_idx,
-                               fe_idx=ii,
-                               prev_fe=prev_fe)
+            fe = FiniteElement(self.opts, self.model, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
             self._add_finite_element(fe)
             control_stage.append(fe)
             prev_fe = fe
@@ -801,6 +806,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
 
 class NosnocSolver():
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         # preprocess inputs
@@ -849,18 +855,22 @@ class NosnocSolver():
             # print(f"updating w0 with RK4 smoothened")
             # NOTE: assume N_stages = 1 and STEWART
             dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
-            irk_time_grid = np.array([opts.irk_time_points[0]] + [opts.irk_time_points[k] - opts.irk_time_points[k-1] for k in range(1, opts.n_s)])
+            irk_time_grid = np.array(
+                [opts.irk_time_points[0]] +
+                [opts.irk_time_points[k] - opts.irk_time_points[k - 1] for k in range(1, opts.n_s)])
             rk4_t_grid = dt_fe * irk_time_grid
 
             x_rk4_current = x0
             db_updated_indices = list(ind_x0)
             for i in range(opts.N_finite_elements):
-                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun, x0=x_rk4_current, t_grid=rk4_t_grid)
+                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun,
+                                       x0=x_rk4_current,
+                                       t_grid=rk4_t_grid)
                 x_rk4_current = Xrk4[-1]
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
-                    x_ki = Xrk4[k+1]
-                    self.w0[prob.ind_x[i+1][k]] = x_ki
+                    x_ki = Xrk4[k + 1]
+                    self.w0[prob.ind_x[i + 1][k]] = x_ki
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
@@ -872,18 +882,20 @@ class NosnocSolver():
                     # print(f"mu_ki = {list(mu_ki.full())}")
                     # print(f"lam_ki = {list(lam_ki.full())}\n")
                     for s in range(self.model.dims.n_sys):
-                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
+                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]),
+                                            sum(self.model.dims.n_f_sys[:s + 1]))
                         self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
                         self.w0[prob.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
                         self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
-                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][s] + prob.ind_mu[i][k][s] + prob.ind_x[i+1][k] + prob.ind_h
+                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][
+                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i + 1][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[prob.ind_x[i+1][-1]] = x_ki
-                    db_updated_indices += prob.ind_x[i+1][-1]
+                    self.w0[prob.ind_x[i + 1][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[i + 1][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)

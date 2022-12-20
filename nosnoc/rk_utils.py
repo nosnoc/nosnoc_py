@@ -12,7 +12,7 @@ def rk4(f, x0, tf: float, n_steps: int = 1):
     t = np.linspace(0, tf, n_steps + 1)
 
     # Create storage for solution
-    x = np.zeros((n_steps+1, len(x0)))
+    x = np.zeros((n_steps + 1, len(x0)))
     x[0, :] = x0
 
     # Runge-Kutta 4th order method
@@ -21,14 +21,15 @@ def rk4(f, x0, tf: float, n_steps: int = 1):
         k2 = f(x[i, :] + dt * k1 / 2)
         k3 = f(x[i, :] + dt * k2 / 2)
         k4 = f(x[i, :] + dt * k3)
-        x[i+1, :] = x[i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4).full().flatten()
+        x[i + 1, :] = x[i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4).full().flatten()
 
     x = x.tolist()
     return x, t
 
+
 def rk4_on_timegrid(f, x0, t_grid: np.ndarray) -> list:
 
-    x = np.zeros((len(t_grid)+1, len(x0)))
+    x = np.zeros((len(t_grid) + 1, len(x0)))
     x[0, :] = x0
 
     # Runge-Kutta 4th order method
@@ -39,7 +40,7 @@ def rk4_on_timegrid(f, x0, t_grid: np.ndarray) -> list:
         k2 = f(x[i, :] + dt * k1 / 2)
         k3 = f(x[i, :] + dt * k2 / 2)
         k4 = f(x[i, :] + dt * k3)
-        x[i+1, :] = x[i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4).full().flatten()
+        x[i + 1, :] = x[i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4).full().flatten()
 
     x = x.tolist()
     return x
