@@ -746,7 +746,12 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
     results = dict()
     results["x_out"] = w_opt[prob.ind_x[-1][-1]]
+    # TODO: improve naming here?
     results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
+
+    ind_x_all = [prob.ind_x[0]] + [ind for ind_list in prob.ind_x[1:] for ind in ind_list]
+    results["x_all_list"] = [w_opt[ind] for ind in ind_x_all]
+
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
     results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
     results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
