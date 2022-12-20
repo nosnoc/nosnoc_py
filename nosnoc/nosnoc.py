@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
+from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
@@ -132,21 +132,38 @@ class NosnocModel:
         y = SX.sym('y')
         smooth_step_fun = Function('smooth_step_fun', [y], [(tanh(smoothing_parameter*y)+1)/2])
 
-        # create theta_smooth, f_x_smooth
+        lambda_smooth = []
+        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
+
         theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
+        mu_smooth_list = []
         f_x_smooth = SX.zeros((dims.nx, 1))
         for s in range(dims.n_sys):
             n_c: int = dims.n_c_sys[s]
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
+
+            min_in = SX.sym('min_in', dims.n_f_sys[s])
+            min_out = sum1(casadi_vertcat_list([min_in[i]*exp(-smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
+                      sum1(casadi_vertcat_list([exp(-smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
+            smooth_min_fun = Function('smooth_min_fun', [min_in], [min_out])
+            mu_smooth_list.append(-smooth_min_fun(g_Stewart_list[s]))
+            lambda_smooth = vertcat(lambda_smooth,
+                                    g_Stewart_list[s] - smooth_min_fun(g_Stewart_list[s]))
+
             for i in range(dims.n_f_sys[s]):
                 n_Ri = sum(np.abs(self.S[s][i,:]))
                 theta_list[s][i] = 2 ** (n_c - n_Ri)
                 for j in range(n_c):
                     theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
             f_x_smooth += self.F[s] @ theta_list[s]
+
         theta_smooth = casadi_vertcat_list(theta_list)
+        mu_smooth = casadi_vertcat_list(mu_smooth_list)
+
         self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
         self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
+        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x], [mu_smooth])
+        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x], [lambda_smooth])
 
 class NosnocOcp:
     """
@@ -844,13 +861,16 @@ class NosnocSolver():
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k+1]
                     self.w0[prob.ind_x[i+1][k]] = x_ki
+                    # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
+                    # -> infeasible. Possibly another smooth min fun could be used.
+                    # However, this would be inconsistent with mu.
                     lam_ki = self.model.lambda00_fun(x_ki)
-                    mu_ki = self.model.mu00_stewart_fun(x_ki)
+                    mu_ki = self.model.mu_smooth_fun(x_ki)
                     theta_ki = self.model.theta_smooth_fun(x_ki)
-                    # print(f"{theta_ki=}")
-                    # print(f"{mu_ki=}")
                     # print(f"{x_ki=}")
-                    # print(f"{lam_ki=}")
+                    # print(f"theta_ki = {list(theta_ki.full())}")
+                    # print(f"mu_ki = {list(mu_ki.full())}")
+                    # print(f"lam_ki = {list(lam_ki.full())}\n")
                     for s in range(self.model.dims.n_sys):
                         ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
                         self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
