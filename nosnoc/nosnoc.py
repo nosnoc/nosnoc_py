@@ -360,9 +360,14 @@ class FiniteElement(FiniteElementBase):
         # in order to store the end variables
         # TODO: add helper: create_list_mat(n_s+1, 0)
         # TODO: if irk tableau contains end point, we should only use n_s state variables!
-        self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
+        # TODO: make lift_irk_differential an IrkRepresentation option?
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
+        elif opts.right_boundary_point_explicit:
+            self.ind_x = np.empty((n_s, 0), dtype=int).tolist()
+        else:
+            self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
+
         self.ind_v = np.empty((n_s, 0), dtype=int).tolist()
         self.ind_theta = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
         self.ind_lam = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
@@ -462,9 +467,11 @@ class FiniteElement(FiniteElementBase):
                                dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
-        # add final X variables
-        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
-                          -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
+
+        if not opts.right_boundary_point_explicit:
+            # add final X variables
+            self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
+                            -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
