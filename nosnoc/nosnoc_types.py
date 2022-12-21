@@ -16,7 +16,7 @@ class IRKSchemes(Enum):
 
 class InitializationStrategy(Enum):
     ALL_XCURRENT_W0_START = 0
-    RK4_SMOOTHENED = 1 # experimental
+    RK4_SMOOTHENED = 1  # experimental
     # Other ideas
     # OLD_SOLUTION = 1
     # lp_initialization
@@ -32,7 +32,7 @@ class StepEquilibrationMode(Enum):
 
 class CrossComplementarityMode(Enum):
     COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = 0  # nosnoc 1
-    SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA = 1  # nosnoc 3
+    SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = 1  # nosnoc 3
     # NOTE: tested in simple_sim_tests
 
 

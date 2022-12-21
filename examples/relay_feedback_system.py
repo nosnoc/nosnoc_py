@@ -55,14 +55,14 @@ def get_default_options() -> nosnoc.NosnocOpts:
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
-    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.comp_tol = 1e-6
     opts.print_level = 0
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.LINEAR
     # opts.homotopy_update_exponent = 1.4
     # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
-    # opts.irk_representation = nosnoc.IrkRepresentation.INTEGRAL
+    opts.irk_representation = nosnoc.IrkRepresentation.INTEGRAL
     # opts.lift_irk_differential = False
     return opts
 
@@ -89,17 +89,24 @@ def main():
         else:
             timings = np.minimum(timings, results["cpu_nlp"])
 
+    #     for isim in range(0, Nsim, 20):
+    #         w_all_0 = results["w_all"][isim]
+    #         nosnoc.plot_iterates(solver.problem, w_all_0[:2] + [w_all_0[-1]], title_list=['init RK4', '1st iter', f'solution {isim}'], figure_filename=f'relay_RK4_init_{isim}.pdf')
+
     # plot trajectory
     X_sim = results["X_sim"]
     t_grid = results["t_grid"]
-    plot_system_trajectory(X_sim, t_grid=t_grid)
+    plot_system_trajectory(X_sim, t_grid=t_grid, figure_filename='relay_traj.pdf')
+    plot_algebraic_variables(results, figure_filename='relay_algebraic_traj.pdf')
     # plot_system_3d(results)
 
     # plot timings
     filename = ""
     filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
-    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"# {opts.homotopy_update_rule.name}"
+    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"  # {opts.homotopy_update_rule.name}"
     nosnoc.plot_timings(results["cpu_nlp"], title=plot_title, figure_filename=filename)
+
+    plt.show()
 
 
 def main_rk4_simulation():
@@ -122,13 +129,14 @@ def main_rk4_simulation():
     model = get_relay_feedback_system_model()
     opts.preprocess()
     model.preprocess_model(opts)
-    model.add_smooth_step_representation()
+    model.add_smooth_step_representation(smoothing_parameter=1e-4)
 
     # smooth dynamics based on STEP
     X_sim, t_grid = nosnoc.rk4(model.f_x_smooth_fun, model.x0, Tsim, Nsim)
 
     #
     plot_system_trajectory(X_sim, t_grid)
+    plt.show()
 
 
 def plot_system_3d(results):
@@ -150,7 +158,7 @@ def plot_system_3d(results):
     plt.show()
 
 
-def plot_system_trajectory(X_sim, t_grid):
+def plot_system_trajectory(X_sim, t_grid, figure_filename=''):
     nosnoc.latexify_plot()
 
     # state trajectory plot
@@ -161,10 +169,13 @@ def plot_system_trajectory(X_sim, t_grid):
         plt.grid()
         plt.xlabel("$t$")
         plt.ylabel(f"$x_{i+1}(t)$")
-    plt.show()
+
+    if figure_filename != '':
+        plt.savefig(figure_filename)
+        print(f'stored figure as {figure_filename}')
 
 
-def plot_algebraic_variables(results):
+def plot_algebraic_variables(results, figure_filename=''):
     nosnoc.latexify_plot()
 
     # algebraic variables
@@ -186,7 +197,9 @@ def plot_algebraic_variables(results):
     plt.grid()
     plt.legend()
 
-    plt.show()
+    if figure_filename != '':
+        plt.savefig(figure_filename)
+        print(f'stored figure as {figure_filename}')
 
 
 if __name__ == "__main__":

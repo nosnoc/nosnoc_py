@@ -130,7 +130,7 @@ def main():
     print(f"mean timing solver call {mean_timing:.5f} s")
 
     # plot timings
-    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"# {opts.homotopy_update_rule.name}"
+    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"  # {opts.homotopy_update_rule.name}"
     nosnoc.plot_timings(timings, title=plot_title)
 
     # plot trajectory

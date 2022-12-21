@@ -53,7 +53,7 @@ def main_codim1():
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
-    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.comp_tol = 1e-6
     opts.equidistant_control_grid = False
@@ -85,7 +85,7 @@ def main_codim2():
     opts.N_finite_elements = 3
     opts.n_s = 4
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
-    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.comp_tol = 1e-9
     opts.equidistant_control_grid = False

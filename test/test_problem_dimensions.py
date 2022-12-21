@@ -25,26 +25,26 @@ def main_w_test():
                     opts.pss_mode = pss_mode
 
                     if pss_mode == nosnoc.PssMode.STEWART:
-                        nx = 1
-                        nz = 5
-                        nh = 1
+                        n_x = 1
+                        n_z = 5
+                        n_h = 1
                     elif pss_mode == nosnoc.PssMode.STEP:
-                        nx = 1
-                        nz = 3
-                        nh = 1
+                        n_x = 1
+                        n_z = 3
+                        n_h = 1
 
                     if irk == nosnoc.IRKSchemes.RADAU_IIA:
                         n_end = 0
                     elif irk == nosnoc.IRKSchemes.GAUSS_LEGENDRE:
                         if pss_mode == nosnoc.PssMode.STEWART:
-                            n_end = nz - 2
+                            n_end = n_z - 2
                         elif pss_mode == nosnoc.PssMode.STEP:
-                            n_end = nz - 1
+                            n_end = n_z - 1
 
-                    nw_expected = nx + Nfe * (ns * (nx + nz) + nh + nx) + (Nfe - 1) * (n_end)
+                    nw_expected = n_x + Nfe * (ns * (n_x + n_z) + n_h + n_x) + (Nfe - 1) * (n_end)
                     try:
                         solver = nosnoc.NosnocSolver(opts, model)
-                        assert (solver.w.shape[0] == nw_expected)
+                        assert (solver.problem.w.shape[0] == nw_expected)
                     except AssertionError:
                         raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_w_test: SUCCESS")

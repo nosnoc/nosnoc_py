@@ -33,7 +33,7 @@ def get_motor_with_friction_ocp_description():
     I = SX.sym("I")
     # electric current
     x = vertcat(x1, v1, x2, v2, I)
-    nx = nosnoc.casadi_length(x)
+    n_x = nosnoc.casadi_length(x)
 
     # control
     u = SX.sym("u")
@@ -47,7 +47,7 @@ def get_motor_with_friction_ocp_description():
         [k / m2, c_damping / m2, -k / m2, -c_damping / m2, 0],
         [0, -K_S / L, 0, 0, -R / L],
     ])
-    B = np.zeros((nx, 1))
+    B = np.zeros((n_x, 1))
     B[-1, 0] = 1 / L
     C1 = np.array([0, -F_R / m1, 0, 0, 0])  # v1 >0
     C2 = -C1  # v1<0

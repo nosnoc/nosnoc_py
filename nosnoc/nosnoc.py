@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin
+from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
@@ -20,10 +20,18 @@ class NosnocModel:
 
     where S_i denotes the rows of S.
     """
+
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
 
-    def __init__(self, x: SX, F: List[SX], c: List[SX], S: List[np.ndarray], x0: np.ndarray, u: SX = SX.sym('u_dummy', 0, 1), name: str = 'nosnoc'):
+    def __init__(self,
+                 x: SX,
+                 F: List[SX],
+                 c: List[SX],
+                 S: List[np.ndarray],
+                 x0: np.ndarray,
+                 u: SX = SX.sym('u_dummy', 0, 1),
+                 name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
@@ -36,17 +44,13 @@ class NosnocModel:
 
     def preprocess_model(self, opts: NosnocOpts):
         # detect dimensions
-        nx = casadi_length(self.x)
-        nu = casadi_length(self.u)
+        n_x = casadi_length(self.x)
+        n_u = casadi_length(self.u)
         n_sys = len(self.F)
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
-        self.dims = NosnocDims(nx=nx,
-                               nu=nu,
-                               n_sys=n_sys,
-                               n_c_sys=n_c_sys,
-                               n_f_sys=n_f_sys)
+        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
 
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
@@ -80,7 +84,7 @@ class NosnocModel:
         z = fe.rk_stage_z(0)
 
         # Reformulate the Filippov ODE into a DCS
-        f_x = SX.zeros((nx, 1))
+        f_x = SX.zeros((n_x, 1))
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(n_sys):
@@ -98,8 +102,7 @@ class NosnocModel:
                 g_switching = vertcat(
                     g_switching,
                     self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
-                std_compl_res += transpose(
-                    fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
+                std_compl_res += transpose(fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
                 std_compl_res += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
                 lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
@@ -125,28 +128,54 @@ class NosnocModel:
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter = 1e2):
+    def add_smooth_step_representation(self, smoothing_parameter: float=1e1):
+        """
+        smoothing_parameter: larger -> smoother, smaller -> more exact
+        """
+        if smoothing_parameter <= 0:
+            raise ValueError("smoothing_parameter should be > 0")
+
         dims = self.dims
 
         # smooth step function
         y = SX.sym('y')
-        smooth_step_fun = Function('smooth_step_fun', [y], [tanh(smoothing_parameter*y)])
+        smooth_step_fun = Function('smooth_step_fun', [y],
+                                   [(tanh(1/smoothing_parameter * y) + 1) / 2])
 
-        # create theta_smooth, f_x_smooth
+        lambda_smooth = []
+        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
+
         theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
-        f_x_smooth = SX.zeros((dims.nx, 1))
+        mu_smooth_list = []
+        f_x_smooth = SX.zeros((dims.n_x, 1))
         for s in range(dims.n_sys):
             n_c: int = dims.n_c_sys[s]
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
+
+            min_in = SX.sym('min_in', dims.n_f_sys[s])
+            min_out = sum1(casadi_vertcat_list([min_in[i]*exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
+                      sum1(casadi_vertcat_list([exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
+            smooth_min_fun = Function('smooth_min_fun', [min_in], [min_out])
+            mu_smooth_list.append(-smooth_min_fun(g_Stewart_list[s]))
+            lambda_smooth = vertcat(lambda_smooth,
+                                    g_Stewart_list[s] - smooth_min_fun(g_Stewart_list[s]))
+
             for i in range(dims.n_f_sys[s]):
-                n_Ri = sum(np.abs(self.S[s][i,:]))
-                theta_list[s][i] = 2 ** (n_c - n_Ri)
+                n_Ri = sum(np.abs(self.S[s][i, :]))
+                theta_list[s][i] = 2**(n_c - n_Ri)
                 for j in range(n_c):
-                    theta_list[s][i] *= ((1- self.S[s][i, j])/2 + self.S[s][i, j] * alpha_expr_s[j])
+                    theta_list[s][i] *= ((1 - self.S[s][i, j]) / 2 +
+                                         self.S[s][i, j] * alpha_expr_s[j])
             f_x_smooth += self.F[s] @ theta_list[s]
+
         theta_smooth = casadi_vertcat_list(theta_list)
+        mu_smooth = casadi_vertcat_list(mu_smooth_list)
+
         self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
         self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
+        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x], [mu_smooth])
+        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x], [lambda_smooth])
+
 
 class NosnocOcp:
     """
@@ -162,7 +191,8 @@ class NosnocOcp:
     f_q_T(x_terminal) -- evaluated at the end
     """
 
-    def __init__(self, lbu: np.ndarray = np.ones((0,)),
+    def __init__(self,
+                 lbu: np.ndarray = np.ones((0,)),
                  ubu: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
                  f_q_T: SX = SX.zeros(1),
@@ -183,8 +213,8 @@ class NosnocDims:
     """
     detected automatically
     """
-    nx: int = 0
-    nu: int = 0
+    n_x: int = 0
+    n_u: int = 0
     n_sys: int = 0
     n_c_sys: list = field(default_factory=list)
     n_f_sys: list = field(default_factory=list)
@@ -282,7 +312,7 @@ class FiniteElementZero(FiniteElementBase):
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
-        self.add_variable(SX.sym('X0', dims.nx), self.ind_x, model.x0, model.x0, model.x0, 0)
+        self.add_variable(SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
 
         # lambda00
         if opts.pss_mode == PssMode.STEWART:
@@ -356,12 +386,12 @@ class FiniteElement(FiniteElementBase):
         for ii in range(opts.n_s):
             # state / state derivative variables
             if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx),
-                                  self.ind_v, -inf * np.ones(dims.nx), inf * np.ones(dims.nx),
-                                  np.zeros(dims.nx), ii)
+                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x),
+                                  self.ind_v, -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x),
+                                  np.zeros(dims.n_x), ii)
             if opts.irk_representation == IrkRepresentation.INTEGRAL or opts.lift_irk_differential:
-                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx), self.ind_x,
-                                  -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, ii)
+                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
+                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
@@ -433,8 +463,8 @@ class FiniteElement(FiniteElementBase):
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
         # add final X variables
-        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.nx), self.ind_x,
-                          -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, -1)
+        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
+                          -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -510,7 +540,8 @@ class FiniteElement(FiniteElementBase):
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
                 self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
-            self.add_constraint(model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
+            self.add_constraint(
+                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
 
         return
 
@@ -533,7 +564,7 @@ class FiniteElement(FiniteElementBase):
                 for r in range(dims.n_sys)
                 for j in range(opts.n_s)
             ])
-        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_THETAS_COMPLEMENT_WITH_EVERY_LAMBDA:
+        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             # Note: sum_Lambda contains last stage of prev_fe
             g_cross_comp = casadi_vertcat_list([
                 diag(self.Theta(stage=j, sys=r)) @ self.sum_Lambda(sys=r)
@@ -580,21 +611,18 @@ class FiniteElement(FiniteElementBase):
         return
 
 
-class NosnocSolver(NosnocFormulationObject):
+class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
-        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.nu)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros((self.model.dims.nu,)))
+        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros(
+            (self.model.dims.n_u,)))
 
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
-            fe = FiniteElement(self.opts,
-                               self.model,
-                               ctrl_idx,
-                               fe_idx=ii,
-                               prev_fe=prev_fe)
+            fe = FiniteElement(self.opts, self.model, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
             self._add_finite_element(fe)
             control_stage.append(fe)
             prev_fe = fe
@@ -654,18 +682,9 @@ class NosnocSolver(NosnocFormulationObject):
 
         super().__init__()
 
-        if ocp is None:
-            ocp = NosnocOcp()
         self.model = model
         self.ocp = ocp
         self.opts = opts
-
-        opts.preprocess()
-        model.preprocess_model(opts)
-        ocp.preprocess_ocp(model.x, model.u)
-
-        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
-            self.model.add_smooth_step_representation()
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
@@ -737,9 +756,88 @@ class NosnocSolver(NosnocFormulationObject):
         self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
-        # NLP Solver
+    def print(self):
+        print("g:")
+        print_casadi_vector(self.g)
+        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
+        print("w:")
+        print_casadi_vector(self.w)
+        print(f"lbw, ubw\n{np.vstack((self.lbw, self.ubw)).T}")
+        print("w0")
+        for xx in self.w0:
+            print(xx)
+        print(f"cost:\n{self.cost}")
+
+
+def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
+    opts = prob.opts
+
+    results = dict()
+    results["x_out"] = w_opt[prob.ind_x[-1][-1]]
+    # TODO: improve naming here?
+    results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
+
+    ind_x_all = [prob.ind_x[0]] + [ind for ind_list in prob.ind_x[1:] for ind in ind_list]
+    results["x_all_list"] = [w_opt[ind] for ind in ind_x_all]
+
+    results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+    results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
+    results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
+    results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lam]
+    results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_mu]
+
+    # if opts.pss_mode == PssMode.STEP:
+    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_alpha]
+    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_n]
+    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_p]
+
+    if opts.use_fesd:
+        time_steps = w_opt[prob.ind_h]
+    else:
+        t_stages = opts.terminal_time / opts.N_stages
+        for Nfe in opts.Nfe_list:
+            time_steps = Nfe * [t_stages / Nfe]
+    results["time_steps"] = time_steps
+
+    # results relevant for OCP:
+    x0 = prob.w0[prob.ind_x[0]]
+    results["x_traj"] = [x0] + results["x_list"]
+    results["u_traj"] = results["u_list"]  # duplicate name
+    t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
+    results["t_grid"] = t_grid
+    u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
+    results["t_grid_u"] = [t_grid[i] for i in u_grid]
+
+    return results
+
+
+class NosnocSolver():
+
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+
+        # preprocess inputs
+        if ocp is None:
+            ocp = NosnocOcp()
+        opts.preprocess()
+        model.preprocess_model(opts)
+        ocp.preprocess_ocp(model.x, model.u)
+
+        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+            model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
+
+        # store references
+        self.model = model
+        self.ocp = ocp
+        self.opts = opts
+
+        # create problem
+        problem = NosnocProblem(opts, model, ocp)
+        self.problem = problem
+        self.w0 = problem.w0
+
+        # create NLP Solver
         try:
-            prob = {'f': self.cost, 'x': self.w, 'g': self.g, 'p': self.p}
+            prob = {'f': problem.cost, 'x': problem.w, 'g': problem.g, 'p': problem.p}
             self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
@@ -751,49 +849,59 @@ class NosnocSolver(NosnocFormulationObject):
 
     def initialize(self):
         opts = self.opts
-        ind_x0 = self.ind_x[0]
+        prob = self.problem
+        ind_x0 = prob.ind_x[0]
         x0 = self.w0[ind_x0]
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
-            for ind in self.ind_x:
+            for ind in prob.ind_x:
                 self.w0[ind] = x0
         # This is experimental
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             # print(f"updating w0 with RK4 smoothened")
             # NOTE: assume N_stages = 1 and STEWART
             dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
-            irk_time_grid = np.array([opts.irk_time_points[0]] + [opts.irk_time_points[k] - opts.irk_time_points[k-1] for k in range(1, opts.n_s)])
+            irk_time_grid = np.array(
+                [opts.irk_time_points[0]] +
+                [opts.irk_time_points[k] - opts.irk_time_points[k - 1] for k in range(1, opts.n_s)])
             rk4_t_grid = dt_fe * irk_time_grid
 
             x_rk4_current = x0
             db_updated_indices = list(ind_x0)
             for i in range(opts.N_finite_elements):
-                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun, x0=x_rk4_current, t_grid=rk4_t_grid)
+                Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun,
+                                       x0=x_rk4_current,
+                                       t_grid=rk4_t_grid)
                 x_rk4_current = Xrk4[-1]
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
-                    x_ki = Xrk4[k+1]
-                    self.w0[self.ind_x[i+1][k]] = x_ki
+                    x_ki = Xrk4[k + 1]
+                    self.w0[prob.ind_x[i + 1][k]] = x_ki
+                    # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
+                    # -> infeasible. Possibly another smooth min fun could be used.
+                    # However, this would be inconsistent with mu.
                     lam_ki = self.model.lambda00_fun(x_ki)
-                    mu_ki = self.model.mu00_stewart_fun(x_ki)
+                    mu_ki = self.model.mu_smooth_fun(x_ki)
                     theta_ki = self.model.theta_smooth_fun(x_ki)
-                    # print(f"{theta_ki=}")
-                    # print(f"{mu_ki=}")
                     # print(f"{x_ki=}")
-                    # print(f"{lam_ki=}")
+                    # print(f"theta_ki = {list(theta_ki.full())}")
+                    # print(f"mu_ki = {list(mu_ki.full())}")
+                    # print(f"lam_ki = {list(lam_ki.full())}\n")
                     for s in range(self.model.dims.n_sys):
-                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]), sum(self.model.dims.n_f_sys[:s+1]))
-                        self.w0[self.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
-                        self.w0[self.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
-                        self.w0[self.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]),
+                                            sum(self.model.dims.n_f_sys[:s + 1]))
+                        self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
-                    db_updated_indices += self.ind_theta[i][k][s] + self.ind_lam[i][k][s] + self.ind_mu[i][k][s] + self.ind_x[i+1][k] + self.ind_h
+                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][
+                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i + 1][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[self.ind_x[i+1][-1]] = x_ki
-                    db_updated_indices += self.ind_x[i+1][-1]
+                    self.w0[prob.ind_x[i + 1][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[i + 1][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)
@@ -805,8 +913,10 @@ class NosnocSolver(NosnocFormulationObject):
 
         self.initialize()
         opts = self.opts
-        w_all = []
+        prob = self.problem
+        w0 = self.w0.copy()
 
+        w_all = [w0.copy()]
         complementarity_stats = opts.max_iter_homotopy * [None]
         cpu_time_nlp = opts.max_iter_homotopy * [None]
         nlp_iter = opts.max_iter_homotopy * [None]
@@ -815,11 +925,10 @@ class NosnocSolver(NosnocFormulationObject):
             print('-------------------------------------------')
             print('sigma \t\t compl_res \t CPU time \t iter \t status')
 
-        w0 = self.w0
         sigma_k = opts.sigma_0
 
         # lambda00 initialization
-        x0 = w0[self.ind_x[0]]
+        x0 = w0[prob.ind_x[0]]
         lambda00 = self.model.lambda00_fun(x0).full().flatten()
         p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
 
@@ -830,10 +939,10 @@ class NosnocSolver(NosnocFormulationObject):
             # solve NLP
             t = time.time()
             sol = self.solver(x0=w0,
-                              lbg=self.lbg,
-                              ubg=self.ubg,
-                              lbx=self.lbw,
-                              ubx=self.ubw,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
+                              lbx=prob.lbw,
+                              ubx=prob.ubw,
                               p=p_val)
             cpu_time_nlp[ii] = time.time() - t
 
@@ -845,7 +954,7 @@ class NosnocSolver(NosnocFormulationObject):
             w0 = w_opt
             w_all.append(w_opt)
 
-            complementarity_residual = self.comp_res(w_opt, p_val).full()[0][0]
+            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
@@ -871,59 +980,26 @@ class NosnocSolver(NosnocFormulationObject):
                         sigma_k**opts.homotopy_update_exponent))
 
         # collect results
-        results = dict()
-        results["x_out"] = w_opt[self.ind_x[-1][-1]]
-        results["x_list"] = [w_opt[ind] for ind in self.ind_x_cont]
-        results["u_list"] = [w_opt[ind] for ind in self.ind_u]
-        results["v_list"] = [w_opt[ind] for ind in self.ind_v]
-        results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_theta]
-        results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lam]
-        results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_mu]
+        results = get_results_from_primal_vector(prob, w_opt)
 
-        # if opts.pss_mode == PssMode.STEP:
-        results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_alpha]
-        results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_n]
-        results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in self.ind_lambda_p]
-
-        if opts.use_fesd:
-            time_steps = w_opt[self.ind_h]
-        else:
-            t_stages = opts.terminal_time / opts.N_stages
-            for Nfe in opts.Nfe_list:
-                time_steps = Nfe * [t_stages / Nfe]
-        results["time_steps"] = time_steps
         # stats
         results["cpu_time_nlp"] = cpu_time_nlp
         results["nlp_iter"] = nlp_iter
-
-        # results relevant for OCP:
-        results["x_traj"] = [self.model.x0] + results["x_list"]
-        results["u_traj"] = results["u_list"]  # duplicate name
-        t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
-        results["t_grid"] = t_grid
-        u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
-        results["t_grid_u"] = [t_grid[i] for i in u_grid]
+        results["w_all"] = w_all
         results["w_sol"] = w_opt
 
         return results
 
+    # TODO: move this to problem?
     def set(self, field: str, value):
+        prob = self.problem
         if field == 'x':
-            ind_x0 = self.ind_x[0]
-            self.w0[ind_x0] = value
-            self.lbw[ind_x0] = value
-            self.ubw[ind_x0] = value
+            ind_x0 = prob.ind_x[0]
+            prob.w0[ind_x0] = value
+            prob.lbw[ind_x0] = value
+            prob.ubw[ind_x0] = value
         else:
             raise NotImplementedError()
 
     def print_problem(self):
-        print("g:")
-        print_casadi_vector(self.g)
-        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
-        print("w:")
-        print_casadi_vector(self.w)
-        print(f"lbw, ubw\n{np.vstack((self.lbw, self.ubw)).T}")
-        print("w0")
-        for xx in self.w0:
-            print(xx)
-        print(f"cost:\n{self.cost}")
+        self.problem.print()
