@@ -44,13 +44,13 @@ class NosnocModel:
 
     def preprocess_model(self, opts: NosnocOpts):
         # detect dimensions
-        nx = casadi_length(self.x)
-        nu = casadi_length(self.u)
+        n_x = casadi_length(self.x)
+        n_u = casadi_length(self.u)
         n_sys = len(self.F)
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
-        self.dims = NosnocDims(nx=nx, nu=nu, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
+        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
 
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
@@ -84,7 +84,7 @@ class NosnocModel:
         z = fe.rk_stage_z(0)
 
         # Reformulate the Filippov ODE into a DCS
-        f_x = SX.zeros((nx, 1))
+        f_x = SX.zeros((n_x, 1))
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(n_sys):
@@ -147,7 +147,7 @@ class NosnocModel:
 
         theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
         mu_smooth_list = []
-        f_x_smooth = SX.zeros((dims.nx, 1))
+        f_x_smooth = SX.zeros((dims.n_x, 1))
         for s in range(dims.n_sys):
             n_c: int = dims.n_c_sys[s]
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
@@ -213,8 +213,8 @@ class NosnocDims:
     """
     detected automatically
     """
-    nx: int = 0
-    nu: int = 0
+    n_x: int = 0
+    n_u: int = 0
     n_sys: int = 0
     n_c_sys: list = field(default_factory=list)
     n_f_sys: list = field(default_factory=list)
@@ -312,7 +312,7 @@ class FiniteElementZero(FiniteElementBase):
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
-        self.add_variable(SX.sym('X0', dims.nx), self.ind_x, model.x0, model.x0, model.x0, 0)
+        self.add_variable(SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
 
         # lambda00
         if opts.pss_mode == PssMode.STEWART:
@@ -386,12 +386,12 @@ class FiniteElement(FiniteElementBase):
         for ii in range(opts.n_s):
             # state / state derivative variables
             if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
-                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx),
-                                  self.ind_v, -inf * np.ones(dims.nx), inf * np.ones(dims.nx),
-                                  np.zeros(dims.nx), ii)
+                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x),
+                                  self.ind_v, -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x),
+                                  np.zeros(dims.n_x), ii)
             if opts.irk_representation == IrkRepresentation.INTEGRAL or opts.lift_irk_differential:
-                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.nx), self.ind_x,
-                                  -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, ii)
+                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
+                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
@@ -463,8 +463,8 @@ class FiniteElement(FiniteElementBase):
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
         # add final X variables
-        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.nx), self.ind_x,
-                          -inf * np.ones(dims.nx), inf * np.ones(dims.nx), model.x0, -1)
+        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
+                          -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -615,9 +615,9 @@ class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
-        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.nu)
+        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros(
-            (self.model.dims.nu,)))
+            (self.model.dims.n_u,)))
 
         # Create Finite elements in this control stage
         control_stage = []

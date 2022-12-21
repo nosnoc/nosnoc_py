@@ -116,7 +116,7 @@ def plot_iterates(problem: NosnocProblem,
         # plot x
         x_list = results['x_all_list']
         plt.subplot(n_row, n_iterates, n_iterates * 2 + it + 1)
-        for i in range(problem.model.dims.nx):
+        for i in range(problem.model.dims.n_x):
             plt.plot([x[i] for x in x_list], label=r'$x_' + f'{i+1}$')
         plt.grid(alpha=0.3)
         plt.legend()
