@@ -129,7 +129,7 @@ def main_rk4_simulation():
     model = get_relay_feedback_system_model()
     opts.preprocess()
     model.preprocess_model(opts)
-    model.add_smooth_step_representation(smoothing_parameter=1e4)
+    model.add_smooth_step_representation(smoothing_parameter=1e-4)
 
     # smooth dynamics based on STEP
     X_sim, t_grid = nosnoc.rk4(model.f_x_smooth_fun, model.x0, Tsim, Nsim)

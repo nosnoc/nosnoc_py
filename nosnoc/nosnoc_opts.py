@@ -31,6 +31,9 @@ class NosnocOpts:
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
     gamma_h: float = 1.0
 
+    smoothing_parameter: float = 1e1 # used for smoothed Step representation
+                # used in InitializationStrategy.RK4_smoothed
+
     # initialization - Stewart
     init_theta: float = 1.0
     init_lambda: float = 1.0

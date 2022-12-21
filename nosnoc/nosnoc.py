@@ -128,13 +128,19 @@ class NosnocModel:
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter=1e-1):
+    def add_smooth_step_representation(self, smoothing_parameter: float=1e1):
+        """
+        smoothing_parameter: larger -> smoother, smaller -> more exact
+        """
+        if smoothing_parameter <= 0:
+            raise ValueError("smoothing_parameter should be > 0")
+
         dims = self.dims
 
         # smooth step function
         y = SX.sym('y')
         smooth_step_fun = Function('smooth_step_fun', [y],
-                                   [(tanh(smoothing_parameter * y) + 1) / 2])
+                                   [(tanh(1/smoothing_parameter * y) + 1) / 2])
 
         lambda_smooth = []
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
@@ -147,8 +153,8 @@ class NosnocModel:
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
 
             min_in = SX.sym('min_in', dims.n_f_sys[s])
-            min_out = sum1(casadi_vertcat_list([min_in[i]*exp(-smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
-                      sum1(casadi_vertcat_list([exp(-smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
+            min_out = sum1(casadi_vertcat_list([min_in[i]*exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
+                      sum1(casadi_vertcat_list([exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
             smooth_min_fun = Function('smooth_min_fun', [min_in], [min_out])
             mu_smooth_list.append(-smooth_min_fun(g_Stewart_list[s]))
             lambda_smooth = vertcat(lambda_smooth,
@@ -817,7 +823,7 @@ class NosnocSolver():
         ocp.preprocess_ocp(model.x, model.u)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
-            model.add_smooth_step_representation()
+            model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
 
         # store references
         self.model = model
