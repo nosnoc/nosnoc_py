@@ -39,8 +39,6 @@ class NosnocOpts:
     init_mu: float = 1.0
     # initialization - Step
     init_alpha: float = 1.0  # for step only
-    init_lambda_0: float = 1.0
-    init_lambda_1: float = 1.0
     init_beta: float = 1.0
     init_gamma: float = 1.0
 
