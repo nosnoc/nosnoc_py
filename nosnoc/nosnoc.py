@@ -39,8 +39,13 @@ class NosnocModel:
         self.x0: np.ndarray = x0
         self.u: SX = u
         self.name: str = name
-
         self.dims: NosnocDims = None
+
+    def __repr__(self) -> str:
+        out = ''
+        for k, v in self.__dict__.items():
+            out += f"{k} : {v}\n"
+        return out
 
     def preprocess_model(self, opts: NosnocOpts):
         # detect dimensions
