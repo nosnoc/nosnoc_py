@@ -109,17 +109,15 @@ def main_test_discretization():
     for mpcc_mode in nosnoc.MpccMode:
         for irk_scheme in nosnoc.IRKSchemes:
             for irk_representation in nosnoc.IrkRepresentation:
-                for lifted_irk in [True, False]:
-                    opts = get_default_options()
-                    opts.mpcc_mode = mpcc_mode
-                    opts.irk_scheme = irk_scheme
-                    opts.print_level = 0
-                    opts.irk_representation = irk_representation
-                    opts.lift_irk_differential = lifted_irk
-                    try:
-                        test_opts(opts, model=model)
-                    except:
-                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                opts = get_default_options()
+                opts.mpcc_mode = mpcc_mode
+                opts.irk_scheme = irk_scheme
+                opts.print_level = 0
+                opts.irk_representation = irk_representation
+                try:
+                    test_opts(opts, model=model)
+                except:
+                    raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
     print("main_test_sliding: SUCCESS")
 
 

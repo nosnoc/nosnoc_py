@@ -39,6 +39,7 @@ class CrossComplementarityMode(Enum):
 class IrkRepresentation(Enum):
     INTEGRAL = 0
     DIFFERENTIAL = 1
+    DIFFERENTIAL_LIFT_X = 2
     # NOTE: tested in test_ocp
 
 
