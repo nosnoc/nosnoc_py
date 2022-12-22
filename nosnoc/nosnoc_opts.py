@@ -30,8 +30,8 @@ class NosnocOpts:
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
     gamma_h: float = 1.0
 
-    smoothing_parameter: float = 1e1 # used for smoothed Step representation
-                # used in InitializationStrategy.RK4_smoothed
+    smoothing_parameter: float = 1e1  # used for smoothed Step representation
+    # used in InitializationStrategy.RK4_smoothed
 
     # initialization - Stewart
     init_theta: float = 1.0
@@ -121,7 +121,8 @@ class NosnocOpts:
             self.B_irk = B_irk
             self.C_irk = C_irk
             self.D_irk = D_irk
-        elif self.irk_representation in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]:
+        elif (self.irk_representation
+              in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
             A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(self.n_s, self.irk_scheme)
             self.A_irk = A_irk
             self.b_irk = b_irk
