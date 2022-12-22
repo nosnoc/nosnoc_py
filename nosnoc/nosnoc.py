@@ -239,7 +239,10 @@ class NosnocFormulationObject(ABC):
         self.cost: SX = SX.zeros(1)
 
         # index lists
-        self.ind_x: list = []
+        self.ind_x: list
+        self.ind_lam: list
+        self.ind_lambda_n: list
+        self.ind_lambda_p: list
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -296,12 +299,6 @@ class FiniteElementBase(NosnocFormulationObject):
         return vertcat(self.w[flatten(self.ind_lam[stage][sys])],
                        self.w[flatten(self.ind_lambda_n[stage][sys])],
                        self.w[flatten(self.ind_lambda_p[stage][sys])])
-
-    def sum_Lambda(self, sys=slice(None)):
-        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
-        Lambdas.append(self.prev_fe.Lambda(
-            stage=-1, sys=sys))  # Include the last finite element's last stage lambda
-        return casadi_sum_list(Lambdas)
 
 
 class FiniteElementZero(FiniteElementBase):
@@ -506,6 +503,13 @@ class FiniteElement(FiniteElementBase):
     def sum_Theta(self) -> SX:
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
         return casadi_sum_list(Thetas)
+
+    def sum_Lambda(self, sys=slice(None)):
+        """NOTE: includes the prev fes last stage lambda"""
+        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
+        Lambdas.append(self.prev_fe.Lambda(
+            stage=-1, sys=sys))
+        return casadi_sum_list(Lambdas)
 
     def h(self) -> SX:
         return self.w[self.ind_h]
