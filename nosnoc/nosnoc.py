@@ -360,9 +360,14 @@ class FiniteElement(FiniteElementBase):
         # in order to store the end variables
         # TODO: add helper: create_list_mat(n_s+1, 0)
         # TODO: if irk tableau contains end point, we should only use n_s state variables!
-        self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
+        # TODO: make lift_irk_differential an IrkRepresentation option?
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential:
             self.ind_x = np.empty((1, 0), dtype=int).tolist()
+        elif opts.right_boundary_point_explicit:
+            self.ind_x = np.empty((n_s, 0), dtype=int).tolist()
+        else:
+            self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
+
         self.ind_v = np.empty((n_s, 0), dtype=int).tolist()
         self.ind_theta = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
         self.ind_lam = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
@@ -462,9 +467,11 @@ class FiniteElement(FiniteElementBase):
                                dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
-        # add final X variables
-        self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
-                          -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
+
+        if not opts.right_boundary_point_explicit or (opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential):
+            # add final X variables
+            self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
+                            -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -523,19 +530,21 @@ class FiniteElement(FiniteElementBase):
             gj = model.g_z_all_fun(X_ki[j], self.rk_stage_z(j), Uk)
             qj = ocp.f_q_fun(X_ki[j], Uk)
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
-                xp = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
-                for r, x in enumerate(X_ki[:-1]):
-                    xp += opts.C_irk[r + 1, j + 1] * x
+                xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(opts.n_s):
+                    xj += opts.C_irk[r + 1, j + 1] * X_ki[r]
                 Xk_end += opts.D_irk[j + 1] * X_ki[j]
-                self.add_constraint(self.h() * fj - xp)
+                self.add_constraint(self.h() * fj - xj)
                 self.cost += opts.B_irk[j + 1] * self.h() * qj
             elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
                 Xk_end += self.h() * opts.b_irk[j] * self.w[self.ind_v[j]]
                 self.add_constraint(fj - self.w[self.ind_v[j]])
                 self.cost += opts.b_irk[j] * self.h() * qj
             self.add_constraint(gj)
+
         # continuity condition: end of fe state - final stage state
-        self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
+        if not opts.right_boundary_point_explicit or (opts.irk_representation == IrkRepresentation.DIFFERENTIAL and not opts.lift_irk_differential):
+            self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
 
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd and (

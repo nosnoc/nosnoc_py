@@ -23,6 +23,7 @@ def main_w_test():
                     opts.N_finite_elements = Nfe
                     opts.irk_scheme = irk
                     opts.pss_mode = pss_mode
+                    opts.preprocess()
 
                     if pss_mode == nosnoc.PssMode.STEWART:
                         n_x = 1
@@ -33,15 +34,18 @@ def main_w_test():
                         n_z = 3
                         n_h = 1
 
-                    if irk == nosnoc.IRKSchemes.RADAU_IIA:
+                    nw_expected = n_x + Nfe * (ns * (n_x + n_z) + n_h)
+
+                    if opts.right_boundary_point_explicit:
                         n_end = 0
-                    elif irk == nosnoc.IRKSchemes.GAUSS_LEGENDRE:
+                    else:
+                        nw_expected += Nfe * n_x
                         if pss_mode == nosnoc.PssMode.STEWART:
                             n_end = n_z - 2
                         elif pss_mode == nosnoc.PssMode.STEP:
                             n_end = n_z - 1
 
-                    nw_expected = n_x + Nfe * (ns * (n_x + n_z) + n_h + n_x) + (Nfe - 1) * (n_end)
+                    nw_expected += (Nfe - 1) * (n_end)
                     try:
                         solver = nosnoc.NosnocSolver(opts, model)
                         assert (solver.problem.w.shape[0] == nw_expected)
