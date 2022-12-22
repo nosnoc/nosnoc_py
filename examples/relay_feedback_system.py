@@ -51,7 +51,7 @@ def get_default_options() -> nosnoc.NosnocOpts:
 
     opts.use_fesd = True
     opts.pss_mode = nosnoc.PssMode.STEWART
-    opts.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
@@ -63,7 +63,6 @@ def get_default_options() -> nosnoc.NosnocOpts:
     # opts.homotopy_update_exponent = 1.4
     # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
     opts.irk_representation = nosnoc.IrkRepresentation.INTEGRAL
-    # opts.lift_irk_differential = False
     return opts
 
 

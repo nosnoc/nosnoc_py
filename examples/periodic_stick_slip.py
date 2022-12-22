@@ -49,7 +49,7 @@ def main_codim1():
 
     opts.use_fesd = True
     opts.pss_mode = nosnoc.PssMode.STEWART
-    opts.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
@@ -81,7 +81,7 @@ def main_codim2():
 
     opts.use_fesd = True
     opts.pss_mode = nosnoc.PssMode.STEWART
-    opts.irk_scheme = nosnoc.IRKSchemes.RADAU_IIA
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.N_finite_elements = 3
     opts.n_s = 4
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ

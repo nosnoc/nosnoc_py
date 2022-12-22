@@ -1,7 +1,7 @@
 import numpy as np
 import casadi as ca
 
-from .nosnoc_types import IRKSchemes
+from .nosnoc_types import IrkSchemes
 
 
 def rk4(f, x0, tf: float, n_steps: int = 1):
@@ -47,7 +47,7 @@ def rk4_on_timegrid(f, x0, t_grid: np.ndarray) -> list:
 
 
 def generate_butcher_tableu(n_s, irk_scheme):
-    if irk_scheme == IRKSchemes.RADAU_IIA:
+    if irk_scheme == IrkSchemes.RADAU_IIA:
         order = 2 * n_s - 1
         if n_s == 1:
             A = np.array([[1.0]])
@@ -540,7 +540,7 @@ def generate_butcher_tableu(n_s, irk_scheme):
         else:
             raise NotImplementedError()
 
-    elif irk_scheme == IRKSchemes.GAUSS_LEGENDRE:
+    elif irk_scheme == IrkSchemes.GAUSS_LEGENDRE:
         order = 2 * n_s
         if n_s == 1:
             A = np.array([[
@@ -1053,7 +1053,7 @@ def generate_butcher_tableu(n_s, irk_scheme):
 
 
 def generate_butcher_tableu_integral(n_s, irk_scheme):
-    IRK_SCHEME_TO_STRING = {IRKSchemes.GAUSS_LEGENDRE: "legendre", IRKSchemes.RADAU_IIA: "radau"}
+    IRK_SCHEME_TO_STRING = {IrkSchemes.GAUSS_LEGENDRE: "legendre", IrkSchemes.RADAU_IIA: "radau"}
     points = ca.collocation_points(n_s, IRK_SCHEME_TO_STRING[irk_scheme])
     tau_root = np.array([0.0] + points)
 

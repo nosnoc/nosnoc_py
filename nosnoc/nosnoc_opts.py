@@ -4,7 +4,7 @@ import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
-from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
+from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
 
 @dataclass
@@ -23,7 +23,7 @@ class NosnocOpts:
 
     # IRK and FESD opts
     n_s: int = 2  # Number of IRK stages
-    irk_scheme: IRKSchemes = IRKSchemes.RADAU_IIA
+    irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
     cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
 
