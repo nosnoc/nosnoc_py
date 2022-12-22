@@ -224,16 +224,22 @@ class NosnocFormulationObject(ABC):
 
     @abstractmethod
     def __init__(self):
+        # optimization variables with initial guess, bounds
         self.w: SX = SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
         self.ubw: np.array = np.array([])
 
+        # constraints and bounds
         self.g: SX = SX([])
         self.lbg: np.array = np.array([])
         self.ubg: np.array = np.array([])
 
+        # cost
         self.cost: SX = SX.zeros(1)
+
+        # index lists
+        self.ind_x: list = []
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -508,44 +514,41 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         model = self.model
 
-        # setup X_ki
+        # setup X_fe: list of x values on fe, initialize X_end
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
-            X_ki = [self.w[x_kij] for x_kij in self.ind_x]
+            X_fe = [self.w[ind] for ind in self.ind_x]
             Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
-
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            X_ki = []
-            for j in range(opts.n_s):  # Ignore continuity vars
+            X_fe = []
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+            for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
-                X_ki.append(x_temp)
-            X_ki.append(self.w[self.ind_x[-1]])
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
-
+                X_fe.append(x_temp)
+            X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
-            X_ki = []
-            for j in range(opts.n_s):  # Ignore continuity vars
+            X_fe = [self.w[ind] for ind in self.ind_x]
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+            for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
-                X_ki.append(self.w[self.ind_x[j]])
+                # lifting constraints
                 self.add_constraint(self.w[self.ind_x[j]] - x_temp)
-            X_ki.append(self.w[self.ind_x[-1]])
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_ki[j], self.rk_stage_z(j), Uk)
-            qj = ocp.f_q_fun(X_ki[j], Uk)
+            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk)
+            qj = ocp.f_q_fun(X_fe[j], Uk)
             # path constraint
-            gj = model.g_z_all_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk)
             self.add_constraint(gj)
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    xj += opts.C_irk[r + 1, j + 1] * X_ki[r]
-                Xk_end += opts.D_irk[j + 1] * X_ki[j]
+                    xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
+                Xk_end += opts.D_irk[j + 1] * X_fe[j]
                 self.add_constraint(self.h() * fj - xj)
                 self.cost += opts.B_irk[j + 1] * self.h() * qj
             elif opts.irk_representation in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]:
@@ -607,8 +610,9 @@ class FiniteElement(FiniteElementBase):
 
     def step_equilibration(self) -> None:
         opts = self.opts
-        prev_fe = self.prev_fe
-        if opts.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
+        # step equilibration only within control stages.
+        if opts.use_fesd and self.fe_idx > 0:
+            prev_fe: FiniteElement = self.prev_fe
             delta_h_ki = self.h() - prev_fe.h()
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                 h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
