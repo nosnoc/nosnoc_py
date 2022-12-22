@@ -23,7 +23,7 @@ def test_loop():
     for equidistant_control_grid in EQUIDISTANT_CONTROLS:
         for step_equilibration in nosnoc.StepEquilibrationMode:
             for irk_representation in nosnoc.IrkRepresentation:
-                for irk_scheme in nosnoc.IRKSchemes:
+                for irk_scheme in nosnoc.IrkSchemes:
                     for pss_mode in PSS_MODES:
                         for homotopy_update_rule in nosnoc.HomotopyUpdateRule:
                             opts = get_default_options()

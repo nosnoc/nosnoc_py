@@ -73,3 +73,7 @@ def increment_indices(L, inc):
         else:
             raise ValueError('Not a nested list of integers')
     return L_new
+
+
+def create_empty_list_matrix(list_dims: tuple):
+    return np.empty(list_dims + (0,), dtype=int).tolist()

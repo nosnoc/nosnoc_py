@@ -8,7 +8,7 @@ class MpccMode(Enum):
     # NOTE: tested in simple_sim_tests
 
 
-class IRKSchemes(Enum):
+class IrkSchemes(Enum):
     RADAU_IIA = 0
     GAUSS_LEGENDRE = 1
     # NOTE: tested in simple_sim_tests

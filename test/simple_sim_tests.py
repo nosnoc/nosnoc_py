@@ -88,7 +88,7 @@ def main_test_sliding():
     for ns in NS_VALUES:
         for Nfe in N_FINITE_ELEMENT_VALUES:
             for pss_mode in nosnoc.PssMode:
-                for irk_scheme in nosnoc.IRKSchemes:
+                for irk_scheme in nosnoc.IrkSchemes:
                     opts = get_default_options()
                     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
                     opts.irk_scheme = irk_scheme
@@ -107,7 +107,7 @@ def main_test_discretization():
     model = get_simplest_model_sliding()
 
     for mpcc_mode in nosnoc.MpccMode:
-        for irk_scheme in nosnoc.IRKSchemes:
+        for irk_scheme in nosnoc.IrkSchemes:
             for irk_representation in nosnoc.IrkRepresentation:
                 opts = get_default_options()
                 opts.mpcc_mode = mpcc_mode

@@ -4,7 +4,7 @@ import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
-from .nosnoc_types import MpccMode, IRKSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
+from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
 
 
 @dataclass
@@ -23,15 +23,15 @@ class NosnocOpts:
 
     # IRK and FESD opts
     n_s: int = 2  # Number of IRK stages
-    irk_scheme: IRKSchemes = IRKSchemes.RADAU_IIA
+    irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
     cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
 
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
     gamma_h: float = 1.0
 
-    smoothing_parameter: float = 1e1 # used for smoothed Step representation
-                # used in InitializationStrategy.RK4_smoothed
+    smoothing_parameter: float = 1e1  # used for smoothed Step representation
+    # used in InitializationStrategy.RK4_smoothed
 
     # initialization - Stewart
     init_theta: float = 1.0
@@ -39,8 +39,6 @@ class NosnocOpts:
     init_mu: float = 1.0
     # initialization - Step
     init_alpha: float = 1.0  # for step only
-    init_lambda_0: float = 1.0
-    init_lambda_1: float = 1.0
     init_beta: float = 1.0
     init_gamma: float = 1.0
 
@@ -121,7 +119,8 @@ class NosnocOpts:
             self.B_irk = B_irk
             self.C_irk = C_irk
             self.D_irk = D_irk
-        elif self.irk_representation in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]:
+        elif (self.irk_representation
+              in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
             A_irk, b_irk, irk_time_points, _ = generate_butcher_tableu(self.n_s, self.irk_scheme)
             self.A_irk = A_irk
             self.b_irk = b_irk

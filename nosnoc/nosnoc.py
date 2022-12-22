@@ -8,7 +8,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix
 from nosnoc.rk_utils import rk4_on_timegrid
 
 
@@ -39,8 +39,13 @@ class NosnocModel:
         self.x0: np.ndarray = x0
         self.u: SX = u
         self.name: str = name
-
         self.dims: NosnocDims = None
+
+    def __repr__(self) -> str:
+        out = ''
+        for k, v in self.__dict__.items():
+            out += f"{k} : {v}\n"
+        return out
 
     def preprocess_model(self, opts: NosnocOpts):
         # detect dimensions
@@ -128,7 +133,7 @@ class NosnocModel:
         self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
         self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
 
-    def add_smooth_step_representation(self, smoothing_parameter: float=1e1):
+    def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
         """
         smoothing_parameter: larger -> smoother, smaller -> more exact
         """
@@ -140,7 +145,7 @@ class NosnocModel:
         # smooth step function
         y = SX.sym('y')
         smooth_step_fun = Function('smooth_step_fun', [y],
-                                   [(tanh(1/smoothing_parameter * y) + 1) / 2])
+                                   [(tanh(1 / smoothing_parameter * y) + 1) / 2])
 
         lambda_smooth = []
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
@@ -224,16 +229,25 @@ class NosnocFormulationObject(ABC):
 
     @abstractmethod
     def __init__(self):
+        # optimization variables with initial guess, bounds
         self.w: SX = SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
         self.ubw: np.array = np.array([])
 
+        # constraints and bounds
         self.g: SX = SX([])
         self.lbg: np.array = np.array([])
         self.ubg: np.array = np.array([])
 
+        # cost
         self.cost: SX = SX.zeros(1)
+
+        # index lists
+        self.ind_x: list
+        self.ind_lam: list
+        self.ind_lambda_n: list
+        self.ind_lambda_p: list
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -291,24 +305,17 @@ class FiniteElementBase(NosnocFormulationObject):
                        self.w[flatten(self.ind_lambda_n[stage][sys])],
                        self.w[flatten(self.ind_lambda_p[stage][sys])])
 
-    def sum_Lambda(self, sys=slice(None)):
-        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
-        Lambdas.append(self.prev_fe.Lambda(
-            stage=-1, sys=sys))  # Include the last finite element's last stage lambda
-        return casadi_sum_list(Lambdas)
-
 
 class FiniteElementZero(FiniteElementBase):
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
         dims = model.dims
-        self.n_rkstages = 1
 
-        self.ind_x = np.empty((1, 0), dtype=int).tolist()
-        self.ind_lam = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_n = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_p = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
+        self.ind_x = create_empty_list_matrix((1,))
+        self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
+        self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
+        self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
@@ -348,6 +355,7 @@ class FiniteElement(FiniteElementBase):
         self.fe_idx = fe_idx
         self.opts = opts
         self.model = model
+        self.prev_fe: FiniteElementBase = prev_fe
 
         dims = self.model.dims
 
@@ -356,27 +364,22 @@ class FiniteElement(FiniteElementBase):
                                        fe_idx < opts.Nfe_list[ctrl_idx] - 1)
         end_allowance = 1 if create_right_boundary_point else 0
 
-        # Initialze index vectors. Note ind_x contains an extra element
-        # in order to store the end variables
-        # TODO: add helper: create_list_mat(n_s+1, 0)
+        # Initialze index lists
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
             # only x_end
-            self.ind_x = np.empty((1, 0), dtype=int).tolist()
+            self.ind_x = create_empty_list_matrix((1,))
         elif opts.right_boundary_point_explicit:
-            self.ind_x = np.empty((n_s, 0), dtype=int).tolist()
+            self.ind_x = create_empty_list_matrix((n_s,))
         else:
-            self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
-
-        self.ind_v: list = np.empty((n_s, 0), dtype=int).tolist()
-        self.ind_theta = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lam = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_mu = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_alpha = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_n = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_p = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
+            self.ind_x = create_empty_list_matrix((n_s + 1,))
+        self.ind_v: list = create_empty_list_matrix((n_s,))
+        self.ind_theta = create_empty_list_matrix((n_s, dims.n_sys))
+        self.ind_lam = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_mu = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_alpha = create_empty_list_matrix((n_s, dims.n_sys))
+        self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_h = []
-
-        self.prev_fe: FiniteElementBase = prev_fe
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -389,13 +392,14 @@ class FiniteElement(FiniteElementBase):
         # RK stage stuff
         for ii in range(opts.n_s):
             # state derivatives
-            if opts.irk_representation in [IrkRepresentation.DIFFERENTIAL,
-                                           IrkRepresentation.DIFFERENTIAL_LIFT_X]:
-                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x),
-                                  self.ind_v, -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x),
+            if (opts.irk_representation
+                    in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
+                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_v,
+                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x),
                                   np.zeros(dims.n_x), ii)
             # states
-            if opts.irk_representation in [IrkRepresentation.INTEGRAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]:
+            if (opts.irk_representation
+                    in [IrkRepresentation.INTEGRAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
                                   -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, ii)
             # algebraic variables
@@ -470,10 +474,10 @@ class FiniteElement(FiniteElementBase):
                         opts.n_s, ij)
 
         if (not opts.right_boundary_point_explicit or
-            opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
+                opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
             self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
-                            -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
+                              -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -501,6 +505,12 @@ class FiniteElement(FiniteElementBase):
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
         return casadi_sum_list(Thetas)
 
+    def sum_Lambda(self, sys=slice(None)):
+        """NOTE: includes the prev fes last stage lambda"""
+        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
+        Lambdas.append(self.prev_fe.Lambda(stage=-1, sys=sys))
+        return casadi_sum_list(Lambdas)
+
     def h(self) -> SX:
         return self.w[self.ind_h]
 
@@ -508,54 +518,52 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         model = self.model
 
-        # setup X_ki
+        # setup X_fe: list of x values on fe, initialize X_end
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
-            X_ki = [self.w[x_kij] for x_kij in self.ind_x]
+            X_fe = [self.w[ind] for ind in self.ind_x]
             Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
-
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
-            X_ki = []
-            for j in range(opts.n_s):  # Ignore continuity vars
+            X_fe = []
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+            for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
-                X_ki.append(x_temp)
-            X_ki.append(self.w[self.ind_x[-1]])
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
-
+                X_fe.append(x_temp)
+            X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
-            X_ki = []
-            for j in range(opts.n_s):  # Ignore continuity vars
+            X_fe = [self.w[ind] for ind in self.ind_x]
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+            for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
-                X_ki.append(self.w[self.ind_x[j]])
+                # lifting constraints
                 self.add_constraint(self.w[self.ind_x[j]] - x_temp)
-            X_ki.append(self.w[self.ind_x[-1]])
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]  # initialize
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_ki[j], self.rk_stage_z(j), Uk)
-            qj = ocp.f_q_fun(X_ki[j], Uk)
+            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk)
+            qj = ocp.f_q_fun(X_fe[j], Uk)
             # path constraint
-            gj = model.g_z_all_fun(X_ki[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk)
             self.add_constraint(gj)
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    xj += opts.C_irk[r + 1, j + 1] * X_ki[r]
-                Xk_end += opts.D_irk[j + 1] * X_ki[j]
+                    xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
+                Xk_end += opts.D_irk[j + 1] * X_fe[j]
                 self.add_constraint(self.h() * fj - xj)
                 self.cost += opts.B_irk[j + 1] * self.h() * qj
-            elif opts.irk_representation in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]:
+            elif (opts.irk_representation
+                  in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 Xk_end += self.h() * opts.b_irk[j] * self.w[self.ind_v[j]]
                 self.add_constraint(fj - self.w[self.ind_v[j]])
                 self.cost += opts.b_irk[j] * self.h() * qj
 
         # continuity condition: end of fe state - final stage state
         if (not opts.right_boundary_point_explicit or
-               opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
+                opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
 
         # g_z_all constraint for boundary point and continuity of algebraic variables.
@@ -607,8 +615,9 @@ class FiniteElement(FiniteElementBase):
 
     def step_equilibration(self) -> None:
         opts = self.opts
-        prev_fe = self.prev_fe
-        if opts.use_fesd and self.fe_idx > 0:  # step equilibration only within control stages.
+        # step equilibration only within control stages.
+        if opts.use_fesd and self.fe_idx > 0:
+            prev_fe: FiniteElement = self.prev_fe
             delta_h_ki = self.h() - prev_fe.h()
             if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
                 h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
@@ -637,8 +646,8 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
         Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, np.zeros(
-            (self.model.dims.n_u,)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu,
+                          np.zeros((self.model.dims.n_u,)))
 
         # Create Finite elements in this control stage
         control_stage = []
