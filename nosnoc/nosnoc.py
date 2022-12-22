@@ -667,17 +667,16 @@ class FiniteElement(FiniteElementBase):
                 [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(opts.n_s)])
 
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-            # complement within fe
-            g_cross_comp = casadi_vertcat_list([
+            cross_comp_within_fe = [
                 diag(self.Theta(stage=j, sys=r)) @ self.Lambda(stage=jj, sys=r)
                 for r in range(dims.n_sys) for j in range(opts.n_s) for jj in range(opts.n_s)
-            ])
-            # complement with end of previous fe
-            g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
+            ]
+            cross_comp_with_prev_fe = [
                 diag(self.Theta(stage=j, sys=r)) @ self.prev_fe.Lambda(stage=-1, sys=r)
                 for r in range(dims.n_sys)
                 for j in range(opts.n_s)
-            ])
+            ]
+            g_cross_comp = casadi_vertcat_list(cross_comp_within_fe + cross_comp_with_prev_fe)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             # Note: sum_Lambda contains last stage of prev_fe
             g_cross_comp = casadi_vertcat_list([
