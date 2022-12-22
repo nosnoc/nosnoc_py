@@ -8,7 +8,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_list_of_empty_lists
 from nosnoc.rk_utils import rk4_on_timegrid
 
 
@@ -306,12 +306,11 @@ class FiniteElementZero(FiniteElementBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
         dims = model.dims
-        self.n_rkstages = 1
 
-        self.ind_x = np.empty((1, 0), dtype=int).tolist()
-        self.ind_lam = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_n = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_p = np.empty((self.n_rkstages, dims.n_sys, 0), dtype=int).tolist()
+        self.ind_x = create_list_of_empty_lists((1, ))
+        self.ind_lam = create_list_of_empty_lists((1, dims.n_sys))
+        self.ind_lambda_n = create_list_of_empty_lists((1, dims.n_sys))
+        self.ind_lambda_p = create_list_of_empty_lists((1, dims.n_sys))
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
@@ -351,6 +350,7 @@ class FiniteElement(FiniteElementBase):
         self.fe_idx = fe_idx
         self.opts = opts
         self.model = model
+        self.prev_fe: FiniteElementBase = prev_fe
 
         dims = self.model.dims
 
@@ -359,27 +359,22 @@ class FiniteElement(FiniteElementBase):
                                        fe_idx < opts.Nfe_list[ctrl_idx] - 1)
         end_allowance = 1 if create_right_boundary_point else 0
 
-        # Initialze index vectors. Note ind_x contains an extra element
-        # in order to store the end variables
-        # TODO: add helper: create_list_mat(n_s+1, 0)
+        # Initialze index lists
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
             # only x_end
-            self.ind_x = np.empty((1, 0), dtype=int).tolist()
+            self.ind_x = create_list_of_empty_lists((1,))
         elif opts.right_boundary_point_explicit:
-            self.ind_x = np.empty((n_s, 0), dtype=int).tolist()
+            self.ind_x = create_list_of_empty_lists((n_s,))
         else:
-            self.ind_x = np.empty((n_s + 1, 0), dtype=int).tolist()
-
-        self.ind_v: list = np.empty((n_s, 0), dtype=int).tolist()
-        self.ind_theta = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lam = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_mu = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_alpha = np.empty((n_s, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_n = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
-        self.ind_lambda_p = np.empty((n_s + end_allowance, dims.n_sys, 0), dtype=int).tolist()
+            self.ind_x = create_list_of_empty_lists((n_s + 1,))
+        self.ind_v: list = create_list_of_empty_lists((n_s,))
+        self.ind_theta = create_list_of_empty_lists((n_s, dims.n_sys))
+        self.ind_lam = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
+        self.ind_mu = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
+        self.ind_alpha = create_list_of_empty_lists((n_s, dims.n_sys))
+        self.ind_lambda_n = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
+        self.ind_lambda_p = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
         self.ind_h = []
-
-        self.prev_fe: FiniteElementBase = prev_fe
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
