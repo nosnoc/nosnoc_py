@@ -8,7 +8,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_list_of_empty_lists
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix
 from nosnoc.rk_utils import rk4_on_timegrid
 
 
@@ -307,10 +307,10 @@ class FiniteElementZero(FiniteElementBase):
         super().__init__()
         dims = model.dims
 
-        self.ind_x = create_list_of_empty_lists((1, ))
-        self.ind_lam = create_list_of_empty_lists((1, dims.n_sys))
-        self.ind_lambda_n = create_list_of_empty_lists((1, dims.n_sys))
-        self.ind_lambda_p = create_list_of_empty_lists((1, dims.n_sys))
+        self.ind_x = create_empty_list_matrix((1, ))
+        self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
+        self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
+        self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
@@ -362,18 +362,18 @@ class FiniteElement(FiniteElementBase):
         # Initialze index lists
         if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
             # only x_end
-            self.ind_x = create_list_of_empty_lists((1,))
+            self.ind_x = create_empty_list_matrix((1,))
         elif opts.right_boundary_point_explicit:
-            self.ind_x = create_list_of_empty_lists((n_s,))
+            self.ind_x = create_empty_list_matrix((n_s,))
         else:
-            self.ind_x = create_list_of_empty_lists((n_s + 1,))
-        self.ind_v: list = create_list_of_empty_lists((n_s,))
-        self.ind_theta = create_list_of_empty_lists((n_s, dims.n_sys))
-        self.ind_lam = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
-        self.ind_mu = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
-        self.ind_alpha = create_list_of_empty_lists((n_s, dims.n_sys))
-        self.ind_lambda_n = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
-        self.ind_lambda_p = create_list_of_empty_lists((n_s + end_allowance, dims.n_sys))
+            self.ind_x = create_empty_list_matrix((n_s + 1,))
+        self.ind_v: list = create_empty_list_matrix((n_s,))
+        self.ind_theta = create_empty_list_matrix((n_s, dims.n_sys))
+        self.ind_lam = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_mu = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_alpha = create_empty_list_matrix((n_s, dims.n_sys))
+        self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_h = []
 
         # create variables
