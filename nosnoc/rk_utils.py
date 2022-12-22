@@ -1084,3 +1084,12 @@ def generate_butcher_tableu_integral(n_s, irk_scheme):
         pint = np.polyint(coeff)
         B[j] = np.polyval(pint, 1.0)
     return B, C, D, tau_root
+
+
+if __name__ == "__main__":
+    # test RK tableaus
+    for irk_scheme in IrkSchemes:
+        n_s = 2
+        B, C, D, tau_root = generate_butcher_tableu_integral(n_s, irk_scheme)
+        print(f"Tableau for {n_s=} {irk_scheme.name} reads")
+        print(f"{B=}\n{C=}\n{D=}\n{tau_root=}\n\n")
