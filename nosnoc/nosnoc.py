@@ -590,11 +590,16 @@ class FiniteElement(FiniteElementBase):
         Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
         return casadi_sum_list(Thetas)
 
-    def sum_Lambda(self, sys=slice(None)):
-        """NOTE: includes the prev fes last stage lambda"""
+    def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
         Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
         Lambdas.append(self.prev_fe.Lambda(stage=-1, sys=sys))
+        return Lambdas
+
+    def sum_Lambda(self, sys=slice(None)):
+        """NOTE: includes the prev fes last stage lambda"""
+        Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
+
 
     def h(self) -> SX:
         return self.w[self.ind_h]
@@ -659,41 +664,66 @@ class FiniteElement(FiniteElementBase):
 
         return
 
+
+
+    def create_complementarity(self, x, y, sigma):
+        """
+        x: list of SX
+        y: SX
+        sigma: smoothing parameter
+
+        -> outputs:
+        NOTE: lblam etc are only 0 for SCHOLTES_*
+        """
+        opts = self.opts
+
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
+            g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
+
+        n_comp = casadi_length(g_comp)
+        ub_comp = 0 * np.ones((n_comp,))
+        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            lb_comp = -np.inf * np.ones((n_comp,))
+        elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
+            lb_comp = 0 * np.ones((n_comp,))
+
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
+        return
+
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
         opts = self.opts
         dims = self.model.dims
         if not opts.use_fesd:
-            g_cross_comp = casadi_vertcat_list(
-                [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(opts.n_s)])
+            for j in range(opts.n_s):
+                self.create_complementarity([self.Lambda(stage=j)],
+                self.Theta(stage=j), sigma_p)
 
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-            cross_comp_within_fe = [
-                diag(self.Theta(stage=j, sys=r)) @ self.Lambda(stage=jj, sys=r)
-                for r in range(dims.n_sys) for j in range(opts.n_s) for jj in range(opts.n_s)
-            ]
-            cross_comp_with_prev_fe = [
-                diag(self.Theta(stage=j, sys=r)) @ self.prev_fe.Lambda(stage=-1, sys=r)
-                for r in range(dims.n_sys)
-                for j in range(opts.n_s)
-            ]
-            g_cross_comp = casadi_vertcat_list(cross_comp_within_fe + cross_comp_with_prev_fe)
+            # cross_comp_within_fe
+            for r in range(dims.n_sys):
+                for j in range(opts.n_s):
+                    for jj in range(opts.n_s):
+                        self.create_complementarity([self.Theta(stage=j, sys=r)], self.Lambda(stage=jj, sys=r), sigma_p)
+            # cross_comp_with_prev_fe
+            for r in range(dims.n_sys):
+                for j in range(opts.n_s):
+                    self.create_complementarity([self.Theta(stage=j, sys=r)], self.prev_fe.Lambda(stage=-1, sys=r), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
-            # Note: sum_Lambda contains last stage of prev_fe
-            g_cross_comp = casadi_vertcat_list([
-                diag(self.Theta(stage=j, sys=r)) @ self.sum_Lambda(sys=r)
-                for r in range(dims.n_sys)
-                for j in range(opts.n_s)
-            ])
+            for r in range(dims.n_sys):
+                for j in range(opts.n_s):
+                    # Note: sum_Lambda contains last stage of prev_fe
+                    Lambda_list = self.get_Lambdas_incl_last_prev_fe(sys=r)
+                    self.create_complementarity(Lambda_list, (self.Theta(stage=j, sys=r)), sigma_p)
 
-        n_cross_comp = casadi_length(g_cross_comp)
-        g_cross_comp = g_cross_comp - sigma_p
-        g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-            g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
-        elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
-            g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
+        # n_cross_comp = casadi_length(g_cross_comp)
+        # g_cross_comp = g_cross_comp - sigma_p
+        # g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
+        # if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+        #     g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
+        # elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
+        #     g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
 
-        self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
+        # self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
 
         return
 

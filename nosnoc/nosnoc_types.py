@@ -4,6 +4,8 @@ from enum import Enum
 class MpccMode(Enum):
     SCHOLTES_INEQ = 0
     SCHOLTES_EQ = 1
+    # FISCHER_BURMEISTER = 2
+    # KANZOW_SCHWARTZ = 3
     # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
     # NOTE: tested in simple_sim_tests
 
