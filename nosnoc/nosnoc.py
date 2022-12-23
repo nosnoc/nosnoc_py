@@ -687,12 +687,15 @@ class FiniteElement(FiniteElementBase):
         elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
             lb_comp = 0 * np.ones((n_comp,))
 
+        # print(f"g_comp")
+        # print_casadi_vector(g_comp)
+        # print(f"{lb_comp=}")
+        # print(f"{ub_comp=}")
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
         return
 
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
         opts = self.opts
-        dims = self.model.dims
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)],
@@ -700,30 +703,17 @@ class FiniteElement(FiniteElementBase):
 
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             # cross_comp_within_fe
-            for r in range(dims.n_sys):
-                for j in range(opts.n_s):
-                    for jj in range(opts.n_s):
-                        self.create_complementarity([self.Theta(stage=j, sys=r)], self.Lambda(stage=jj, sys=r), sigma_p)
+            for j in range(opts.n_s):
+                for jj in range(opts.n_s):
+                    self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj), sigma_p)
             # cross_comp_with_prev_fe
-            for r in range(dims.n_sys):
-                for j in range(opts.n_s):
-                    self.create_complementarity([self.Theta(stage=j, sys=r)], self.prev_fe.Lambda(stage=-1, sys=r), sigma_p)
+            for j in range(opts.n_s):
+                self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
-            for r in range(dims.n_sys):
-                for j in range(opts.n_s):
-                    # Note: sum_Lambda contains last stage of prev_fe
-                    Lambda_list = self.get_Lambdas_incl_last_prev_fe(sys=r)
-                    self.create_complementarity(Lambda_list, (self.Theta(stage=j, sys=r)), sigma_p)
-
-        # n_cross_comp = casadi_length(g_cross_comp)
-        # g_cross_comp = g_cross_comp - sigma_p
-        # g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
-        # if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-        #     g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
-        # elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
-        #     g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
-
-        # self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
+            for j in range(opts.n_s):
+                # Note: sum_Lambda contains last stage of prev_fe
+                Lambda_list = self.get_Lambdas_incl_last_prev_fe()
+                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
 
         return
 
