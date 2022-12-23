@@ -699,22 +699,21 @@ class FiniteElement(FiniteElementBase):
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)],
-                self.Theta(stage=j), sigma_p)
-
+                                            self.Theta(stage=j), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-            # cross_comp_within_fe
             for j in range(opts.n_s):
+                # cross comp with prev_fe
+                self.create_complementarity([self.Theta(stage=j)]
+                            self.prev_fe.Lambda(stage=-1), sigma_p)
                 for jj in range(opts.n_s):
-                    self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj), sigma_p)
-            # cross_comp_with_prev_fe
-            for j in range(opts.n_s):
-                self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1), sigma_p)
+                    # within fe
+                    self.create_complementarity([self.Theta(stage=j)],
+                                    self.Lambda(stage=jj), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
                 # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
                 self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
-
         return
 
     def step_equilibration(self) -> None:
