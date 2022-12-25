@@ -591,8 +591,8 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Thetas)
 
     def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
-        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
-        Lambdas.append(self.prev_fe.Lambda(stage=-1, sys=sys))
+        Lambdas = [self.prev_fe.Lambda(stage=-1, sys=sys)]
+        Lambdas += [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
         return Lambdas
 
     def sum_Lambda(self, sys=slice(None)):
@@ -703,7 +703,7 @@ class FiniteElement(FiniteElementBase):
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
-                self.create_complementarity([self.Theta(stage=j)]
+                self.create_complementarity([self.Theta(stage=j)],
                             self.prev_fe.Lambda(stage=-1), sigma_p)
                 for jj in range(opts.n_s):
                     # within fe
