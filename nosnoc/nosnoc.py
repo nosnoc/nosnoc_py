@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp
+from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
@@ -474,6 +474,11 @@ class FiniteElement(FiniteElementBase):
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
 
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
+            lb_dual = 0.0
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            lb_dual = -inf
+
         # RK stage stuff
         for ii in range(opts.n_s):
             # state derivatives
@@ -493,13 +498,13 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_theta, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_theta, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -511,20 +516,21 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
-                        self.ind_alpha, np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
+                        self.ind_alpha, lb_dual*np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
                         opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n,
+                            lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         ii, ij)
 
@@ -535,7 +541,7 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -547,14 +553,14 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n, lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual * np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
 
@@ -586,9 +592,11 @@ class FiniteElement(FiniteElementBase):
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
             self.w[flatten(self.ind_alpha[stage][sys])])
 
+    def get_Theta_list(self) -> list:
+        return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
+
     def sum_Theta(self) -> SX:
-        Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
-        return casadi_sum_list(Thetas)
+        return casadi_sum_list(self.get_Theta_list())
 
     def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
         Lambdas = [self.prev_fe.Lambda(stage=-1, sys=sys)]
@@ -672,22 +680,48 @@ class FiniteElement(FiniteElementBase):
         y: SX
         sigma: smoothing parameter
 
-        -> outputs:
         NOTE: lblam etc are only 0 for SCHOLTES_*
         """
         opts = self.opts
 
+
+        # print(f"{x=}, {y=}")
+        n = casadi_length(y)
+
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
             g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            g_comp = SX.zeros(n, 1)
+            # V1: \phi \in [-sigma, +sigma]
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2)
+            g_comp_p = g_comp + sigma
+            g_comp_m = g_comp - sigma
+            g_comp = vertcat(g_comp_m, g_comp_p)
+            n_comp = casadi_length(g_comp_m)
+            ub_comp = np.concatenate((0 * np.ones((n_comp,)), inf * np.ones((n_comp,))))
+            lb_comp = np.concatenate((-inf * np.ones((n_comp,)), 0 * np.ones((n_comp,))))
+        # elif...
+            # V2: \phi(a, b, sigma) == 0
+            # for j in range(n):
+            #     for x_i in x:
+            #         g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 - sigma**2)
+            # n_comp = casadi_length(g_comp)
+            # lb_comp = 0 * np.ones((n_comp,))
+            # ub_comp = 0 * np.ones((n_comp,))
 
         n_comp = casadi_length(g_comp)
-        ub_comp = 0 * np.ones((n_comp,))
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
             lb_comp = -np.inf * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
         elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
             lb_comp = 0 * np.ones((n_comp,))
-
-        # print(f"g_comp")
+            ub_comp = 0 * np.ones((n_comp,))
+        # elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+        #     ub_comp = 0 * np.ones((n_comp,))
+        #     lb_comp = 0 * np.ones((n_comp,))
+        # print(f"\ng_comp")
         # print_casadi_vector(g_comp)
         # print(f"{lb_comp=}")
         # print(f"{ub_comp=}")
