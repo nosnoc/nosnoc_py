@@ -870,7 +870,11 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
-            J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
+            J_comp = 0.0
+            for fe in flatten(self.stages):
+                sum_abs_lam = casadi_sum_list([fabs(lam) for lam in fe.get_Lambdas_incl_last_prev_fe()])
+                sum_abs_theta = casadi_sum_list([fabs(t) for t in fe.get_Theta_list()])
+                J_comp += sum1(diag(sum_abs_theta) @ sum_abs_lam)
         else:
             J_comp = casadi_sum_list([
                 model.std_compl_res_fun(fe.rk_stage_z(j), fe.p)
