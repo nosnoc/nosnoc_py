@@ -11,6 +11,7 @@ def main():
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.n_s = 2
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
 
     opts.N_stages = 50  # number of control intervals
     opts.N_finite_elements = 2  # number of finite element on every control intevral
@@ -47,25 +48,22 @@ def main():
     F = [horzcat(f_1, f_2)]
     # switching function (cart velocity)
     c = [v[0]]
+    # Sign matrix # f_1 for c=v>0, f_2 for c=v<0
+    S = [np.array([[1], [-1]])]
 
     # specify initial and end state, cost ref and weight matrix
     x0 = np.array([1, 0 / 180 * np.pi, 0, 0])  # start downwards
     x_ref = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
 
-    Q = np.diag([1.0, 100.0, 1.0, 1])
-    Q_terminal = np.diag([10.0, 100.0, 10.0, 20])
-    Q_terminal = np.diag([100.0, 100.0, 10.0, 10])
-    # Q_terminal = 10*Q
-    R = 1
+    Q = np.diag([1.0, 100.0, 1.0, 1.0])
+    Q_terminal = np.diag([100.0, 100.0, 10.0, 10.0])
+    R = 1.0
 
     # bounds
-    ubx = np.array([5, 240 / 180 * np.pi, 20, 20])
-    lbx = np.array([-0.0, -240 / 180 * np.pi, -20, -20])
-    u_max = 30
-    u_ref = 0
-
-    # Sign matrix # f_1 for c=v>0, f_2 for c=v<0
-    S = [np.array([[1], [-1]])]
+    ubx = np.array([5.0, 240 / 180 * np.pi, 20.0, 20.0])
+    lbx = np.array([-0.0, -240 / 180 * np.pi, -20.0, -20.0])
+    u_max = 30.0
+    u_ref = 0.0
 
     # Stage cost
     f_q = (x - x_ref).T @ Q @ (x - x_ref) + (u - u_ref).T @ R @ (u - u_ref)
@@ -78,14 +76,14 @@ def main():
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
-    # TODO: lbx, ubx
-    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_q_T=f_q_T, g_terminal=g_terminal)
+    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_q_T=f_q_T, g_terminal=g_terminal,
+                           lbx=lbx, ubx=ubx)
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     plot_results(results)
 
 
@@ -96,16 +94,20 @@ def plot_results(results):
 
     plt.figure()
     # states
-    plt.subplot(2, 1, 1)
-    plt.plot(results["t_grid"], x_traj[:, 0], label='q1 - cart')
-    plt.plot(results["t_grid"], x_traj[:, 1], label='q2 - pole')
-    plt.plot(results["t_grid"], x_traj[:, 2], label='v1 - cart')
-    plt.plot(results["t_grid"], x_traj[:, 3], label='v2 - pole')
+    plt.subplot(3, 1, 1)
+    plt.plot(results["t_grid"], x_traj[:, 0], label='$q_1$ - cart')
+    plt.plot(results["t_grid"], x_traj[:, 1], label='$q_2$ - pole')
+    plt.legend()
+    plt.grid()
+
+    plt.subplot(3, 1, 2)
+    plt.plot(results["t_grid"], x_traj[:, 2], label='$v_1$ - cart')
+    plt.plot(results["t_grid"], x_traj[:, 3], label='$v_2$ - pole')
     plt.legend()
     plt.grid()
 
     # controls
-    plt.subplot(2, 1, 2)
+    plt.subplot(3, 1, 3)
     plt.step(results["t_grid_u"], [results["u_traj"][0]] + results["u_traj"], label='u')
 
     plt.legend()
