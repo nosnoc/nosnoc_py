@@ -78,7 +78,9 @@ class NosnocModel:
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
-        fe = FiniteElement(opts, self, ctrl_idx=0, fe_idx=0, prev_fe=None)
+        dummy_ocp = NosnocOcp()
+        dummy_ocp.preprocess_ocp(self)
+        fe = FiniteElement(opts, self, dummy_ocp, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
         # setup upsilon
         upsilon = []
@@ -216,19 +218,33 @@ class NosnocOcp:
     def __init__(self,
                  lbu: np.ndarray = np.ones((0,)),
                  ubu: np.ndarray = np.ones((0,)),
+                 lbx: np.ndarray = np.ones((0,)),
+                 ubx: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
                  f_q_T: SX = SX.zeros(1),
                  g_terminal: SX = SX.zeros(0)):
+        # TODO: not providing lbu, ubu should work as well!
         self.lbu: np.ndarray = lbu
         self.ubu: np.ndarray = ubu
+        self.lbx: np.ndarray = lbx
+        self.ubx: np.ndarray = ubx
         self.f_q: SX = f_q
         self.f_q_T: SX = f_q_T
         self.g_terminal: SX = g_terminal
 
-    def preprocess_ocp(self, x: SX, u: SX, p: SX):
-        self.g_terminal_fun = Function('g_terminal_fun', [x, p], [self.g_terminal])
-        self.f_q_fun = Function('f_q_fun', [x, u, p], [self.f_q])
+    def preprocess_ocp(self, model: NosnocModel):
+        dims: NosnocDims = model.dims
+        self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p], [self.g_terminal])
+        self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p], [self.f_q])
 
+        if len(self.lbx) == 0:
+            self.lbx = -inf * np.ones((dims.n_x,))
+        elif len(self.lbx) != dims.n_x:
+            raise ValueError("lbx should be empty or of lenght n_x.")
+        if len(self.ubx) == 0:
+            self.ubx = inf * np.ones((dims.n_x,))
+        elif len(self.ubx) != dims.n_x:
+            raise ValueError("ubx should be empty or of lenght n_x.")
 
 @dataclass
 class NosnocDims:
@@ -359,6 +375,7 @@ class FiniteElement(FiniteElementBase):
     def __init__(self,
                  opts: NosnocOpts,
                  model: NosnocModel,
+                 ocp: NosnocOcp,
                  ctrl_idx: int,
                  fe_idx: int,
                  prev_fe=None):
@@ -418,7 +435,7 @@ class FiniteElement(FiniteElementBase):
             if (opts.irk_representation
                     in [IrkRepresentation.INTEGRAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
-                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, ii)
+                                  ocp.lbx, ocp.ubx, model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
@@ -494,7 +511,7 @@ class FiniteElement(FiniteElementBase):
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
             self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
-                              -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
+                              ocp.lbx, ocp.ubx, model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -669,7 +686,7 @@ class NosnocProblem(NosnocFormulationObject):
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
-            fe = FiniteElement(self.opts, self.model, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
+            fe = FiniteElement(self.opts, self.model, self.ocp, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
             self._add_finite_element(fe)
             control_stage.append(fe)
             prev_fe = fe
@@ -868,7 +885,7 @@ class NosnocSolver():
             ocp = NosnocOcp()
         opts.preprocess()
         model.preprocess_model(opts)
-        ocp.preprocess_ocp(model.x, model.u, model.p)
+        ocp.preprocess_ocp(model)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
