@@ -66,6 +66,12 @@ class NosnocModel:
         n_p = casadi_length(self.p)
         if n_p != len(self.p_val):
             raise Exception("dimension of p_val and p dont match")
+        if not isinstance(self.F, list):
+            raise ValueError("model.F should be a list.")
+        if not isinstance(self.c, list):
+            raise ValueError("model.c should be a list.")
+        if not isinstance(self.S, list):
+            raise ValueError("model.S should be a list.")
 
         # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
