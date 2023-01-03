@@ -31,14 +31,19 @@ class NosnocModel:
                  S: List[np.ndarray],
                  x0: np.ndarray,
                  u: SX = SX.sym('u_dummy', 0, 1),
+                 p: SX = SX.sym('p_dummy', 0, 1),
+                 p_val: np.ndarray = np.array([]),
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
         self.S: List[np.ndarray] = S
         self.x0: np.ndarray = x0
+        self.p: SX = p
+        self.p_val: SX = p_val
         self.u: SX = u
         self.name: str = name
+
         self.dims: NosnocDims = None
 
     def __repr__(self) -> str:
@@ -57,6 +62,12 @@ class NosnocModel:
 
         self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
 
+        # sanity checks
+        n_p = casadi_length(self.p)
+        if n_p != len(self.p_val):
+            raise Exception("dimension of p_val and p dont match")
+
+        # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
@@ -119,19 +130,19 @@ class NosnocModel:
 
         # CasADi functions for indicator and region constraint functions
         self.z = z
-        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x], [g_Stewart])
-        self.c_fun = Function('c_fun', [self.x], [casadi_vertcat_list(self.c)])
+        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
+        self.c_fun = Function('c_fun', [self.x, self.p], [casadi_vertcat_list(self.c)])
 
         # dynamics
-        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u], [f_x])
+        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p], [f_x])
 
         # lp kkt conditions without bilinear complementarity terms
-        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u], [g_switching])
-        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u], [g_z_all])
-        self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
+        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
+        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
+        self.lambda00_fun = Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
-        self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
-        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
+        self.std_compl_res_fun = Function('std_compl_res_fun', [z, self.p], [std_compl_res])
+        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
 
     def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
         """
@@ -176,10 +187,10 @@ class NosnocModel:
         theta_smooth = casadi_vertcat_list(theta_list)
         mu_smooth = casadi_vertcat_list(mu_smooth_list)
 
-        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
-        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
-        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x], [mu_smooth])
-        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x], [lambda_smooth])
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x, self.p], [f_x_smooth])
+        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
+        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
+        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
 
 
 class NosnocOcp:
@@ -543,10 +554,10 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk)
+            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, model.p)
             qj = ocp.f_q_fun(X_fe[j], Uk)
             # path constraint
-            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, model.p)
             self.add_constraint(gj)
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -570,7 +581,7 @@ class FiniteElement(FiniteElementBase):
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
                 self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
             self.add_constraint(
-                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
+                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk, model.p))
 
         return
 
@@ -734,7 +745,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
-        self.p = sigma_p
+        self.p = vertcat(model.p, sigma_p)
 
         # Generate all the variables we need
         self.__create_primal_variables()
@@ -766,7 +777,7 @@ class NosnocProblem(NosnocFormulationObject):
             J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
             J_comp = casadi_sum_list([
-                model.std_compl_res_fun(fe.rk_stage_z(j))
+                model.std_compl_res_fun(fe.rk_stage_z(j), model.p)
                 for j in range(opts.n_s)
                 for fe in flatten(self.stages)
             ])
@@ -910,9 +921,9 @@ class NosnocSolver():
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
-                    lam_ki = self.model.lambda00_fun(x_ki)
-                    mu_ki = self.model.mu_smooth_fun(x_ki)
-                    theta_ki = self.model.theta_smooth_fun(x_ki)
+                    lam_ki = self.model.lambda00_fun(x_ki, self.model.p_val)
+                    mu_ki = self.model.mu_smooth_fun(x_ki, self.model.p_val)
+                    theta_ki = self.model.theta_smooth_fun(x_ki, self.model.p_val)
                     # print(f"{x_ki=}")
                     # print(f"theta_ki = {list(theta_ki.full())}")
                     # print(f"mu_ki = {list(mu_ki.full())}")
@@ -959,12 +970,12 @@ class NosnocSolver():
 
         # lambda00 initialization
         x0 = w0[prob.ind_x[0]]
-        lambda00 = self.model.lambda00_fun(x0).full().flatten()
-        p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
+        lambda00 = self.model.lambda00_fun(x0, prob.model.p_val).full().flatten()
+        p_val = np.concatenate((prob.model.p_val, np.array([opts.sigma_0]), lambda00))
 
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            p_val[0] = sigma_k
+            p_val = np.concatenate((prob.model.p_val, np.array([sigma_k]), lambda00))
 
             # solve NLP
             t = time.time()
