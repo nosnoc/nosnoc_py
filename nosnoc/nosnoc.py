@@ -219,9 +219,9 @@ class NosnocOcp:
         self.f_q_T: SX = f_q_T
         self.g_terminal: SX = g_terminal
 
-    def preprocess_ocp(self, x: SX, u: SX):
-        self.g_terminal_fun = Function('g_terminal_fun', [x], [self.g_terminal])
-        self.f_q_fun = Function('f_q_fun', [x, u], [self.f_q])
+    def preprocess_ocp(self, x: SX, u: SX, p: SX):
+        self.g_terminal_fun = Function('g_terminal_fun', [x, p], [self.g_terminal])
+        self.f_q_fun = Function('f_q_fun', [x, u, p], [self.f_q])
 
 
 @dataclass
@@ -555,7 +555,7 @@ class FiniteElement(FiniteElementBase):
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
             fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, model.p)
-            qj = ocp.f_q_fun(X_fe[j], Uk)
+            qj = ocp.f_q_fun(X_fe[j], Uk, model.p)
             # path constraint
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, model.p)
             self.add_constraint(gj)
@@ -783,8 +783,9 @@ class NosnocProblem(NosnocFormulationObject):
             ])
 
         # terminal constraint
-        # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
-        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
+        # NOTE: this was evaluated at Xk_end (expression for previous state before)
+        # which should be worse for convergence.
+        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]], model.p)
         self.add_constraint(g_terminal)
 
         # Terminal numerical time
@@ -861,7 +862,7 @@ class NosnocSolver():
             ocp = NosnocOcp()
         opts.preprocess()
         model.preprocess_model(opts)
-        ocp.preprocess_ocp(model.x, model.u)
+        ocp.preprocess_ocp(model.x, model.u, model.p)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
