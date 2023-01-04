@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 
 import nosnoc
 
-# TODO:% 2 ) make the masses m_1 and m_2 parameteres (constant over time)
 
 PARAMETRIC = 1
 def main():
@@ -34,14 +33,20 @@ def main():
     m1 = SX.sym('m1')  # cart
     m2 = SX.sym('m2')  # link
     x_ref = SX.sym('x_ref', 4)
-    p = vertcat(m1, m2, x_ref)
+    u_ref = SX.sym('u_ref', 1)
+    p = vertcat(m1, m2, x_ref, u_ref)
 
     x_ref_val = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
+    u_ref_val = np.array([0.0])
 
     # either provide single parameter vector
-    p_val = np.concatenate((np.array([1.0, 0.1]), x_ref_val))
+    p_val = np.concatenate((np.array([1.0, 0.1]), x_ref_val, u_ref_val))
     # or matrix (one parameter vector for each control stage)
     p_val = np.tile(p_val, (opts.N_stages, 1))
+    # vary x_ref over time
+    p_ind_theta = 3
+    p_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
+    import pdb; pdb.set_trace()
 
     link_length = 1
     g = 9.81
@@ -79,7 +84,6 @@ def main():
     ubx = np.array([5.0, 240 / 180 * np.pi, 20.0, 20.0])
     lbx = np.array([-0.0, -240 / 180 * np.pi, -20.0, -20.0])
     u_max = 30.0
-    u_ref = 0.0
 
     # Stage cost
     f_q = (x - x_ref).T @ Q @ (x - x_ref) + (u - u_ref).T @ R @ (u - u_ref)
