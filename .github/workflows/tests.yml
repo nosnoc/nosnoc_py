@@ -33,6 +33,12 @@ jobs:
         source env/bin/activate
         python test/simple_sim_tests.py
 
+    - name: Test parametric OCP example
+      shell: bash
+      run: |
+        source env/bin/activate
+        python test/test_parametric_ocp.py
+
     - name: Run OCP tests motor example
       shell: bash
       run: |

@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 import nosnoc
 
 
-PARAMETRIC = 1
-def main():
+def solve_example(parameter_variant=0):
     # opts
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
@@ -38,15 +37,19 @@ def main():
 
     x_ref_val = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
     u_ref_val = np.array([0.0])
+    p_val_default = np.concatenate((np.array([1.0, 0.1]), x_ref_val, u_ref_val))
 
-    # either provide single parameter vector
-    p_val = np.concatenate((np.array([1.0, 0.1]), x_ref_val, u_ref_val))
-    # or matrix (one parameter vector for each control stage)
-    p_val = np.tile(p_val, (opts.N_stages, 1))
-    # vary x_ref over time
-    p_ind_theta = 3
-    p_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
-    import pdb; pdb.set_trace()
+    if parameter_variant == 0:
+        # either provide single parameter vector
+        p_val = p_val_default
+    elif parameter_variant == 1:
+        # or matrix (one parameter vector for each control stage)
+        p_val = np.tile(p_val_default, (opts.N_stages, 1))
+    elif parameter_variant == 2:
+        # matrix: vary x_ref theta entry over time
+        p_val = np.tile(p_val_default, (opts.N_stages, 1))
+        p_ind_theta = 3
+        p_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
 
     link_length = 1
     g = 9.81
@@ -103,8 +106,13 @@ def main():
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
-    # import pdb; pdb.set_trace()
+    return results
+
+
+def main():
+    results = solve_example()
     plot_results(results)
+
 
 
 def plot_results(results):
