@@ -88,7 +88,7 @@ def main():
     # Stage cost
     f_q = (x - x_ref).T @ Q @ (x - x_ref) + (u - u_ref).T @ R @ (u - u_ref)
     # terminal cost
-    f_q_T = (x - x_ref).T @ Q_terminal @ (x - x_ref)
+    f_terminal = (x - x_ref).T @ Q_terminal @ (x - x_ref)
     g_terminal = []
 
     model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u, p=p, p_val=p_val)
@@ -96,7 +96,7 @@ def main():
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
-    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_q_T=f_q_T, g_terminal=g_terminal,
+    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal,
                            lbx=lbx, ubx=ubx)
 
     ## Solve OCP

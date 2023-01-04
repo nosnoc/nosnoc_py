@@ -219,7 +219,7 @@ class NosnocOcp:
     2) cost of the form:
     f_q(x, u)  -- integrated over the time horizon
     +
-    f_q_T(x_terminal) -- evaluated at the end
+    f_terminal(x_terminal) -- evaluated at the end
     """
 
     def __init__(self,
@@ -228,7 +228,7 @@ class NosnocOcp:
                  lbx: np.ndarray = np.ones((0,)),
                  ubx: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
-                 f_q_T: SX = SX.zeros(1),
+                 f_terminal: SX = SX.zeros(1),
                  g_terminal: SX = SX.zeros(0)):
         # TODO: not providing lbu, ubu should work as well!
         self.lbu: np.ndarray = lbu
@@ -236,13 +236,13 @@ class NosnocOcp:
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
         self.f_q: SX = f_q
-        self.f_q_T: SX = f_q_T
+        self.f_terminal: SX = f_terminal
         self.g_terminal: SX = g_terminal
 
     def preprocess_ocp(self, model: NosnocModel):
         dims: NosnocDims = model.dims
         self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p], [self.g_terminal])
-        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p], [self.f_q_T])
+        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p], [self.f_terminal])
         self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p], [self.f_q])
 
         if len(self.lbx) == 0:
