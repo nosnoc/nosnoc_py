@@ -18,7 +18,7 @@ def main():
     opts.terminal_time = 4.0  # Time horizon
     opts.print_level = 1
 
-    ## Model parameters and defintion
+    ## Model defintion
     q = SX.sym('q', 2)
     v = SX.sym('v', 2)
     x = vertcat(q, v)
@@ -38,7 +38,7 @@ def main():
     # all forces = Gravity+Control+Coriolis (+Friction)
     f_all = vertcat(u, -m2 * g * link_length * sin(x[1])) - C @ v
 
-    # there is friction between cart and ground
+    # friction between cart and ground
     F_friction = 2
     # Dynamics with $ v > 0$
     f_1 = vertcat(v, inv(M) @ (f_all - vertcat(F_friction, 0)))
