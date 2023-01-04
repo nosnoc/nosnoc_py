@@ -242,6 +242,7 @@ class NosnocOcp:
     def preprocess_ocp(self, model: NosnocModel):
         dims: NosnocDims = model.dims
         self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p], [self.g_terminal])
+        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p], [self.f_q_T])
         self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p], [self.f_q])
 
         if len(self.lbx) == 0:
@@ -813,11 +814,13 @@ class NosnocProblem(NosnocFormulationObject):
                 for fe in flatten(self.stages)
             ])
 
-        # terminal constraint
+        # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]], model.p_ctrl_stages[-1])
+        x_terminal = self.w[self.ind_x[-1][-1]]
+        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1])
         self.add_constraint(g_terminal)
+        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1])
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
