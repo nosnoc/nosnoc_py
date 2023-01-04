@@ -20,16 +20,17 @@ def test_loop():
             opts = get_default_options()
             opts.step_equilibration = step_equilibration
             opts.pss_mode = pss_mode
+            # opts.print_level = 0
 
-            print(f"test setting: {opts}")
+            # print(f"test setting: {opts}")
             results = solve_ocp(opts)
 
             x_traj = results["x_traj"]
 
-            np.allclose(x_traj[0], X0, atol=1e-4)
-            np.allclose(x_traj[-1], X_TARGET, atol=1e-4)
+            assert np.allclose(x_traj[0], X0, atol=1e-4)
+            assert np.allclose(x_traj[-1], X_TARGET, atol=1e-4)
 
 
 if __name__ == "__main__":
-    test_default()
     test_loop()
+    test_default()

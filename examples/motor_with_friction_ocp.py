@@ -105,8 +105,8 @@ def solve_ocp(opts=None):
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
-    print(f"{results['u_traj']=}")
-    print(f"{results['time_steps']=}")
+    # print(f"{results['u_traj']=}")
+    # print(f"{results['time_steps']=}")
 
     return results
 
