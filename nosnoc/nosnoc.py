@@ -31,16 +31,20 @@ class NosnocModel:
                  S: List[np.ndarray],
                  x0: np.ndarray,
                  u: SX = SX.sym('u_dummy', 0, 1),
-                 p: SX = SX.sym('p_dummy', 0, 1),
-                 p_val: np.ndarray = np.array([]),
+                 p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
+                 p_global: SX = SX.sym('p_gloabl_dummy', 0, 1),
+                 p_time_var_val: np.ndarray = None,
+                 p_global_val: np.ndarray = np.array([]),
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
         self.S: List[np.ndarray] = S
         self.x0: np.ndarray = x0
-        self.p: SX = p
-        self.p_val: SX = p_val
+        self.p_time_var: SX = p_time_var
+        self.p_global: SX = p_global
+        self.p_time_var_val: np.ndarray = p_time_var_val
+        self.p_global_val: np.ndarray = p_global_val
         self.u: SX = u
         self.name: str = name
 
@@ -70,15 +74,27 @@ class NosnocModel:
         if not isinstance(self.S, list):
             raise ValueError("model.S should be a list.")
 
+        # parameters
+        n_p_glob = casadi_length(self.p_global)
+        if not self.p_global_val.shape == (n_p_glob,):
+            raise Exception(f"dimension of p_global_val and p_global mismatch.",
+                    f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+
+        n_p_time_var = casadi_length(self.p_time_var)
+        if self.p_time_var_val is None:
+            self.p_time_var_val = np.zeros((opts.N_stages, n_p_time_var))
+        if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
+            raise Exception(f"dimension of p_time_var_val and p_time_var mismatch.",
+                    f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
-        n_p = casadi_length(self.p)
-        if self.p_val.shape == (n_p,):
-            self.p_val_ctrl_stages = np.tile(self.p_val, (opts.N_stages, 1))
-        elif self.p_val.shape == (opts.N_stages, n_p):
-            self.p_val_ctrl_stages = self.p_val
-        else:
-            raise Exception(f"dimension of p_val and p mismatch. p has dimension {n_p}.\n", f"p_val has shape {self.p_val.shape}. Should be (n_p,) or (opt.N_stages, n_p).")
+        n_p = n_p_time_var + n_p_glob
+        self.p = vertcat(self.p_time_var, self.p_global)
         self.p_ctrl_stages = [SX.sym(f'p_stage{i}', n_p) for i in range(opts.N_stages)]
+
+        self.p_val_ctrl_stages = np.zeros((opts.N_stages, n_p))
+        for i in range(opts.N_stages):
+            self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
+            self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
 
         # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]

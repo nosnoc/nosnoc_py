@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import nosnoc
 
 
-def solve_example(parameter_variant=0):
+def solve_paramteric_example():
     # opts
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
@@ -33,23 +33,18 @@ def solve_example(parameter_variant=0):
     m2 = SX.sym('m2')  # link
     x_ref = SX.sym('x_ref', 4)
     u_ref = SX.sym('u_ref', 1)
-    p = vertcat(m1, m2, x_ref, u_ref)
-
     x_ref_val = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
     u_ref_val = np.array([0.0])
-    p_val_default = np.concatenate((np.array([1.0, 0.1]), x_ref_val, u_ref_val))
 
-    if parameter_variant == 0:
-        # either provide single parameter vector
-        p_val = p_val_default
-    elif parameter_variant == 1:
-        # or matrix (one parameter vector for each control stage)
-        p_val = np.tile(p_val_default, (opts.N_stages, 1))
-    elif parameter_variant == 2:
-        # matrix: vary x_ref theta entry over time
-        p_val = np.tile(p_val_default, (opts.N_stages, 1))
-        p_ind_theta = 3
-        p_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
+    p_global = vertcat(m1, m2)
+    p_global_val = np.array([1.0, 0.1])
+
+    p_time_var = vertcat(x_ref, u_ref)
+    p_time_var_val = np.tile(np.concatenate((x_ref_val, u_ref_val)), (opts.N_stages, 1))
+
+    # actually vary x_ref theta entry over time
+    # p_ind_theta = 1
+    # p_time_var_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
 
     link_length = 1
     g = 9.81
@@ -94,7 +89,9 @@ def solve_example(parameter_variant=0):
     f_terminal = (x - x_ref).T @ Q_terminal @ (x - x_ref)
     g_terminal = []
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u, p=p, p_val=p_val)
+    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u,
+                               p_global=p_global, p_global_val=p_global_val,
+                               p_time_var=p_time_var, p_time_var_val=p_time_var_val)
 
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
@@ -110,7 +107,7 @@ def solve_example(parameter_variant=0):
 
 
 def main():
-    results = solve_example()
+    results = solve_paramteric_example()
     plot_results(results)
 
 

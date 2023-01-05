@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import nosnoc
 
 
-def main():
+def solve_example():
     # opts
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
@@ -13,7 +13,8 @@ def main():
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
 
-    opts.N_stages = 50  # number of control intervals
+    # opts.N_stages = 50  # MATLAB setting
+    opts.N_stages = 15  # number of control intervals
     opts.N_finite_elements = 2  # number of finite element on every control intevral
     opts.terminal_time = 4.0  # Time horizon
     opts.print_level = 1
@@ -83,7 +84,10 @@ def main():
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
-    # import pdb; pdb.set_trace()
+    return results
+
+def main():
+    results = solve_example()
     plot_results(results)
 
 
