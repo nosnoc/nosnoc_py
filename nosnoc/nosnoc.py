@@ -31,14 +31,23 @@ class NosnocModel:
                  S: List[np.ndarray],
                  x0: np.ndarray,
                  u: SX = SX.sym('u_dummy', 0, 1),
+                 p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
+                 p_global: SX = SX.sym('p_gloabl_dummy', 0, 1),
+                 p_time_var_val: np.ndarray = None,
+                 p_global_val: np.ndarray = np.array([]),
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
         self.S: List[np.ndarray] = S
         self.x0: np.ndarray = x0
+        self.p_time_var: SX = p_time_var
+        self.p_global: SX = p_global
+        self.p_time_var_val: np.ndarray = p_time_var_val
+        self.p_global_val: np.ndarray = p_global_val
         self.u: SX = u
         self.name: str = name
+
         self.dims: NosnocDims = None
 
     def __repr__(self) -> str:
@@ -57,11 +66,44 @@ class NosnocModel:
 
         self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
 
+        # sanity checks
+        if not isinstance(self.F, list):
+            raise ValueError("model.F should be a list.")
+        if not isinstance(self.c, list):
+            raise ValueError("model.c should be a list.")
+        if not isinstance(self.S, list):
+            raise ValueError("model.S should be a list.")
+
+        # parameters
+        n_p_glob = casadi_length(self.p_global)
+        if not self.p_global_val.shape == (n_p_glob,):
+            raise Exception(f"dimension of p_global_val and p_global mismatch.",
+                    f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+
+        n_p_time_var = casadi_length(self.p_time_var)
+        if self.p_time_var_val is None:
+            self.p_time_var_val = np.zeros((opts.N_stages, n_p_time_var))
+        if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
+            raise Exception(f"dimension of p_time_var_val and p_time_var mismatch.",
+                    f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+        # extend parameters for each stage
+        n_p = n_p_time_var + n_p_glob
+        self.p = vertcat(self.p_time_var, self.p_global)
+        self.p_ctrl_stages = [SX.sym(f'p_stage{i}', n_p) for i in range(opts.N_stages)]
+
+        self.p_val_ctrl_stages = np.zeros((opts.N_stages, n_p))
+        for i in range(opts.N_stages):
+            self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
+            self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
+
+        # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
-        fe = FiniteElement(opts, self, ctrl_idx=0, fe_idx=0, prev_fe=None)
+        dummy_ocp = NosnocOcp()
+        dummy_ocp.preprocess_ocp(self)
+        fe = FiniteElement(opts, self, dummy_ocp, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
         # setup upsilon
         upsilon = []
@@ -119,19 +161,19 @@ class NosnocModel:
 
         # CasADi functions for indicator and region constraint functions
         self.z = z
-        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x], [g_Stewart])
-        self.c_fun = Function('c_fun', [self.x], [casadi_vertcat_list(self.c)])
+        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
+        self.c_fun = Function('c_fun', [self.x, self.p], [casadi_vertcat_list(self.c)])
 
         # dynamics
-        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u], [f_x])
+        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p], [f_x])
 
         # lp kkt conditions without bilinear complementarity terms
-        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u], [g_switching])
-        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u], [g_z_all])
-        self.lambda00_fun = Function('lambda00_fun', [self.x], [lambda00_expr])
+        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
+        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
+        self.lambda00_fun = Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
-        self.std_compl_res_fun = Function('std_compl_res_fun', [z], [std_compl_res])
-        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x], [mu00_stewart])
+        self.std_compl_res_fun = Function('std_compl_res_fun', [z, self.p], [std_compl_res])
+        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
 
     def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
         """
@@ -176,10 +218,10 @@ class NosnocModel:
         theta_smooth = casadi_vertcat_list(theta_list)
         mu_smooth = casadi_vertcat_list(mu_smooth_list)
 
-        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
-        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x], [theta_smooth])
-        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x], [mu_smooth])
-        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x], [lambda_smooth])
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x, self.p], [f_x_smooth])
+        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
+        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
+        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
 
 
 class NosnocOcp:
@@ -193,25 +235,40 @@ class NosnocOcp:
     2) cost of the form:
     f_q(x, u)  -- integrated over the time horizon
     +
-    f_q_T(x_terminal) -- evaluated at the end
+    f_terminal(x_terminal) -- evaluated at the end
     """
 
     def __init__(self,
                  lbu: np.ndarray = np.ones((0,)),
                  ubu: np.ndarray = np.ones((0,)),
+                 lbx: np.ndarray = np.ones((0,)),
+                 ubx: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
-                 f_q_T: SX = SX.zeros(1),
+                 f_terminal: SX = SX.zeros(1),
                  g_terminal: SX = SX.zeros(0)):
+        # TODO: not providing lbu, ubu should work as well!
         self.lbu: np.ndarray = lbu
         self.ubu: np.ndarray = ubu
+        self.lbx: np.ndarray = lbx
+        self.ubx: np.ndarray = ubx
         self.f_q: SX = f_q
-        self.f_q_T: SX = f_q_T
+        self.f_terminal: SX = f_terminal
         self.g_terminal: SX = g_terminal
 
-    def preprocess_ocp(self, x: SX, u: SX):
-        self.g_terminal_fun = Function('g_terminal_fun', [x], [self.g_terminal])
-        self.f_q_fun = Function('f_q_fun', [x, u], [self.f_q])
+    def preprocess_ocp(self, model: NosnocModel):
+        dims: NosnocDims = model.dims
+        self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p], [self.g_terminal])
+        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p], [self.f_terminal])
+        self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p], [self.f_q])
 
+        if len(self.lbx) == 0:
+            self.lbx = -inf * np.ones((dims.n_x,))
+        elif len(self.lbx) != dims.n_x:
+            raise ValueError("lbx should be empty or of lenght n_x.")
+        if len(self.ubx) == 0:
+            self.ubx = inf * np.ones((dims.n_x,))
+        elif len(self.ubx) != dims.n_x:
+            raise ValueError("ubx should be empty or of lenght n_x.")
 
 @dataclass
 class NosnocDims:
@@ -342,6 +399,7 @@ class FiniteElement(FiniteElementBase):
     def __init__(self,
                  opts: NosnocOpts,
                  model: NosnocModel,
+                 ocp: NosnocOcp,
                  ctrl_idx: int,
                  fe_idx: int,
                  prev_fe=None):
@@ -356,6 +414,7 @@ class FiniteElement(FiniteElementBase):
         self.opts = opts
         self.model = model
         self.prev_fe: FiniteElementBase = prev_fe
+        self.p = model.p_ctrl_stages[ctrl_idx]
 
         dims = self.model.dims
 
@@ -401,7 +460,7 @@ class FiniteElement(FiniteElementBase):
             if (opts.irk_representation
                     in [IrkRepresentation.INTEGRAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
-                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, ii)
+                                  ocp.lbx, ocp.ubx, model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
@@ -477,7 +536,7 @@ class FiniteElement(FiniteElementBase):
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
             self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
-                              -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x), model.x0, -1)
+                              ocp.lbx, ocp.ubx, model.x0, -1)
 
     def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
@@ -543,10 +602,10 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk)
-            qj = ocp.f_q_fun(X_fe[j], Uk)
+            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+            qj = ocp.f_q_fun(X_fe[j], Uk, self.p)
             # path constraint
-            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk)
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
             self.add_constraint(gj)
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -570,7 +629,7 @@ class FiniteElement(FiniteElementBase):
         if not opts.right_boundary_point_explicit and opts.use_fesd and (
                 self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
             self.add_constraint(
-                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk))
+                model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk, self.p))
 
         return
 
@@ -652,7 +711,7 @@ class NosnocProblem(NosnocFormulationObject):
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
-            fe = FiniteElement(self.opts, self.model, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
+            fe = FiniteElement(self.opts, self.model, self.ocp, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
             self._add_finite_element(fe)
             control_stage.append(fe)
             prev_fe = fe
@@ -734,7 +793,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
-        self.p = sigma_p
+        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p)
 
         # Generate all the variables we need
         self.__create_primal_variables()
@@ -766,15 +825,18 @@ class NosnocProblem(NosnocFormulationObject):
             J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
         else:
             J_comp = casadi_sum_list([
-                model.std_compl_res_fun(fe.rk_stage_z(j))
+                model.std_compl_res_fun(fe.rk_stage_z(j), fe.p)
                 for j in range(opts.n_s)
                 for fe in flatten(self.stages)
             ])
 
-        # terminal constraint
-        # NOTE: this was evaluated at Xk_end (expression for previous state before) which should be worse for convergence.
-        g_terminal = ocp.g_terminal_fun(self.w[self.ind_x[-1][-1]])
+        # terminal constraint and cost
+        # NOTE: this was evaluated at Xk_end (expression for previous state before)
+        # which should be worse for convergence.
+        x_terminal = self.w[self.ind_x[-1][-1]]
+        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1])
         self.add_constraint(g_terminal)
+        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1])
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
@@ -850,7 +912,7 @@ class NosnocSolver():
             ocp = NosnocOcp()
         opts.preprocess()
         model.preprocess_model(opts)
-        ocp.preprocess_ocp(model.x, model.u)
+        ocp.preprocess_ocp(model)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
@@ -910,9 +972,10 @@ class NosnocSolver():
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
-                    lam_ki = self.model.lambda00_fun(x_ki)
-                    mu_ki = self.model.mu_smooth_fun(x_ki)
-                    theta_ki = self.model.theta_smooth_fun(x_ki)
+                    p_0 = self.model.p_val_ctrl_stages[0]
+                    lam_ki = self.model.lambda00_fun(x_ki, p_0)
+                    mu_ki = self.model.mu_smooth_fun(x_ki, p_0)
+                    theta_ki = self.model.theta_smooth_fun(x_ki, p_0)
                     # print(f"{x_ki=}")
                     # print(f"theta_ki = {list(theta_ki.full())}")
                     # print(f"mu_ki = {list(mu_ki.full())}")
@@ -959,12 +1022,12 @@ class NosnocSolver():
 
         # lambda00 initialization
         x0 = w0[prob.ind_x[0]]
-        lambda00 = self.model.lambda00_fun(x0).full().flatten()
-        p_val = np.concatenate((np.array([opts.sigma_0]), lambda00))
+        p0 = prob.model.p_val_ctrl_stages[0]
+        lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            p_val[0] = sigma_k
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k]), lambda00))
 
             # solve NLP
             t = time.time()

@@ -97,13 +97,13 @@ def get_sliding_mode_ocp_description():
 
     if TERMINAL_CONSTRAINT:
         g_terminal = x[:2] - X_TARGET
-        f_q_T = SX.zeros(1)
+        f_terminal = SX.zeros(1)
     else:
         g_terminal = SX.zeros(0)
-        f_q_T = 100 * (x[:2] - X_TARGET).T @ (x[:2] - X_TARGET)
+        f_terminal = 100 * (x[:2] - X_TARGET).T @ (x[:2] - X_TARGET)
 
     model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u)
-    ocp = nosnoc.NosnocOcp(lbu=LBU, ubu=UBU, f_q=f_q, f_q_T=f_q_T, g_terminal=g_terminal)
+    ocp = nosnoc.NosnocOcp(lbu=LBU, ubu=UBU, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal)
 
     return model, ocp
 
