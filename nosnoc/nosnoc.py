@@ -32,9 +32,10 @@ class NosnocModel:
                  x0: np.ndarray,
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
-                 p_global: SX = SX.sym('p_gloabl_dummy', 0, 1),
+                 p_global: SX = SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: np.ndarray = None,
                  p_global_val: np.ndarray = np.array([]),
+                 v_global: SX = SX.sym('v_global_dummy', 0, 1),
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
@@ -45,6 +46,7 @@ class NosnocModel:
         self.p_global: SX = p_global
         self.p_time_var_val: np.ndarray = p_time_var_val
         self.p_global_val: np.ndarray = p_global_val
+        self.v_global = v_global
         self.u: SX = u
         self.name: str = name
 
@@ -165,7 +167,7 @@ class NosnocModel:
         self.c_fun = Function('c_fun', [self.x, self.p], [casadi_vertcat_list(self.c)])
 
         # dynamics
-        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p], [f_x])
+        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
 
         # lp kkt conditions without bilinear complementarity terms
         self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
@@ -245,7 +247,11 @@ class NosnocOcp:
                  ubx: np.ndarray = np.ones((0,)),
                  f_q: SX = SX.zeros(1),
                  f_terminal: SX = SX.zeros(1),
-                 g_terminal: SX = SX.zeros(0)):
+                 g_terminal: SX = SX.zeros(0),
+                 lbv_global: np.ndarray = np.ones((0,)),
+                 ubv_global: np.ndarray = np.ones((0,)),
+                 v_global_guess: np.ndarray = np.ones((0,)),
+                ):
         # TODO: not providing lbu, ubu should work as well!
         self.lbu: np.ndarray = lbu
         self.ubu: np.ndarray = ubu
@@ -254,12 +260,15 @@ class NosnocOcp:
         self.f_q: SX = f_q
         self.f_terminal: SX = f_terminal
         self.g_terminal: SX = g_terminal
+        self.lbv_global: np.ndarray = lbv_global
+        self.ubv_global: np.ndarray = ubv_global
+        self.v_global_guess: np.ndarray = v_global_guess
 
     def preprocess_ocp(self, model: NosnocModel):
         dims: NosnocDims = model.dims
-        self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p], [self.g_terminal])
-        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p], [self.f_terminal])
-        self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p], [self.f_q])
+        self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p, model.v_global], [self.g_terminal])
+        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p, model.v_global], [self.f_terminal])
+        self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p, model.v_global], [self.f_q])
 
         if len(self.lbx) == 0:
             self.lbx = -inf * np.ones((dims.n_x,))
@@ -269,6 +278,23 @@ class NosnocOcp:
             self.ubx = inf * np.ones((dims.n_x,))
         elif len(self.ubx) != dims.n_x:
             raise ValueError("ubx should be empty or of lenght n_x.")
+
+        # global variables
+        n_v_global = casadi_length(model.v_global)
+        if len(self.lbv_global) == 0:
+            self.lbv_global = -inf * np.ones((n_v_global,))
+        if self.lbv_global.shape != (n_v_global,):
+            raise Exception("lbv_global and v_global have inconsistent shapes.")
+
+        if len(self.ubv_global) == 0:
+            self.ubv_global = -inf * np.ones((n_v_global,))
+        if self.ubv_global.shape != (n_v_global,):
+            raise Exception("ubv_global and v_global have inconsistent shapes.")
+
+        if len(self.v_global_guess) == 0:
+            self.v_global_guess = -inf * np.ones((n_v_global,))
+        if self.v_global_guess.shape != (n_v_global,):
+            raise Exception("v_global_guess and v_global have inconsistent shapes.")
 
 @dataclass
 class NosnocDims:
@@ -602,8 +628,8 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-            qj = ocp.f_q_fun(X_fe[j], Uk, self.p)
+            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
+            qj = ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             # path constraint
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
             self.add_constraint(gj)
@@ -728,6 +754,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x,
                           self.fe0.lbw[self.fe0.ind_x[0]], self.fe0.ubw[self.fe0.ind_x[0]],
                           self.fe0.w0[self.fe0.ind_x[0]])
+        # v_global
+        self.add_variable(self.model.v_global, self.ind_v_global, self.ocp.lbv_global, self.ocp.ubv_global,
+                          self.ocp.v_global_guess)
 
         # Generate control_stages
         prev_fe = self.fe0
@@ -790,6 +819,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lambda_p = []
         self.ind_u = []
         self.ind_h = []
+        self.ind_v_global = []
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
@@ -834,9 +864,9 @@ class NosnocProblem(NosnocFormulationObject):
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
         x_terminal = self.w[self.ind_x[-1][-1]]
-        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1])
+        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
         self.add_constraint(g_terminal)
-        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1])
+        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
@@ -899,6 +929,8 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["t_grid"] = t_grid
     u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
     results["t_grid_u"] = [t_grid[i] for i in u_grid]
+
+    results["v_global"] = w_opt[prob.ind_v_global]
 
     return results
 
@@ -1081,6 +1113,8 @@ class NosnocSolver():
         results["w_all"] = w_all
         results["w_sol"] = w_opt
 
+        # for i in range(len(w_opt)):
+        #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
     # TODO: move this to problem?
