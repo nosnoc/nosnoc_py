@@ -706,7 +706,8 @@ class FiniteElement(FiniteElementBase):
             # V2: \phi(a, b, sigma) == 0
             for j in range(n):
                 for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2) + sigma
+                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+                    # g_comp[j] += (x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2))**2
             n_comp = casadi_length(g_comp)
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
