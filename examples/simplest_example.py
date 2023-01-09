@@ -87,7 +87,7 @@ def plot_results(results):
 
     plt.figure()
     plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], results["X_sim"], label='x')
+    plt.plot(results["t_grid"], results["X_sim"], label='x', marker='o')
     plt.legend()
     plt.grid()
 
@@ -107,6 +107,7 @@ def plot_results(results):
     for i in range(n_lam):
         plt.plot(results["t_grid"], [x[i] for x in thetas], label=f'theta_{i}')
     plt.grid()
+    plt.vlines(results["t_grid"], ymin=0.0, ymax=1.0, linestyles='dotted')
     plt.legend()
     plt.show()
 
