@@ -7,7 +7,7 @@ import numpy as np
 from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt
 
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
+from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix
 from nosnoc.rk_utils import rk4_on_timegrid
 
@@ -106,6 +106,11 @@ class NosnocModel:
         dummy_ocp = NosnocOcp()
         dummy_ocp.preprocess_ocp(self)
         fe = FiniteElement(opts, self, dummy_ocp, ctrl_idx=0, fe_idx=0, prev_fe=None)
+
+        # check if pure simulation problem
+        if n_u > 0:
+            if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+                raise ValueError("ConstraintHandling.LEAST_SQUARES only works with pure simulation problem.")
 
         # setup upsilon
         upsilon = []
@@ -477,7 +482,7 @@ class FiniteElement(FiniteElementBase):
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             lb_dual = 0.0
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            lb_dual = -inf
+            lb_dual = -inf #?
 
         # RK stage stuff
         for ii in range(opts.n_s):
@@ -727,6 +732,8 @@ class FiniteElement(FiniteElementBase):
         # print(f"{lb_comp=}")
         # print(f"{ub_comp=}")
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
+        # for j in range(n):
+        #     self.cost += g_comp[j]**2
         return
 
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
@@ -898,7 +905,11 @@ class NosnocProblem(NosnocFormulationObject):
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
-                self.add_constraint(fe.g, fe.lbg, fe.ubg)
+                if opts.constraint_handling == ConstraintHandling.EXACT:
+                    self.add_constraint(fe.g, fe.lbg, fe.ubg)
+                elif opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+                    for ii in range(casadi_length(fe.g)):
+                        self.cost += fe.g[ii] ** 2
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)

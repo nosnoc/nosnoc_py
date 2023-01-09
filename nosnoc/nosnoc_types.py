@@ -50,6 +50,10 @@ class HomotopyUpdateRule(Enum):
     SUPERLINEAR = 1
 
 
+class ConstraintHandling(Enum):
+    EXACT = 0
+    LEAST_SQUARES = 1
+
 class PssMode(Enum):
     # NOTE: tested in simple_sim_tests, test_ocp_motor
     STEWART = 0
