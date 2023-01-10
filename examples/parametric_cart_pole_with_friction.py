@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import nosnoc
 
 
-def solve_paramteric_example():
+def solve_paramteric_example(with_global_var=False):
     # opts
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
@@ -36,12 +36,24 @@ def solve_paramteric_example():
     x_ref_val = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
     u_ref_val = np.array([0.0])
 
-    p_global = vertcat(m1, m2)
-    p_global_val = np.array([1.0, 0.1])
-
     p_time_var = vertcat(x_ref, u_ref)
     p_time_var_val = np.tile(np.concatenate((x_ref_val, u_ref_val)), (opts.N_stages, 1))
 
+    if with_global_var:
+        p_global = vertcat(m2)
+        p_global_val = np.array([0.1])
+
+        v_global = m1
+        lbv_global = np.array([1.0])
+        ubv_global = np.array([100.0])
+        v_global_guess = np.array([1.5])
+    else:
+        p_global = vertcat(m1, m2)
+        p_global_val = np.array([1.0, 0.1])
+        v_global = SX.sym("v_global", 0, 1)
+        lbv_global = np.array([])
+        ubv_global = np.array([])
+        v_global_guess = np.array([])
     # actually vary x_ref theta entry over time
     # p_ind_theta = 1
     # p_time_var_val[:, p_ind_theta] = np.linspace(0.0, np.pi, opts.N_stages)
@@ -91,13 +103,15 @@ def solve_paramteric_example():
 
     model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u,
                                p_global=p_global, p_global_val=p_global_val,
-                               p_time_var=p_time_var, p_time_var_val=p_time_var_val)
+                               p_time_var=p_time_var, p_time_var_val=p_time_var_val,
+                               v_global=v_global
+    )
 
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal,
-                           lbx=lbx, ubx=ubx)
+                           lbx=lbx, ubx=ubx, lbv_global=lbv_global, ubv_global=ubv_global, v_global_guess=v_global_guess)
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)
