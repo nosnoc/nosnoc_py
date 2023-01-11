@@ -2,6 +2,6 @@ API
 ===
 
 .. autosummary::
-   :toctree: generated
+   :toctree: nosnoc
 
-   nosnoc.nosnoc
+   nosnoc
