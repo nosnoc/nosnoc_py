@@ -5,6 +5,10 @@ from .nosnoc import NosnocSolver
 class NosnocSimLooper:
 
     def __init__(self, solver: NosnocSolver, x0: np.ndarray, Nsim: int):
+        # check that NosnocSolver solves a pure simulation problem.
+        if not solver.problem.is_sim_problem():
+            raise Exception("NosnocSimLooper can only be used with pure simulation problem")
+
         self.solver = solver
         self.Nsim = Nsim
 

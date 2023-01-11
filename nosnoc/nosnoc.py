@@ -801,8 +801,14 @@ class NosnocProblem(NosnocFormulationObject):
         super().__init__()
 
         self.model = model
-        self.ocp = ocp
         self.opts = opts
+        if ocp is None:
+            self.ocp_trivial = True
+            ocp = NosnocOcp()
+        else:
+            self.ocp_trivial = False
+        ocp.preprocess_ocp(model)
+        self.ocp = ocp
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
@@ -891,6 +897,15 @@ class NosnocProblem(NosnocFormulationObject):
         print(f"cost:\n{self.cost}")
 
 
+    def is_sim_problem(self):
+        if self.model.dims.n_u != 0:
+            return False
+        if self.opts.N_stages != 1:
+            return False
+        if not self.ocp_trivial:
+            return False
+        return True
+
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
 
@@ -940,11 +955,8 @@ class NosnocSolver():
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         # preprocess inputs
-        if ocp is None:
-            ocp = NosnocOcp()
         opts.preprocess()
         model.preprocess_model(opts)
-        ocp.preprocess_ocp(model)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
