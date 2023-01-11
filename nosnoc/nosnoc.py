@@ -1132,13 +1132,21 @@ class NosnocSolver():
         return results
 
     # TODO: move this to problem?
-    def set(self, field: str, value):
+    def set(self, field: str, value: np.ndarray) -> None:
+        """
+        :param field: in ["x", "p_global"]
+        :param value: np.ndarray: numerical value of appropriate size
+        """
         prob = self.problem
+        dims = prob.model.dims
         if field == 'x':
             ind_x0 = prob.ind_x[0]
             prob.w0[ind_x0] = value
             prob.lbw[ind_x0] = value
             prob.ubw[ind_x0] = value
+        elif field == 'p_global':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
         else:
             raise NotImplementedError()
 
