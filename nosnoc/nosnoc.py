@@ -689,48 +689,23 @@ class FiniteElement(FiniteElementBase):
         """
         opts = self.opts
 
-
-        # print(f"{x=}, {y=}")
         n = casadi_length(y)
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
             g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
             g_comp = SX.zeros(n, 1)
-            # V1: \phi \in [-sigma, +sigma]
-            # for j in range(n):
-            #     for x_i in x:
-            #         g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2)
-            # g_comp_p = g_comp + sigma
-            # g_comp_m = g_comp - sigma
-            # g_comp = vertcat(g_comp_m, g_comp_p)
-            # n_comp = casadi_length(g_comp_m)
-            # ub_comp = np.concatenate((0 * np.ones((n_comp,)), inf * np.ones((n_comp,))))
-            # lb_comp = np.concatenate((-inf * np.ones((n_comp,)), 0 * np.ones((n_comp,))))
-        # elif...
-            # V2: \phi(a, b, sigma) == 0
             for j in range(n):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-                    # g_comp[j] += (x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2))**2
-            n_comp = casadi_length(g_comp)
-            lb_comp = 0 * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
             lb_comp = -np.inf * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
+        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER]:
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
-        # elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-        #     ub_comp = 0 * np.ones((n_comp,))
-        #     lb_comp = 0 * np.ones((n_comp,))
-        # print(f"\ng_comp")
-        # print_casadi_vector(g_comp)
-        # print(f"{lb_comp=}")
-        # print(f"{ub_comp=}")
 
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
 
