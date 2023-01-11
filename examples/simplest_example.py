@@ -78,7 +78,8 @@ def solve_simplest_example(opts=None, model=None):
     looper = nosnoc.NosnocSimLooper(solver, X0, Nsim)
     looper.run()
     results = looper.get_results()
-
+    # solver.print_problem()
+    # plot_results(results)
     return results
 
 
