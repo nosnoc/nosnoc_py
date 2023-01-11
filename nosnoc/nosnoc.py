@@ -482,7 +482,7 @@ class FiniteElement(FiniteElementBase):
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             lb_dual = 0.0
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            lb_dual = -inf #?
+            lb_dual = -inf
 
         # RK stage stuff
         for ii in range(opts.n_s):
@@ -731,9 +731,9 @@ class FiniteElement(FiniteElementBase):
         # print_casadi_vector(g_comp)
         # print(f"{lb_comp=}")
         # print(f"{ub_comp=}")
+
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
-        # for j in range(n):
-        #     self.cost += g_comp[j]**2
+
         return
 
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
@@ -909,11 +909,7 @@ class NosnocProblem(NosnocFormulationObject):
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
-                if opts.constraint_handling == ConstraintHandling.EXACT:
-                    self.add_constraint(fe.g, fe.lbg, fe.ubg)
-                elif opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-                    for ii in range(casadi_length(fe.g)):
-                        self.cost += fe.g[ii] ** 2
+                self.add_constraint(fe.g, fe.lbg, fe.ubg)
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
@@ -940,10 +936,20 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
+
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
+
+        if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+            for ii in range(casadi_length(self.g)):
+                if self.lbg[ii] != 0.0:
+                    raise Exception(f"least_squares constraint handling only supported if all lbg, ubg == 0.0, got {self.lbg[ii]=}, {self.ubg[ii]=}, {self.g[ii]=}")
+                self.cost += self.g[ii] ** 2
+            self.g = SX([])
+            self.lbg = np.array([])
+            self.ubg = np.array([])
 
         # CasADi Functions
         self.cost_fun = Function('cost_fun', [self.w], [self.cost])
