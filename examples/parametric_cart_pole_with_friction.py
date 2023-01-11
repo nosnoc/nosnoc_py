@@ -103,7 +103,7 @@ def solve_paramteric_example(with_global_var=False):
 
     model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u,
                                p_global=p_global, p_global_val=p_global_val,
-                               p_time_var=p_time_var, p_time_var_val=p_time_var_val,
+                               p_time_var=p_time_var,
                                v_global=v_global
     )
 
@@ -113,12 +113,15 @@ def solve_paramteric_example(with_global_var=False):
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal,
                            lbx=lbx, ubx=ubx, lbv_global=lbv_global, ubv_global=ubv_global, v_global_guess=v_global_guess)
 
-    ## Solve OCP
+    # create solver
     solver = nosnoc.NosnocSolver(opts, model, ocp)
+    # set / update parameters
+    solver.set('p_time_var', p_time_var_val)
+    solver.set('p_global', p_global_val)
 
+    # solve OCP
     results = solver.solve()
     return results
-
 
 def main():
     results = solve_paramteric_example()
