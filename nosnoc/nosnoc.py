@@ -66,8 +66,6 @@ class NosnocModel:
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
-        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
-
         # sanity checks
         if not isinstance(self.F, list):
             raise ValueError("model.F should be a list.")
@@ -97,6 +95,9 @@ class NosnocModel:
         for i in range(opts.N_stages):
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
+
+        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys,
+                               n_p_time_var=n_p_time_var, n_p_glob=n_p_glob)
 
         # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
@@ -301,12 +302,13 @@ class NosnocDims:
     """
     detected automatically
     """
-    n_x: int = 0
-    n_u: int = 0
-    n_sys: int = 0
-    n_c_sys: list = field(default_factory=list)
-    n_f_sys: list = field(default_factory=list)
-
+    n_x: int
+    n_u: int
+    n_sys: int
+    n_p_time_var: int
+    n_p_glob: int
+    n_c_sys: list
+    n_f_sys: list
 
 class NosnocFormulationObject(ABC):
 
