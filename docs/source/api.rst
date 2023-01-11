@@ -1,7 +1,13 @@
 API
 ===
 
-.. autosummary::
-   :toctree: nosnoc
+.. automodule:: nosnoc.nosnoc_types
+    :members:
+    :private-members:
+    :exclude-members:
 
-   nosnoc
+
+.. automodule:: nosnoc.nosnoc
+    :members:
+    :private-members:
+    :exclude-members:
