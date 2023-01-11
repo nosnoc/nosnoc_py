@@ -33,7 +33,7 @@ class NosnocModel:
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: SX = SX.sym('p_global_dummy', 0, 1),
-                 p_time_var_val: np.ndarray = None,
+                 p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
                  name: str = 'nosnoc'):
@@ -66,8 +66,6 @@ class NosnocModel:
         n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
-        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys)
-
         # sanity checks
         if not isinstance(self.F, list):
             raise ValueError("model.F should be a list.")
@@ -97,6 +95,9 @@ class NosnocModel:
         for i in range(opts.N_stages):
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
+
+        self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys,
+                               n_p_time_var=n_p_time_var, n_p_glob=n_p_glob)
 
         # g_Stewart
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
@@ -301,12 +302,13 @@ class NosnocDims:
     """
     detected automatically
     """
-    n_x: int = 0
-    n_u: int = 0
-    n_sys: int = 0
-    n_c_sys: list = field(default_factory=list)
-    n_f_sys: list = field(default_factory=list)
-
+    n_x: int
+    n_u: int
+    n_sys: int
+    n_p_time_var: int
+    n_p_glob: int
+    n_c_sys: list
+    n_f_sys: list
 
 class NosnocFormulationObject(ABC):
 
@@ -801,8 +803,14 @@ class NosnocProblem(NosnocFormulationObject):
         super().__init__()
 
         self.model = model
-        self.ocp = ocp
         self.opts = opts
+        if ocp is None:
+            self.ocp_trivial = True
+            ocp = NosnocOcp()
+        else:
+            self.ocp_trivial = False
+        ocp.preprocess_ocp(model)
+        self.ocp = ocp
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElementBase]] = []
@@ -891,6 +899,15 @@ class NosnocProblem(NosnocFormulationObject):
         print(f"cost:\n{self.cost}")
 
 
+    def is_sim_problem(self):
+        if self.model.dims.n_u != 0:
+            return False
+        if self.opts.N_stages != 1:
+            return False
+        if not self.ocp_trivial:
+            return False
+        return True
+
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
 
@@ -940,11 +957,8 @@ class NosnocSolver():
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         # preprocess inputs
-        if ocp is None:
-            ocp = NosnocOcp()
         opts.preprocess()
         model.preprocess_model(opts)
-        ocp.preprocess_ocp(model)
 
         if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
@@ -1118,13 +1132,24 @@ class NosnocSolver():
         return results
 
     # TODO: move this to problem?
-    def set(self, field: str, value):
+    def set(self, field: str, value: np.ndarray) -> None:
+        """
+        :param field: in ["x", "p_global", "p_time_var"]
+        :param value: np.ndarray: numerical value of appropriate size
+        """
         prob = self.problem
+        dims = prob.model.dims
         if field == 'x':
             ind_x0 = prob.ind_x[0]
             prob.w0[ind_x0] = value
             prob.lbw[ind_x0] = value
             prob.ubw[ind_x0] = value
+        elif field == 'p_global':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
+        elif field == 'p_time_var':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
         else:
             raise NotImplementedError()
 
