@@ -17,3 +17,9 @@ Contents
 
    usage
    api
+
+
+.. automodule:: nosnoc.nosnoc
+    :members:
+    :private-members:
+    :exclude-members:
