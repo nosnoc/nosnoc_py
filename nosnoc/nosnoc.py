@@ -33,7 +33,7 @@ class NosnocModel:
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: SX = SX.sym('p_global_dummy', 0, 1),
-                 p_time_var_val: np.ndarray = None,
+                 p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
                  name: str = 'nosnoc'):
@@ -1134,7 +1134,7 @@ class NosnocSolver():
     # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
-        :param field: in ["x", "p_global"]
+        :param field: in ["x", "p_global", "p_time_var"]
         :param value: np.ndarray: numerical value of appropriate size
         """
         prob = self.problem
@@ -1147,6 +1147,9 @@ class NosnocSolver():
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
+        elif field == 'p_time_var':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
         else:
             raise NotImplementedError()
 
