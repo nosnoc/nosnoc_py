@@ -107,11 +107,6 @@ class NosnocModel:
         dummy_ocp.preprocess_ocp(self)
         fe = FiniteElement(opts, self, dummy_ocp, ctrl_idx=0, fe_idx=0, prev_fe=None)
 
-        # check if pure simulation problem
-        if n_u > 0:
-            if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-                raise ValueError("ConstraintHandling.LEAST_SQUARES only works with pure simulation problem.")
-
         # setup upsilon
         upsilon = []
         if opts.pss_mode == PssMode.STEP:
