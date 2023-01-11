@@ -29,6 +29,7 @@ class StepEquilibrationMode(Enum):
     HEURISTIC_DELTA = 1
     L2_RELAXED_SCALED = 2
     L2_RELAXED = 3
+    DIRECT = 4
     # NOTE: tested in test_ocp_motor
 
 

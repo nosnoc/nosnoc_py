@@ -771,22 +771,24 @@ class FiniteElement(FiniteElementBase):
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
             self.cost += opts.rho_h * (self.h() - h_fe)**2
+            return
         elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self.cost += opts.rho_h * delta_h_ki**2
-        elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-            eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                    prev_fe.sum_Theta() * self.sum_Theta()
-            nu_k = 1
-            for jjj in range(casadi_length(eta_k)):
-                nu_k = nu_k * eta_k[jjj]
+            return
+
+        # modes that need nu_k
+        eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                prev_fe.sum_Theta() * self.sum_Theta()
+        nu_k = 1
+        for jjj in range(casadi_length(eta_k)):
+            nu_k = nu_k * eta_k[jjj]
+
+        if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
             self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-            eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                    prev_fe.sum_Theta() * self.sum_Theta()
-            nu_k = 1
-            for jjj in range(casadi_length(eta_k)):
-                nu_k = nu_k * eta_k[jjj]
             self.cost += opts.rho_h * nu_k * delta_h_ki**2
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
+            self.add_constraint(nu_k)
         return
 
 
