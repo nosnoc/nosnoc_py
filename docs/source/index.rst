@@ -18,5 +18,6 @@ Contents
    api
 
 
-.. automodule:: nosnoc.nosnoc
+.. automodule:: nosnoc
    :members:
+
