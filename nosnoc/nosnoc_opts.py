@@ -136,8 +136,9 @@ class NosnocOpts:
         if self.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA and self.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
             Warning("UNSUPPORTED option combination comp_mode: SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA and mpcc_mode: MpccMode.FISCHER_BURMEISTER")
         if self.mpcc_mode == MpccMode.FISCHER_BURMEISTER and self.constraint_handling != ConstraintHandling.LEAST_SQUARES:
-            Warning("UNSUPPORTED option combination comp_mode: mpcc_mode == MpccMode.FISCHER_BURMEISTER and self.constraint_handling != ConstraintHandling.LEAST_SQUARES")
-
+            Warning("UNSUPPORTED option combination comp_mode: mpcc_mode == MpccMode.FISCHER_BURMEISTER and constraint_handling != ConstraintHandling.LEAST_SQUARES")
+        if self.step_equilibration == StepEquilibrationMode.DIRECT and self.constraint_handling != ConstraintHandling.LEAST_SQUARES:
+            Warning("UNSUPPORTED option combination: StepEquilibrationMode.DIRECT and constraint_handling != ConstraintHandling.LEAST_SQUARES")
         return
 
     ## Options in matlab..
