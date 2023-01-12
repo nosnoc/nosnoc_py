@@ -4,7 +4,9 @@
 import sys, os
 
 # TODO: needed?
-sys.path.insert(0, os.path.abspath('..'))
+# sys.path.insert(0, os.path.abspath('../../nosnoc'))
+sys.path.insert(0, os.path.abspath('../..'))
+print(sys.path)
 
 project = 'nosnoc'
 copyright = '2023, Jonathan Frey, Anton Pozharskiy, Armin Nurkanovic'

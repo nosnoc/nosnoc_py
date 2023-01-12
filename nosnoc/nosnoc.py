@@ -1023,8 +1023,11 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
 
 class NosnocSolver():
-
+    """ Main solver class which generates and solves an NLP based on the given options, dynamic model, and (optionally) the ocp data.
+    """
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
 
         # preprocess inputs
         opts.preprocess()
@@ -1118,7 +1121,10 @@ class NosnocSolver():
             # import pdb; pdb.set_trace()
 
     def solve(self) -> dict:
+        """ Solves the NLP with the currently stored parameters.
 
+        :return: Returns a dictionary containing ... TODO document all fields
+        """
         self.initialize()
         opts = self.opts
         prob = self.problem

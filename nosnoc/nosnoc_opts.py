@@ -13,8 +13,8 @@ class NosnocOpts:
     # discretization
     terminal_time: float = 1.0  # TODO: make param?
 
-    use_fesd: bool = True
-    print_level: int = 0
+    use_fesd: bool = True  #: Selects use of fesd or normal RK formulation.
+    print_level: int = 0  #: TODO: document levels
     max_iter_homotopy: int = 0
 
     initialization_strategy: InitializationStrategy = InitializationStrategy.ALL_XCURRENT_W0_START
@@ -22,7 +22,7 @@ class NosnocOpts:
     irk_representation: IrkRepresentation = IrkRepresentation.INTEGRAL
 
     # IRK and FESD opts
-    n_s: int = 2  # Number of IRK stages
+    n_s: int = 2  #: Number of IRK stages
     irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
     cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
@@ -31,7 +31,7 @@ class NosnocOpts:
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
     gamma_h: float = 1.0
 
-    smoothing_parameter: float = 1e1  # used for smoothed Step representation
+    smoothing_parameter: float = 1e1  #: used for smoothed Step representation
     # used in InitializationStrategy.RK4_smoothed
 
     # initialization - Stewart
