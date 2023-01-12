@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt
+from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt, norm_inf
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
@@ -14,7 +14,7 @@ from nosnoc.rk_utils import rk4_on_timegrid
 
 class NosnocModel:
     r"""
-    \dot{x} \in f_i(x, u) if x(t) in R_i \subset \R^{n_x}
+    \dot{x} \in f_i(x, u, p_time_var, p_global, v_global) if x(t) in R_i \subset \R^{n_x}
 
     with R_i = {x \in \R^{n_x} | diag(S_i,\dot) * c(x) > 0}
 
@@ -37,6 +37,24 @@ class NosnocModel:
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
                  name: str = 'nosnoc'):
+        """
+        Create a nosnoc model.
+
+        :param x: state variables
+        :param F: set of state equations for the different regions
+        :param c: set of region boundaries
+        :param S: determination of the boundaries region connecting
+            different state equations with each boundary zone
+        :param x0: initial state
+        :param u: controls
+        :param p_time_var: time varying parameters
+        :param p_global: global parameters
+        :param p_time_var_val: initial values of the time varying parameters
+            (for each control stage)
+        :param p_global_val: values of the global parameters
+        :param v_global: additional timefree optimization variables
+        :param name: name of the model
+        """
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
@@ -1115,7 +1133,7 @@ class NosnocSolver():
 
         if opts.print_level:
             print('-------------------------------------------')
-            print('sigma \t\t compl_res \t CPU time \t iter \t status')
+            print('sigma \t\t compl_res \t nlp_res \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
 
@@ -1142,6 +1160,7 @@ class NosnocSolver():
             solver_stats = self.solver.stats()
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
+            nlp_res = norm_inf(sol['g']).full()[0][0]
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -1151,7 +1170,7 @@ class NosnocSolver():
 
             if opts.print_level:
                 print(
-                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
+                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
                 )
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
