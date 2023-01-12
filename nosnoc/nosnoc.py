@@ -787,12 +787,14 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_primal_variables(self):
         # Initial
         self.fe0 = FiniteElementZero(self.opts, self.model)
+        x0 = self.fe0.w[self.fe0.ind_x[0]]
+        lambda00 = self.fe0.Lambda()
 
         # lambda00 is parameter
-        self.p = vertcat(self.p, self.fe0.Lambda())
+        self.p = vertcat(self.p, lambda00)
 
         # X0 is variable
-        self.add_variable(self.fe0.w[self.fe0.ind_x[0]], self.ind_x,
+        self.add_variable(x0, self.ind_x,
                           self.fe0.lbw[self.fe0.ind_x[0]], self.fe0.ubw[self.fe0.ind_x[0]],
                           self.fe0.w0[self.fe0.ind_x[0]])
         # v_global
