@@ -4,10 +4,10 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp
+from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt
 
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule
+from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix
 from nosnoc.rk_utils import rk4_on_timegrid
 
@@ -476,6 +476,11 @@ class FiniteElement(FiniteElementBase):
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
 
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
+            lb_dual = 0.0
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            lb_dual = -inf
+
         # RK stage stuff
         for ii in range(opts.n_s):
             # state derivatives
@@ -495,13 +500,13 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_theta, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_theta, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -513,20 +518,21 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
-                        self.ind_alpha, np.zeros(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
+                        self.ind_alpha, lb_dual*np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
                         opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n,
+                            lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         ii, ij)
 
@@ -537,7 +543,7 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, np.zeros(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
@@ -549,14 +555,14 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_n, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_n, lb_dual*np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
-                               dims.n_c_sys[ij]), self.ind_lambda_p, np.zeros(dims.n_c_sys[ij]),
+                               dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual * np.ones(dims.n_c_sys[ij]),
                         inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
 
@@ -588,15 +594,22 @@ class FiniteElement(FiniteElementBase):
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
             self.w[flatten(self.ind_alpha[stage][sys])])
 
+    def get_Theta_list(self) -> list:
+        return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
+
     def sum_Theta(self) -> SX:
-        Thetas = [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
-        return casadi_sum_list(Thetas)
+        return casadi_sum_list(self.get_Theta_list())
+
+    def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
+        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
+        Lambdas += [self.prev_fe.Lambda(stage=-1, sys=sys)]
+        return Lambdas
 
     def sum_Lambda(self, sys=slice(None)):
         """NOTE: includes the prev fes last stage lambda"""
-        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
-        Lambdas.append(self.prev_fe.Lambda(stage=-1, sys=sys))
+        Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
+
 
     def h(self) -> SX:
         return self.w[self.ind_h]
@@ -661,70 +674,96 @@ class FiniteElement(FiniteElementBase):
 
         return
 
+
+
+    def create_complementarity(self, x: List[SX], y: SX, sigma: SX) -> None:
+        """
+        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
+
+        :param x: list of SX
+        :param y: SX
+        :param sigma: smoothing parameter
+        """
+        opts = self.opts
+
+        n = casadi_length(y)
+
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
+            # g_comp = diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
+            g_comp = diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
+            # NOTE: this line should be equivalent but yield different results
+            # g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            g_comp = SX.zeros(n, 1)
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+
+        n_comp = casadi_length(g_comp)
+        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            lb_comp = -np.inf * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER]:
+            lb_comp = 0 * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
+
+        return
+
     def create_complementarity_constraints(self, sigma_p: SX) -> None:
         opts = self.opts
-        dims = self.model.dims
         if not opts.use_fesd:
-            g_cross_comp = casadi_vertcat_list(
-                [diag(self.Lambda(stage=j)) @ self.Theta(stage=j) for j in range(opts.n_s)])
-
+            for j in range(opts.n_s):
+                self.create_complementarity([self.Lambda(stage=j)],
+                                            self.Theta(stage=j), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-            # complement within fe
-            g_cross_comp = casadi_vertcat_list([
-                diag(self.Theta(stage=j, sys=r)) @ self.Lambda(stage=jj, sys=r)
-                for r in range(dims.n_sys) for j in range(opts.n_s) for jj in range(opts.n_s)
-            ])
-            # complement with end of previous fe
-            g_cross_comp = casadi_vertcat_list([g_cross_comp] + [
-                diag(self.Theta(stage=j, sys=r)) @ self.prev_fe.Lambda(stage=-1, sys=r)
-                for r in range(dims.n_sys)
-                for j in range(opts.n_s)
-            ])
+            for j in range(opts.n_s):
+                # cross comp with prev_fe
+                self.create_complementarity([self.Theta(stage=j)],
+                            self.prev_fe.Lambda(stage=-1), sigma_p)
+                for jj in range(opts.n_s):
+                    # within fe
+                    self.create_complementarity([self.Theta(stage=j)],
+                                    self.Lambda(stage=jj), sigma_p)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
-            # Note: sum_Lambda contains last stage of prev_fe
-            g_cross_comp = casadi_vertcat_list([
-                diag(self.Theta(stage=j, sys=r)) @ self.sum_Lambda(sys=r)
-                for r in range(dims.n_sys)
-                for j in range(opts.n_s)
-            ])
-
-        n_cross_comp = casadi_length(g_cross_comp)
-        g_cross_comp = g_cross_comp - sigma_p
-        g_cross_comp_ub = 0 * np.ones((n_cross_comp,))
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-            g_cross_comp_lb = -np.inf * np.ones((n_cross_comp,))
-        elif opts.mpcc_mode == MpccMode.SCHOLTES_EQ:
-            g_cross_comp_lb = 0 * np.ones((n_cross_comp,))
-
-        self.add_constraint(g_cross_comp, lb=g_cross_comp_lb, ub=g_cross_comp_ub)
-
+            for j in range(opts.n_s):
+                # Note: sum_Lambda contains last stage of prev_fe
+                Lambda_list = self.get_Lambdas_incl_last_prev_fe()
+                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
         return
 
     def step_equilibration(self) -> None:
         opts = self.opts
         # step equilibration only within control stages.
-        if opts.use_fesd and self.fe_idx > 0:
-            prev_fe: FiniteElement = self.prev_fe
-            delta_h_ki = self.h() - prev_fe.h()
-            if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-                h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
-                self.cost += opts.rho_h * (self.h() - h_fe)**2
-            elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
-                self.cost += opts.rho_h * delta_h_ki**2
-            elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-                eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                        prev_fe.sum_Theta() * self.sum_Theta()
-                nu_k = 1
-                for jjj in range(casadi_length(eta_k)):
-                    nu_k = nu_k * eta_k[jjj]
-                self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
-            elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-                eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                        prev_fe.sum_Theta() * self.sum_Theta()
-                nu_k = 1
-                for jjj in range(casadi_length(eta_k)):
-                    nu_k = nu_k * eta_k[jjj]
-                self.cost += opts.rho_h * nu_k * delta_h_ki**2
+        if not opts.use_fesd:
+            return
+        if not self.fe_idx > 0:
+            return
+
+        prev_fe: FiniteElement = self.prev_fe
+        delta_h_ki = self.h() - prev_fe.h()
+        if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
+            h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
+            self.cost += opts.rho_h * (self.h() - h_fe)**2
+            return
+        elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
+            self.cost += opts.rho_h * delta_h_ki**2
+            return
+
+        # modes that need nu_k
+        eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                prev_fe.sum_Theta() * self.sum_Theta()
+        nu_k = 1
+        for jjj in range(casadi_length(eta_k)):
+            nu_k = nu_k * eta_k[jjj]
+
+        if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
+            self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
+        elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
+            self.cost += opts.rho_h * nu_k * delta_h_ki**2
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
+            self.add_constraint(nu_k)
         return
 
 
@@ -860,7 +899,11 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
-            J_comp = sum1(diag(fe.sum_Theta()) @ fe.sum_Lambda())
+            J_comp = 0.0
+            for fe in flatten(self.stages):
+                sum_abs_lam = casadi_sum_list([fabs(lam) for lam in fe.get_Lambdas_incl_last_prev_fe()])
+                sum_abs_theta = casadi_sum_list([fabs(t) for t in fe.get_Theta_list()])
+                J_comp += sum1(diag(sum_abs_theta) @ sum_abs_lam)
         else:
             J_comp = casadi_sum_list([
                 model.std_compl_res_fun(fe.rk_stage_z(j), fe.p)
@@ -876,10 +919,20 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
+
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
+
+        if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+            for ii in range(casadi_length(self.g)):
+                if self.lbg[ii] != 0.0:
+                    raise Exception(f"least_squares constraint handling only supported if all lbg, ubg == 0.0, got {self.lbg[ii]=}, {self.ubg[ii]=}, {self.g[ii]=}")
+                self.cost += self.g[ii] ** 2
+            self.g = SX([])
+            self.lbg = np.array([])
+            self.ubg = np.array([])
 
         # CasADi Functions
         self.cost_fun = Function('cost_fun', [self.w], [self.cost])

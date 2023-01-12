@@ -4,7 +4,7 @@ import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
-from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy
+from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling
 
 
 @dataclass
@@ -26,6 +26,7 @@ class NosnocOpts:
     irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
     cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
+    constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
     gamma_h: float = 1.0
@@ -130,6 +131,14 @@ class NosnocOpts:
             self.right_boundary_point_explicit = True
         else:
             self.right_boundary_point_explicit = False
+
+        # checks:
+        if self.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA and self.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            Warning("UNSUPPORTED option combination comp_mode: SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA and mpcc_mode: MpccMode.FISCHER_BURMEISTER")
+        if self.mpcc_mode == MpccMode.FISCHER_BURMEISTER and self.constraint_handling != ConstraintHandling.LEAST_SQUARES:
+            Warning("UNSUPPORTED option combination comp_mode: mpcc_mode == MpccMode.FISCHER_BURMEISTER and constraint_handling != ConstraintHandling.LEAST_SQUARES")
+        if self.step_equilibration == StepEquilibrationMode.DIRECT and self.constraint_handling != ConstraintHandling.LEAST_SQUARES:
+            Warning("UNSUPPORTED option combination: StepEquilibrationMode.DIRECT and constraint_handling != ConstraintHandling.LEAST_SQUARES")
         return
 
     ## Options in matlab..

@@ -106,7 +106,7 @@ def main_test_sliding():
 def main_test_discretization():
     model = get_simplest_model_sliding()
 
-    for mpcc_mode in nosnoc.MpccMode:
+    for mpcc_mode in [nosnoc.MpccMode.SCHOLTES_EQ, nosnoc.MpccMode.SCHOLTES_INEQ]:
         for irk_scheme in nosnoc.IrkSchemes:
             for irk_representation in nosnoc.IrkRepresentation:
                 opts = get_default_options()
@@ -147,9 +147,28 @@ def main_test_fesd_off():
     print("main_test_fesd_off: SUCCESS")
 
 
+def main_test_least_squares_problem():
+    model = get_simplest_model_switch()
+
+    opts = get_default_options()
+    opts.print_level = 1
+    opts.n_s = 3
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
+    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
+    opts.sigma_0 = 0.1
+    try:
+        test_opts(opts, model=model)
+    except:
+        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+
 if __name__ == "__main__":
     test_default()
     main_test_fesd_off()
     main_test_discretization()
     main_test_sliding()
     main_test_switch()
+    main_test_least_squares_problem()
