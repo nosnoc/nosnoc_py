@@ -18,8 +18,5 @@ Contents
    api
 
 
-.. autosummary::
-   :toctree: generated
-
-   nosnoc
-
+.. automodule:: nosnoc.nosnoc
+   :members:
