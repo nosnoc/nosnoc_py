@@ -599,8 +599,8 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(self.get_Theta_list())
 
     def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
-        Lambdas = [self.prev_fe.Lambda(stage=-1, sys=sys)]
-        Lambdas += [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
+        Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
+        Lambdas += [self.prev_fe.Lambda(stage=-1, sys=sys)]
         return Lambdas
 
     def sum_Lambda(self, sys=slice(None)):
