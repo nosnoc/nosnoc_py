@@ -160,6 +160,7 @@ def main_test_least_squares_problem():
     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
     opts.sigma_0 = 0.1
+    opts.gamma_h = np.inf
     try:
         test_opts(opts, model=model)
     except:
