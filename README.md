@@ -29,6 +29,12 @@ source env/bin/activate
 pip install -e .
 ```
 
+4. Docs
+In order to build docs also run:
+```
+pip -r docs_reqirements.txt
+```
+
 ## Literature - theory and algortihms
 
 ### FESD
