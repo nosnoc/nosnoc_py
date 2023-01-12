@@ -14,7 +14,7 @@ from nosnoc.rk_utils import rk4_on_timegrid
 
 class NosnocModel:
     r"""
-    \dot{x} \in f_i(x, u, p(t), p_global, v) if x(t) in R_i \subset \R^{n_x}
+    \dot{x} \in f_i(x, u, p_time_var, p_global, v_global) if x(t) in R_i \subset \R^{n_x}
 
     with R_i = {x \in \R^{n_x} | diag(S_i,\dot) * c(x) > 0}
 
@@ -49,8 +49,8 @@ class NosnocModel:
         :param u: controls
         :param p_time_var: time varying parameters
         :param p_global: global parameters
-        :param p_time_var_val: values of the time varying parameters
-            (dependent of the time)
+        :param p_time_var_val: initial values of the time varying parameters
+            (for each control stage)
         :param p_global_val: values of the global parameters
         :param v_global: additional timefree optimization variables
         :param name: name of the model
