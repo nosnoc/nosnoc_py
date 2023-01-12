@@ -792,11 +792,8 @@ class NosnocProblem(NosnocFormulationObject):
 
         # lambda00 is parameter
         self.p = vertcat(self.p, lambda00)
+        self.p = vertcat(self.p, x0)
 
-        # X0 is variable
-        self.add_variable(x0, self.ind_x,
-                          self.fe0.lbw[self.fe0.ind_x[0]], self.fe0.ubw[self.fe0.ind_x[0]],
-                          self.fe0.w0[self.fe0.ind_x[0]])
         # v_global
         self.add_variable(self.model.v_global, self.ind_v_global, self.ocp.lbv_global, self.ocp.ubv_global,
                           self.ocp.v_global_guess)
@@ -971,8 +968,9 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     # TODO: improve naming here?
     results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
 
-    ind_x_all = [prob.ind_x[0]] + [ind for ind_list in prob.ind_x[1:] for ind in ind_list]
-    results["x_all_list"] = [w_opt[ind] for ind in ind_x_all]
+    x0 = prob.model.x0
+    ind_x_all = [ind for ind_list in prob.ind_x[:] for ind in ind_list]
+    results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
 
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
     results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
@@ -994,7 +992,6 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["time_steps"] = time_steps
 
     # results relevant for OCP:
-    x0 = prob.w0[prob.ind_x[0]]
     results["x_traj"] = [x0] + results["x_list"]
     results["u_traj"] = results["u_list"]  # duplicate name
     t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
@@ -1043,8 +1040,7 @@ class NosnocSolver():
     def initialize(self):
         opts = self.opts
         prob = self.problem
-        ind_x0 = prob.ind_x[0]
-        x0 = self.w0[ind_x0]
+        x0 = prob.model.x0
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
             for ind in prob.ind_x:
@@ -1060,7 +1056,7 @@ class NosnocSolver():
             rk4_t_grid = dt_fe * irk_time_grid
 
             x_rk4_current = x0
-            db_updated_indices = list(ind_x0)
+            db_updated_indices = list()
             for i in range(opts.N_finite_elements):
                 Xrk4 = rk4_on_timegrid(self.model.f_x_smooth_fun,
                                        x0=x_rk4_current,
@@ -1122,13 +1118,13 @@ class NosnocSolver():
         sigma_k = opts.sigma_0
 
         # lambda00 initialization
-        x0 = w0[prob.ind_x[0]]
+        x0 = prob.model.x0
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k]), lambda00))
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k]), lambda00, x0))
 
             # solve NLP
             t = time.time()
@@ -1195,10 +1191,7 @@ class NosnocSolver():
         prob = self.problem
         dims = prob.model.dims
         if field == 'x':
-            ind_x0 = prob.ind_x[0]
-            prob.w0[ind_x0] = value
-            prob.lbw[ind_x0] = value
-            prob.ubw[ind_x0] = value
+            prob.model.x0 = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
