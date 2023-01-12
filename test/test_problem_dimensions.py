@@ -34,7 +34,7 @@ def main_w_test():
                         n_z = 3
                         n_h = 1
 
-                    nw_expected = n_x + Nfe * (ns * (n_x + n_z) + n_h)
+                    nw_expected = Nfe * (ns * (n_x + n_z) + n_h)
 
                     if opts.right_boundary_point_explicit:
                         n_end = 0
