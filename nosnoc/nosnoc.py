@@ -674,20 +674,23 @@ class FiniteElement(FiniteElementBase):
 
 
 
-    def create_complementarity(self, x, y, sigma):
+    def create_complementarity(self, x: List[SX], y: SX, sigma: SX) -> None:
         """
-        x: list of SX
-        y: SX
-        sigma: smoothing parameter
+        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
-        NOTE: lblam etc are only 0 for SCHOLTES_*
+        :param x: list of SX
+        :param y: SX
+        :param sigma: smoothing parameter
         """
         opts = self.opts
 
         n = casadi_length(y)
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
-            g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
+            # g_comp = diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
+            g_comp = diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
+            # NOTE: this line should be equivalent but yield different results
+            # g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
             g_comp = SX.zeros(n, 1)
             for j in range(n):
