@@ -1,5 +1,7 @@
 # `nosnoc`
 
+More documentation can be found on
+https://nosnoc-py.readthedocs.io/en/latest/
 
 ## About
 `nosnoc` is an open source Python software package for NOnSmooth Numerical Optimal Control.
@@ -32,7 +34,7 @@ pip install -e .
 4. Docs
 In order to build docs also run:
 ```
-pip -r docs_reqirements.txt
+pip -r docs/docs_reqirements.txt
 ```
 
 ## Literature - theory and algorithms
