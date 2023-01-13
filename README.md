@@ -1,5 +1,7 @@
 # `nosnoc`
 
+More documentation can be found on
+https://nosnoc-py.readthedocs.io/en/latest/
 
 ## About
 `nosnoc` is an open source Python software package for NOnSmooth Numerical Optimal Control.
@@ -29,7 +31,13 @@ source env/bin/activate
 pip install -e .
 ```
 
-## Literature - theory and algortihms
+4. Docs
+In order to build docs also run:
+```
+pip -r docs/docs_reqirements.txt
+```
+
+## Literature - theory and algorithms
 
 ### FESD
 [Finite Elements with Switch Detection for Direct Optimal Control of Nonsmooth Systems](https://arxiv.org/abs/2205.05337) \

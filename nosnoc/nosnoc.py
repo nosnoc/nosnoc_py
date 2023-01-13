@@ -19,6 +19,22 @@ class NosnocModel:
     with R_i = {x \in \R^{n_x} | diag(S_i,\dot) * c(x) > 0}
 
     where S_i denotes the rows of S.
+
+
+    :param x: state variables
+    :param F: set of state equations for the different regions
+    :param c: set of region boundaries
+    :param S: determination of the boundaries region connecting
+        different state equations with each boundary zone
+    :param x0: initial state
+    :param u: controls
+    :param p_time_var: time varying parameters
+    :param p_global: global parameters
+    :param p_time_var_val: initial values of the time varying parameters
+        (for each control stage)
+    :param p_global_val: values of the global parameters
+    :param v_global: additional timefree optimization variables
+    :param name: name of the model
     """
 
     # TODO: extend docu for n_sys > 1
@@ -37,24 +53,6 @@ class NosnocModel:
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
                  name: str = 'nosnoc'):
-        """
-        Create a nosnoc model.
-
-        :param x: state variables
-        :param F: set of state equations for the different regions
-        :param c: set of region boundaries
-        :param S: determination of the boundaries region connecting
-            different state equations with each boundary zone
-        :param x0: initial state
-        :param u: controls
-        :param p_time_var: time varying parameters
-        :param p_global: global parameters
-        :param p_time_var_val: initial values of the time varying parameters
-            (for each control stage)
-        :param p_global_val: values of the global parameters
-        :param v_global: additional timefree optimization variables
-        :param name: name of the model
-        """
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
@@ -1023,8 +1021,11 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
 
 class NosnocSolver():
-
+    """ Main solver class which generates and solves an NLP based on the given options, dynamic model, and (optionally) the ocp data.
+    """
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
 
         # preprocess inputs
         opts.preprocess()
@@ -1118,7 +1119,10 @@ class NosnocSolver():
             # import pdb; pdb.set_trace()
 
     def solve(self) -> dict:
+        """ Solves the NLP with the currently stored parameters.
 
+        :return: Returns a dictionary containing ... TODO document all fields
+        """
         self.initialize()
         opts = self.opts
         prob = self.problem

@@ -1,0 +1,8 @@
+sphinx
+sphinx-rtd-theme
+sphinx-toolbox
+numpy
+casadi
+scipy
+matplotlib
+enum-tools

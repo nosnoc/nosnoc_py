@@ -8,3 +8,6 @@ env
 private*
 external
 *~
+
+# documentation
+docs/build/*
