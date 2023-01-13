@@ -414,6 +414,8 @@ class FiniteElementZero(FiniteElementBase):
         super().__init__()
         dims = model.dims
 
+        # Indices for x are currently a list of N_stages * N_finite_elements
+        # within each cell n_s IRK stages
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
@@ -1230,13 +1232,35 @@ class NosnocSolver():
     # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
-        :param field: in ["x", "p_global", "p_time_var", "w"]
+        Set values.
+
+        :param field: in ["x0", "x", "u", "p_global", "p_time_var", "w"]
         :param value: np.ndarray: numerical value of appropriate size
         """
         prob = self.problem
         dims = prob.model.dims
-        if field == 'x':
+        if field == 'x0':
             prob.model.x0 = value
+        elif field == 'x':
+            if value.shape[0] == self.opts.N_stages:
+                # Shape is equal to the number of stages
+                for i, sub_idx in enumerate(prob.ind_x):
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+            elif value.shape[0] == sum(self.opts.Nfe_list):
+                # Shape is equal to the number of finite elements
+                i = 0
+                for sub_idx in prob.ind_x:
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+                        i += 1
+
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
+        elif field == 'u':
+            prob.w0[prob.ind_u] = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
