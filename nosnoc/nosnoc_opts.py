@@ -14,7 +14,7 @@ class NosnocOpts:
     terminal_time: float = 1.0  # TODO: make param?
 
     use_fesd: bool = True  #: Selects use of fesd or normal RK formulation.
-    print_level: int = 0  #: TODO: document levels
+    print_level: int = 0  #: higher -> more info
     max_iter_homotopy: int = 0
 
     initialization_strategy: InitializationStrategy = InitializationStrategy.ALL_XCURRENT_W0_START
@@ -43,11 +43,11 @@ class NosnocOpts:
     init_beta: float = 1.0
     init_gamma: float = 1.0
 
-    N_finite_elements: int = 2  # of length N_stages
-    Nfe_list: list = field(default_factory=list)  # of length N_stages
+    N_finite_elements: int = 2  #
+    Nfe_list: list = field(default_factory=list)  #: list of length N_stages, Nfe per stage
 
     # MPCC and Homotopy opts
-    comp_tol: float = 1e-8
+    comp_tol: float = 1e-8  #: complementarity tolerance
     sigma_0: float = 1.0
     sigma_N: float = 1e-8
     homotopy_update_slope: float = 0.1
