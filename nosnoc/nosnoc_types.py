@@ -56,9 +56,14 @@ class ConstraintHandling(Enum):
     LEAST_SQUARES = 1
 
 class PssMode(Enum):
+    """
+    Mode to represent the Piecewise Smooth System (PSS).
+    """
     # NOTE: tested in simple_sim_tests, test_ocp_motor
     STEWART = 0
     """
+    Stewart representaion
+
     basic algebraic equations and complementarity condtions of the DCS
     lambda_i'*theta_i = 0; for all i = 1,..., n_sys
     lambda_i >= 0;    for all i = 1,..., n_sys
@@ -66,6 +71,8 @@ class PssMode(Enum):
     """
     STEP = 1
     """
+    Step representaion
+
     c_i(x) - (lambda_p_i-lambda_n_i)  = 0; for all i = 1,..., n_sys
     lambda_n_i'*alpha_i  = 0; for all i = 1,..., n_sys
     lambda_p_i'*(e-alpha_i)  = 0; for all i = 1,..., n_sys
