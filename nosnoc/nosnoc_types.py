@@ -1,4 +1,4 @@
-from enum import Enum, IntEnum
+from enum import Enum
 
 
 class MpccMode(Enum):
@@ -55,7 +55,7 @@ class ConstraintHandling(Enum):
     EXACT = 0
     LEAST_SQUARES = 1
 
-class PssMode(IntEnum):
+class PssMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).
     """
