@@ -6,22 +6,33 @@ Nosnoc Solver object
 ====================
 
 .. autoclass:: nosnoc.nosnoc.NosnocSolver
-	       :members:
+        :members:
 
 Nosnoc Options
 ==============
 
 .. autoclass:: nosnoc.nosnoc_opts.NosnocOpts
-	       :members:
+        :members:
 
 Nosnoc Model
 ==============
 
 .. autoclass:: nosnoc.nosnoc.NosnocModel
-	       :members:
+        :members:
+        :private-members:
+
 
 Nosnoc OCP
 ==============
 
 .. autoclass:: nosnoc.nosnoc.NosnocOcp
-	       :members:
+        :members:
+
+
+.. TODO: use autoenum?
+Nosnoc Types
+==============
+
+.. automodule:: nosnoc.nosnoc_types
+        :members:
+

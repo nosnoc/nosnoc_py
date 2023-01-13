@@ -4,7 +4,6 @@
 import sys, os
 
 # TODO: needed?
-# sys.path.insert(0, os.path.abspath('../../nosnoc'))
 sys.path.insert(0, os.path.abspath('../..'))
 print(sys.path)
 
@@ -23,6 +22,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    # 'enum_tools.autoenum',
 ]
 
 intersphinx_mapping = {
