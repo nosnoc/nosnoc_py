@@ -22,7 +22,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
-    # 'enum_tools.autoenum',
+    'enum_tools.autoenum',
 ]
 
 intersphinx_mapping = {
