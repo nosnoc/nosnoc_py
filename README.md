@@ -35,7 +35,7 @@ In order to build docs also run:
 pip -r docs_reqirements.txt
 ```
 
-## Literature - theory and algortihms
+## Literature - theory and algorithms
 
 ### FESD
 [Finite Elements with Switch Detection for Direct Optimal Control of Nonsmooth Systems](https://arxiv.org/abs/2205.05337) \
