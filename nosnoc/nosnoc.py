@@ -237,7 +237,7 @@ class NosnocModel:
         theta_smooth = casadi_vertcat_list(theta_list)
         mu_smooth = casadi_vertcat_list(mu_smooth_list)
 
-        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x, self.p], [f_x_smooth])
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
         self.theta_smooth_fun = Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
         self.mu_smooth_fun = Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
         self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
@@ -1084,7 +1084,7 @@ class NosnocSolver():
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k + 1]
-                    self.w0[prob.ind_x[i + 1][k]] = x_ki
+                    self.w0[prob.ind_x[i][k]] = x_ki
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
@@ -1104,13 +1104,13 @@ class NosnocSolver():
                         self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
                     db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][
-                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i + 1][k] + prob.ind_h
+                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[prob.ind_x[i + 1][-1]] = x_ki
-                    db_updated_indices += prob.ind_x[i + 1][-1]
+                    self.w0[prob.ind_x[i][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[i][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)
