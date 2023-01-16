@@ -164,6 +164,21 @@ def main_test_least_squares_problem():
     except:
         raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
 
+
+def main_test_initializations():
+    model = get_simplest_model_switch()
+
+    for initialization_strategy in nosnoc.InitializationStrategy:
+        opts = get_default_options()
+        opts.print_level = 1
+        opts.initialization_strategy = initialization_strategy
+        print(f"\ntesting initialization_strategy = {initialization_strategy}")
+        try:
+            test_opts(opts, model=model)
+        except:
+            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+
+
 if __name__ == "__main__":
     test_default()
     main_test_fesd_off()
@@ -171,3 +186,4 @@ if __name__ == "__main__":
     main_test_sliding()
     main_test_switch()
     main_test_least_squares_problem()
+    main_test_initializations()
