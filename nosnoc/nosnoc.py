@@ -1135,7 +1135,7 @@ class NosnocSolver():
 
         if opts.print_level:
             print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t CPU time \t iter \t status')
+            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
 
@@ -1163,6 +1163,7 @@ class NosnocSolver():
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
             nlp_res = norm_inf(sol['g']).full()[0][0]
+            cost_val = norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -1172,7 +1173,7 @@ class NosnocSolver():
 
             if opts.print_level:
                 print(
-                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
+                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cost_val:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
                 )
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
