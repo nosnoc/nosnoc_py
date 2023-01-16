@@ -180,11 +180,14 @@ def plot_algebraic_variables(results, figure_filename=''):
     # algebraic variables
     plt.figure()
     plt.subplot(2, 1, 1)
-    lambdas = [results["lambda_sim"][0][0]] + \
-              [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
-    thetas = [results["theta_sim"][0][0]] + \
-             [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
+
+    thetas = nosnoc.flatten_layer(results['theta_sim'], 0)
+    thetas = [thetas[0]] + thetas
+
+    lambdas = nosnoc.flatten_layer(results['lambda_sim'], 0)
+    lambdas = [lambdas[0]] + lambdas
     n_lam = len(lambdas[0])
+
     for i in range(n_lam):
         plt.plot(results["t_grid"], [x[i] for x in lambdas], label=f'$\lambda_{i+1}$')
     plt.grid()

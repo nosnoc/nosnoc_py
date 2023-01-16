@@ -91,12 +91,14 @@ def plot_results(results):
     plt.plot(results["t_grid"], results["X_sim"], label='x', marker='o')
     plt.legend()
     plt.grid()
-
     # algebraic variables
-    lambdas = [results["lambda_sim"][0][0]] + \
-              [results["lambda_sim"][i][0] for i in range(len(results["lambda_sim"]))]
-    thetas = [results["theta_sim"][0][0]] + \
-             [results["theta_sim"][i][0] for i in range(len(results["theta_sim"]))]
+    thetas = nosnoc.flatten_layer(results['theta_sim'], 0)
+    thetas = [thetas[0]] + thetas
+
+    lambdas = nosnoc.flatten_layer(results['lambda_sim'], 0)
+    lambdas = [lambdas[0]] + lambdas
+    n_lam = len(lambdas[0])
+
     plt.subplot(3, 1, 2)
     n_lam = len(lambdas[0])
     for i in range(n_lam):

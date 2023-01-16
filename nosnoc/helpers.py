@@ -55,9 +55,9 @@ class NosnocSimLooper:
             self.xcurrent = self.X_sim[-1]
             self.cpu_nlp[i, :] = results["cpu_time_nlp"]
             self.time_steps = np.concatenate((self.time_steps, results["time_steps"]))
-            self.theta_sim += results["theta_list"]
-            self.lambda_sim += results["lambda_list"]
-            self.alpha_sim += results["alpha_list"]
+            self.theta_sim.append(results["theta_list"])
+            self.lambda_sim.append(results["lambda_list"])
+            self.alpha_sim.append(results["alpha_list"])
             self.w_sim += [results["w_sol"]]
             self.w_all += [results["w_all"]]
 

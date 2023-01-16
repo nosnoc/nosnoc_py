@@ -978,6 +978,9 @@ class NosnocProblem(NosnocFormulationObject):
             return False
         return True
 
+def get_cont_algebraic_indices(ind_alg: list):
+    return [ind_rk[-1] for ind_fe in ind_alg for ind_rk in ind_fe]
+
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
 
@@ -991,21 +994,13 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
 
-    ind_theta_all = flatten_outer_layers(prob.ind_theta, 3)
-    ind_lam_all = flatten_outer_layers(prob.ind_lam, 3)
-    ind_alpha_all = flatten_outer_layers(prob.ind_alpha, 3)
-    ind_lam_n_all = flatten_outer_layers(prob.ind_lambda_n, 3)
-    ind_lam_p_all = flatten_outer_layers(prob.ind_lambda_p, 3)
-    ind_mu_all = flatten_outer_layers(prob.ind_mu, 2)
-    ind_theta_cont = [ind_rk[-1] for ind_fe in prob.ind_theta for ind_rk in ind_fe]
-    ind_lam_cont = [ind_rk[-1] for ind_fe in prob.ind_lam for ind_rk in ind_fe]
-    results["theta_list"] = [w_opt[ind] for ind in ind_theta_cont]
-    results["lambda_list"] = [w_opt[ind] for ind in ind_lam_cont]
+    results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
+    results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
     # if opts.pss_mode == PssMode.STEP:
-    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in ind_alpha_all]
-    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in ind_lam_n_all]
-    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in ind_lam_p_all]
+    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)]
+    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_n)]
+    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_p)]
 
     if opts.use_fesd:
         time_steps = w_opt[prob.ind_h]
