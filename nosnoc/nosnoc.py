@@ -935,12 +935,17 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
-
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
+        # CasADi Functions
+        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
+        self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
+        self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
+
+        # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
             for ii in range(casadi_length(self.g)):
                 if self.lbg[ii] != 0.0:
