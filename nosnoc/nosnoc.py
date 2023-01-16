@@ -1211,7 +1211,7 @@ class NosnocSolver():
     # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
-        :param field: in ["x", "p_global", "p_time_var"]
+        :param field: in ["x", "p_global", "p_time_var", "w"]
         :param value: np.ndarray: numerical value of appropriate size
         """
         prob = self.problem
@@ -1224,6 +1224,10 @@ class NosnocSolver():
         elif field == 'p_time_var':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
+        elif field == 'w':
+            self.w0 = value
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
         else:
             raise NotImplementedError()
 
