@@ -154,9 +154,7 @@ def main_test_least_squares_problem():
     opts.print_level = 1
     opts.n_s = 3
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
     opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
-    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
     opts.sigma_0 = 0.1
