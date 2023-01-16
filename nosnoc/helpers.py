@@ -6,12 +6,13 @@ from .nosnoc import NosnocSolver
 
 class NosnocSimLooper:
 
-    def __init__(self, solver: NosnocSolver, x0: np.ndarray, Nsim: int, p_values: Optional[np.ndarray]=None):
+    def __init__(self, solver: NosnocSolver, x0: np.ndarray, Nsim: int, p_values: Optional[np.ndarray]=None, w_init: Optional[list]=None):
         """
         :param solver: NosnocSolver to be called in a loop
         :param x0: np.ndarray: initial state
         :param Nsim: int: number of simulation steps
-        :param: p_values: Optional np.ndarray of shape (Nsim, n_p_glob), parameter values p_glob are updated at each simulation step accordingly.
+        :param p_values: Optional np.ndarray of shape (Nsim, n_p_glob), parameter values p_glob are updated at each simulation step accordingly.
+        :param w_init: Optional: a list of np.ndarray with w values to initialize the solver at each step.
         """
         # check that NosnocSolver solves a pure simulation problem.
         if not solver.problem.is_sim_problem():
@@ -24,7 +25,7 @@ class NosnocSimLooper:
                 raise ValueError("p_values should have shape (Nsim, n_p_glob).")
 
         # create
-        self.solver = solver
+        self.solver: NosnocSolver = solver
         self.Nsim = Nsim
 
         self.xcurrent = x0
@@ -35,6 +36,7 @@ class NosnocSimLooper:
         self.alpha_sim = []
         self.w_sim = []
         self.w_all = []
+        self.w_init = w_init
 
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy))
 
@@ -42,6 +44,8 @@ class NosnocSimLooper:
         for i in range(self.Nsim):
             # set values
             self.solver.set("x", self.xcurrent)
+            if self.w_init is not None:
+                self.solver.set("w", self.w_init[i])
             if self.p_values is not None:
                 self.solver.set("p_global", self.p_values[i, :])
             # solve
@@ -51,9 +55,9 @@ class NosnocSimLooper:
             self.xcurrent = self.X_sim[-1]
             self.cpu_nlp[i, :] = results["cpu_time_nlp"]
             self.time_steps = np.concatenate((self.time_steps, results["time_steps"]))
-            self.theta_sim += results["theta_list"]
-            self.lambda_sim += results["lambda_list"]
-            self.alpha_sim += results["alpha_list"]
+            self.theta_sim.append(results["theta_list"])
+            self.lambda_sim.append(results["lambda_list"])
+            self.alpha_sim.append(results["alpha_list"])
             self.w_sim += [results["w_sol"]]
             self.w_all += [results["w_all"]]
 

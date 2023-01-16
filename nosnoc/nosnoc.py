@@ -8,7 +8,7 @@ from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
-from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix
+from nosnoc.utils import casadi_length, print_casadi_vector, casadi_vertcat_list, casadi_sum_list, flatten_layer, flatten, increment_indices, create_empty_list_matrix, flatten_outer_layers
 from nosnoc.rk_utils import rk4_on_timegrid
 
 
@@ -237,7 +237,7 @@ class NosnocModel:
         theta_smooth = casadi_vertcat_list(theta_list)
         mu_smooth = casadi_vertcat_list(mu_smooth_list)
 
-        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x, self.p], [f_x_smooth])
+        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
         self.theta_smooth_fun = Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
         self.mu_smooth_fun = Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
         self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
@@ -795,7 +795,7 @@ class NosnocProblem(NosnocFormulationObject):
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
             fe = FiniteElement(self.opts, self.model, self.ocp, ctrl_idx, fe_idx=ii, prev_fe=prev_fe)
-            self._add_finite_element(fe)
+            self._add_finite_element(fe, ctrl_idx)
             control_stage.append(fe)
             prev_fe = fe
         return control_stage
@@ -821,21 +821,21 @@ class NosnocProblem(NosnocFormulationObject):
             self.stages.append(stage)
             prev_fe = stage[-1]
 
-    def _add_finite_element(self, fe: FiniteElement):
+    def _add_finite_element(self, fe: FiniteElement, ctrl_idx: int):
         w_len = casadi_length(self.w)
         self._add_primal_vector(fe.w, fe.lbw, fe.ubw, fe.w0)
 
         # update all indices
         self.ind_h.append(fe.ind_h + w_len)
-        self.ind_x.append(increment_indices(fe.ind_x, w_len))
-        self.ind_x_cont.append(increment_indices(fe.ind_x[-1], w_len))
-        self.ind_v.append(increment_indices(fe.ind_v, w_len))
-        self.ind_theta.append(increment_indices(fe.ind_theta, w_len))
-        self.ind_lam.append(increment_indices(fe.ind_lam, w_len))
-        self.ind_mu.append(increment_indices(fe.ind_mu, w_len))
-        self.ind_alpha.append(increment_indices(fe.ind_alpha, w_len))
-        self.ind_lambda_n.append(increment_indices(fe.ind_lambda_n, w_len))
-        self.ind_lambda_p.append(increment_indices(fe.ind_lambda_p, w_len))
+        self.ind_x[ctrl_idx].append(increment_indices(fe.ind_x, w_len))
+        self.ind_x_cont[ctrl_idx].append(increment_indices(fe.ind_x[-1], w_len))
+        self.ind_v[ctrl_idx].append(increment_indices(fe.ind_v, w_len))
+        self.ind_theta[ctrl_idx].append(increment_indices(fe.ind_theta, w_len))
+        self.ind_lam[ctrl_idx].append(increment_indices(fe.ind_lam, w_len))
+        self.ind_mu[ctrl_idx].append(increment_indices(fe.ind_mu, w_len))
+        self.ind_alpha[ctrl_idx].append(increment_indices(fe.ind_alpha, w_len))
+        self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
+        self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
@@ -870,15 +870,16 @@ class NosnocProblem(NosnocFormulationObject):
         self.stages: list[list[FiniteElementBase]] = []
 
         # Index vectors
-        self.ind_x = []
-        self.ind_x_cont = []
-        self.ind_v = []
-        self.ind_theta = []
-        self.ind_lam = []
-        self.ind_mu = []
-        self.ind_alpha = []
-        self.ind_lambda_n = []
-        self.ind_lambda_p = []
+        self.ind_x = create_empty_list_matrix((opts.N_stages,))
+        self.ind_x_cont = create_empty_list_matrix((opts.N_stages,))
+        self.ind_v = create_empty_list_matrix((opts.N_stages,))
+        self.ind_theta = create_empty_list_matrix((opts.N_stages,))
+        self.ind_lam = create_empty_list_matrix((opts.N_stages,))
+        self.ind_mu = create_empty_list_matrix((opts.N_stages,))
+        self.ind_alpha = create_empty_list_matrix((opts.N_stages,))
+        self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
+        self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
+
         self.ind_u = []
         self.ind_h = []
         self.ind_v_global = []
@@ -929,17 +930,22 @@ class NosnocProblem(NosnocFormulationObject):
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        x_terminal = self.w[self.ind_x[-1][-1]]
+        x_terminal = self.w[self.ind_x[-1][-1][-1]]
         g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
-
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
+        # CasADi Functions
+        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
+        self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
+        self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
+
+        # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
             for ii in range(casadi_length(self.g)):
                 if self.lbg[ii] != 0.0:
@@ -949,10 +955,6 @@ class NosnocProblem(NosnocFormulationObject):
             self.lbg = np.array([])
             self.ubg = np.array([])
 
-        # CasADi Functions
-        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
-        self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
-        self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
     def print(self):
         print("g:")
@@ -976,28 +978,29 @@ class NosnocProblem(NosnocFormulationObject):
             return False
         return True
 
+def get_cont_algebraic_indices(ind_alg: list):
+    return [ind_rk[-1] for ind_fe in ind_alg for ind_rk in ind_fe]
+
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
 
     results = dict()
-    results["x_out"] = w_opt[prob.ind_x[-1][-1]]
+    results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
-    results["x_list"] = [w_opt[ind] for ind in prob.ind_x_cont]
+    results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
 
     x0 = prob.model.x0
-    ind_x_all = [ind for ind_list in prob.ind_x[:] for ind in ind_list]
+    ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
-
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
-    results["v_list"] = [w_opt[ind] for ind in prob.ind_v]
-    results["theta_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_theta]
-    results["lambda_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lam]
-    results["mu_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_mu]
 
+    results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
+    results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
+    # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
     # if opts.pss_mode == PssMode.STEP:
-    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_alpha]
-    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_n]
-    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in prob.ind_lambda_p]
+    results["alpha_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)]
+    results["lambda_n_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_n)]
+    results["lambda_p_list"] = [w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_p)]
 
     if opts.use_fesd:
         time_steps = w_opt[prob.ind_h]
@@ -1064,6 +1067,8 @@ class NosnocSolver():
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
             for ind in prob.ind_x:
                 self.w0[ind] = x0
+        elif opts.initialization_strategy == InitializationStrategy.EXTERNAL:
+            pass
         # This is experimental
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             # print(f"updating w0 with RK4 smoothened")
@@ -1084,7 +1089,7 @@ class NosnocSolver():
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k + 1]
-                    self.w0[prob.ind_x[i + 1][k]] = x_ki
+                    self.w0[prob.ind_x[0][i][k]] = x_ki
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
@@ -1099,18 +1104,18 @@ class NosnocSolver():
                     for s in range(self.model.dims.n_sys):
                         ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]),
                                             sum(self.model.dims.n_f_sys[:s + 1]))
-                        self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        self.w0[prob.ind_theta[0][i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_lam[0][i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_mu[0][i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
-                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][
-                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i + 1][k] + prob.ind_h
+                    db_updated_indices += prob.ind_theta[0][i][k][s] + prob.ind_lam[0][i][k][
+                        s] + prob.ind_mu[0][i][k][s] + prob.ind_x[0][i][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[prob.ind_x[i + 1][-1]] = x_ki
-                    db_updated_indices += prob.ind_x[i + 1][-1]
+                    self.w0[prob.ind_x[0][i][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[0][i][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)
@@ -1135,7 +1140,7 @@ class NosnocSolver():
 
         if opts.print_level:
             print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t CPU time \t iter \t status')
+            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
 
@@ -1163,6 +1168,7 @@ class NosnocSolver():
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
             nlp_res = norm_inf(sol['g']).full()[0][0]
+            cost_val = norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -1172,7 +1178,7 @@ class NosnocSolver():
 
             if opts.print_level:
                 print(
-                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
+                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cost_val:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
                 )
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
@@ -1208,7 +1214,7 @@ class NosnocSolver():
     # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
-        :param field: in ["x", "p_global", "p_time_var"]
+        :param field: in ["x", "p_global", "p_time_var", "w"]
         :param value: np.ndarray: numerical value of appropriate size
         """
         prob = self.problem
@@ -1221,6 +1227,10 @@ class NosnocSolver():
         elif field == 'p_time_var':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
+        elif field == 'w':
+            self.w0 = value
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
         else:
             raise NotImplementedError()
 

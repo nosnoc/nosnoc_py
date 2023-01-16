@@ -18,7 +18,8 @@ class IrkSchemes(Enum):
 
 class InitializationStrategy(Enum):
     ALL_XCURRENT_W0_START = 0
-    RK4_SMOOTHENED = 1  # experimental
+    EXTERNAL = 1 # let user do from outsid
+    RK4_SMOOTHENED = 2  # experimental
     # Other ideas
     # OLD_SOLUTION = 1
     # lp_initialization
