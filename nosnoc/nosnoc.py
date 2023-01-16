@@ -1094,7 +1094,7 @@ class NosnocSolver():
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k + 1]
-                    self.w0[prob.ind_x[i][k]] = x_ki
+                    self.w0[prob.ind_x[0][i][k]] = x_ki
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
@@ -1109,18 +1109,18 @@ class NosnocSolver():
                     for s in range(self.model.dims.n_sys):
                         ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]),
                                             sum(self.model.dims.n_f_sys[:s + 1]))
-                        self.w0[prob.ind_theta[i][k][s]] = theta_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_lam[i][k][s]] = lam_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_mu[i][k][s]] = mu_ki[s].full().flatten()
+                        self.w0[prob.ind_theta[0][i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_lam[0][i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        self.w0[prob.ind_mu[0][i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
-                    db_updated_indices += prob.ind_theta[i][k][s] + prob.ind_lam[i][k][
-                        s] + prob.ind_mu[i][k][s] + prob.ind_x[i][k] + prob.ind_h
+                    db_updated_indices += prob.ind_theta[0][i][k][s] + prob.ind_lam[0][i][k][
+                        s] + prob.ind_mu[0][i][k][s] + prob.ind_x[0][i][k] + prob.ind_h
                 if opts.irk_time_points[-1] != 1.0:
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[prob.ind_x[i][-1]] = x_ki
-                    db_updated_indices += prob.ind_x[i][-1]
+                    self.w0[prob.ind_x[0][i][-1]] = x_ki
+                    db_updated_indices += prob.ind_x[0][i][-1]
 
             # print("w0 after RK4 init:")
             # print(self.w0)
