@@ -779,7 +779,8 @@ class FiniteElement(FiniteElementBase):
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
             self.cost += opts.rho_h * nu_k * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
-            self.add_constraint(nu_k)
+            self.add_constraint(nu_k*delta_h_ki)
+
         return
 
 
