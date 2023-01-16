@@ -90,7 +90,7 @@ class NosnocOpts:
     def preprocess(self):
         validate(self)
 
-        self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
+        # self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
         # TODO: clean this up: only do this if not set by user.
         # IPOPT tol should be smaller than outer tol, but not too much
         # Note IPOPT option list: https://coin-or.github.io/Ipopt/OPTIONS.html
