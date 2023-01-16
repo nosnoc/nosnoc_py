@@ -948,6 +948,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+            self.g_lsq = copy(self.g)
             for ii in range(casadi_length(self.g)):
                 if self.lbg[ii] != 0.0:
                     raise Exception(f"least_squares constraint handling only supported if all lbg, ubg == 0.0, got {self.lbg[ii]=}, {self.ubg[ii]=}, {self.g[ii]=}")
@@ -1201,6 +1202,19 @@ class NosnocSolver():
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
+
+        # print constraint violation
+        if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol])
+            g_val = prob.g_fun(w_opt, p_val).full().flatten()
+            if max(abs(g_val)) > threshold:
+                print("\nconstraint violations:")
+                for ii in range(len(g_val)):
+                    if g_val[ii] > threshold:
+                        print(f"g_val[{ii}] = {g_val[ii]} expr: {prob.g_lsq[ii]}")
+
+        # if cost_val > opts.comp_tol * 1e2:
+        #     breakpoint()
 
         # stats
         results["cpu_time_nlp"] = cpu_time_nlp
