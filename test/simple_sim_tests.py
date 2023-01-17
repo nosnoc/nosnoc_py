@@ -77,7 +77,7 @@ class SimpleTests(unittest.TestCase):
                         opts.N_finite_elements = Nfe
                         opts.pss_mode = pss_mode
                         opts.cross_comp_mode = cross_comp_mode
-                        opts.print_level = 1
+                        opts.print_level = 0
                         try:
                             test_opts(opts, model=model)
                         except:
@@ -172,7 +172,7 @@ class SimpleTests(unittest.TestCase):
 
         for initialization_strategy in nosnoc.InitializationStrategy:
             opts = get_default_options()
-            opts.print_level = 1
+            opts.print_level = 0
             opts.initialization_strategy = initialization_strategy
             print(f"\ntesting initialization_strategy = {initialization_strategy}")
             try:
