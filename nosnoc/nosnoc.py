@@ -1060,8 +1060,8 @@ class NosnocSolver():
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
-            print("\nerror creating solver for problem above:\n")
-            print(f"\nerror is \n\n: {err}")
+            print("\nerror creating solver for problem above.")
+            raise err
 
     def initialize(self):
         opts = self.opts
