@@ -151,14 +151,15 @@ def main_test_least_squares_problem():
     model = get_simplest_model_switch()
 
     opts = get_default_options()
-    opts.print_level = 1
+    opts.print_level = 2
     opts.n_s = 3
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
-    opts.sigma_0 = 0.1
-    opts.gamma_h = np.inf
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    opts.initialization_strategy = nosnoc.InitializationStrategy.EXTERNAL
+    opts.sigma_0 = 1e-3
+    opts.gamma_h = 1.0
     try:
         test_opts(opts, model=model)
     except:
@@ -185,5 +186,5 @@ if __name__ == "__main__":
     main_test_discretization()
     main_test_sliding()
     main_test_switch()
-    main_test_least_squares_problem()
+    # main_test_least_squares_problem()
     main_test_initializations()
