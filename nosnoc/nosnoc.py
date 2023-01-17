@@ -1,6 +1,7 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
 import time
+from copy import copy
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -950,6 +951,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
+        # copy original w0
+        self.w0_original = copy(self.w0)
+
         # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
             self.g_lsq = copy(self.g)
@@ -1048,7 +1052,6 @@ class NosnocSolver():
         # create problem
         problem = NosnocProblem(opts, model, ocp)
         self.problem = problem
-        self.w0 = problem.w0
 
         # create NLP Solver
         try:
@@ -1059,17 +1062,20 @@ class NosnocSolver():
             print(f"{opts=}")
             print("\nerror creating solver for problem above:\n")
             print(f"\nerror is \n\n: {err}")
-            import pdb
-            pdb.set_trace()
+            breakpoint()
 
     def initialize(self):
         opts = self.opts
         prob = self.problem
         x0 = prob.model.x0
 
-        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_W0_START:
+        # print("\nw \t\t\t w0 \t\t w0_original:")
+        # for i in range(len(prob.w0)):
+        #     print(f"{prob.w[i].name():<15} \t {prob.w0[i]:4f} \t {prob.w0_original[i]:3f}")
+
+        if opts.initialization_strategy in [InitializationStrategy.ALL_XCURRENT_W0_START, InitializationStrategy.ALL_XCURRENT_WOPT_PREV]:
             for ind in prob.ind_x:
-                self.w0[ind] = x0
+                prob.w0[ind] = x0
         elif opts.initialization_strategy == InitializationStrategy.EXTERNAL:
             pass
         # This is experimental
@@ -1092,7 +1098,7 @@ class NosnocSolver():
                 # print(f"{Xrk4=}")
                 for k in range(opts.n_s):
                     x_ki = Xrk4[k + 1]
-                    self.w0[prob.ind_x[0][i][k]] = x_ki
+                    prob.w0[prob.ind_x[0][i][k]] = x_ki
                     # NOTE: we don't use lambda_smooth_fun, since it gives negative lambdas
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
@@ -1107,9 +1113,9 @@ class NosnocSolver():
                     for s in range(self.model.dims.n_sys):
                         ind_theta_s = range(sum(self.model.dims.n_f_sys[:s]),
                                             sum(self.model.dims.n_f_sys[:s + 1]))
-                        self.w0[prob.ind_theta[0][i][k][s]] = theta_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_lam[0][i][k][s]] = lam_ki[ind_theta_s].full().flatten()
-                        self.w0[prob.ind_mu[0][i][k][s]] = mu_ki[s].full().flatten()
+                        prob.w0[prob.ind_theta[0][i][k][s]] = theta_ki[ind_theta_s].full().flatten()
+                        prob.w0[prob.ind_lam[0][i][k][s]] = lam_ki[ind_theta_s].full().flatten()
+                        prob.w0[prob.ind_mu[0][i][k][s]] = mu_ki[s].full().flatten()
                         # TODO: ind_v
                     db_updated_indices += prob.ind_theta[0][i][k][s] + prob.ind_lam[0][i][k][
                         s] + prob.ind_mu[0][i][k][s] + prob.ind_x[0][i][k] + prob.ind_h
@@ -1117,14 +1123,13 @@ class NosnocSolver():
                     raise NotImplementedError
                 else:
                     # Xk_end
-                    self.w0[prob.ind_x[0][i][-1]] = x_ki
+                    prob.w0[prob.ind_x[0][i][-1]] = x_ki
                     db_updated_indices += prob.ind_x[0][i][-1]
 
             # print("w0 after RK4 init:")
-            # print(self.w0)
-            missing_indices = sorted(set(range(len(self.w0))) - set(db_updated_indices))
+            # print(prob.w0)
+            missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
-            # import pdb; pdb.set_trace()
 
     def solve(self) -> dict:
         """ Solves the NLP with the currently stored parameters.
@@ -1134,7 +1139,7 @@ class NosnocSolver():
         self.initialize()
         opts = self.opts
         prob = self.problem
-        w0 = self.w0.copy()
+        w0 = prob.w0
 
         w_all = [w0.copy()]
         complementarity_stats = opts.max_iter_homotopy * [None]
@@ -1217,6 +1222,8 @@ class NosnocSolver():
         # if cost_val > opts.comp_tol * 1e2:
         #     breakpoint()
 
+        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
+            prob.w0[:] = w_opt[:]
         # stats
         results["cpu_time_nlp"] = cpu_time_nlp
         results["nlp_iter"] = nlp_iter
@@ -1244,7 +1251,7 @@ class NosnocSolver():
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
         elif field == 'w':
-            self.w0 = value
+            prob.w0 = value
             if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
                 raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
         else:

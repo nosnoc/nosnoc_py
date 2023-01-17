@@ -18,6 +18,7 @@ class IrkSchemes(Enum):
 
 class InitializationStrategy(Enum):
     ALL_XCURRENT_W0_START = auto()
+    ALL_XCURRENT_WOPT_PREV = auto()
     EXTERNAL = auto() # let user do from outsid
     RK4_SMOOTHENED = auto()  # experimental
     # Other ideas
