@@ -56,7 +56,8 @@ class TestOcp(unittest.TestCase):
         opts.pss_mode = pss_mode
         opts.homotopy_update_rule = homotopy_update_rule
 
-        print(f"test setting: {opts}")
+        print(f"test setting: equidistant_control_grid {equidistant_control_grid}" +
+              f"\n{step_equilibration}\n{irk_representation}\n{irk_scheme}\n{pss_mode}\n{homotopy_update_rule}")
         results = solve_ocp(opts)
 
         x_traj = results["x_traj"]
