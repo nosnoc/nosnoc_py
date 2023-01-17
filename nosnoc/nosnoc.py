@@ -1215,9 +1215,6 @@ class NosnocSolver():
                     if g_val[ii] > threshold:
                         print(f"g_val[{ii}] = {g_val[ii]} expr: {prob.g_lsq[ii]}")
 
-        # if cost_val > opts.comp_tol * 1e2:
-        #     breakpoint()
-
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
             prob.w0[:] = w_opt[:]
         # stats
