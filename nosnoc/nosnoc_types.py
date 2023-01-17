@@ -31,6 +31,7 @@ class StepEquilibrationMode(Enum):
     L2_RELAXED_SCALED = 2
     L2_RELAXED = 3
     DIRECT = 4
+    DIRECT_COMPLEMENTARITY = 5
     # NOTE: tested in test_ocp_motor
 
 

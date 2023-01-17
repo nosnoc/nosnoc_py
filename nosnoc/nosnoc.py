@@ -749,7 +749,7 @@ class FiniteElement(FiniteElementBase):
                 self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
         return
 
-    def step_equilibration(self) -> None:
+    def step_equilibration(self, sigma_p: SX) -> None:
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
@@ -780,7 +780,11 @@ class FiniteElement(FiniteElementBase):
             self.cost += opts.rho_h * nu_k * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
             self.add_constraint(nu_k*delta_h_ki)
-
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT_COMPLEMENTARITY:
+            self.create_complementarity([nu_k], delta_h_ki, sigma_p)
+            # self.add_constraint(nu_k)
+        # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
+        #     self.add_constraint(tanh(nu_k)*delta_h_ki)
         return
 
 
@@ -905,7 +909,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.create_complementarity_constraints(sigma_p)
 
                 # 3) Step Equilibration
-                fe.step_equilibration()
+                fe.step_equilibration(sigma_p)
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
