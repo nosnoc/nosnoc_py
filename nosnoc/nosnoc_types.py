@@ -1,68 +1,68 @@
-from enum import Enum
+from enum import Enum, auto
 
 
 class MpccMode(Enum):
-    SCHOLTES_INEQ = 0
-    SCHOLTES_EQ = 1
-    FISCHER_BURMEISTER = 2
-    # KANZOW_SCHWARTZ = 3
+    SCHOLTES_INEQ = auto()
+    SCHOLTES_EQ = auto()
+    FISCHER_BURMEISTER = auto()
+    # KANZOW_SCHWARTZ = auto()
     # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
     # NOTE: tested in simple_sim_tests
 
 
 class IrkSchemes(Enum):
-    RADAU_IIA = 0
-    GAUSS_LEGENDRE = 1
+    RADAU_IIA = auto()
+    GAUSS_LEGENDRE = auto()
     # NOTE: tested in simple_sim_tests
 
 
 class InitializationStrategy(Enum):
-    ALL_XCURRENT_W0_START = 0
-    EXTERNAL = 1 # let user do from outsid
-    RK4_SMOOTHENED = 2  # experimental
+    ALL_XCURRENT_W0_START = auto()
+    EXTERNAL = auto() # let user do from outsid
+    RK4_SMOOTHENED = auto()  # experimental
     # Other ideas
-    # OLD_SOLUTION = 1
+    # OLD_SOLUTION = auto()
     # lp_initialization
 
 
 class StepEquilibrationMode(Enum):
-    HEURISTIC_MEAN = 0
-    HEURISTIC_DELTA = 1
-    L2_RELAXED_SCALED = 2
-    L2_RELAXED = 3
-    DIRECT = 4
-    DIRECT_COMPLEMENTARITY = 5
+    HEURISTIC_MEAN = auto()
+    HEURISTIC_DELTA = auto()
+    L2_RELAXED_SCALED = auto()
+    L2_RELAXED = auto()
+    DIRECT = auto()
+    DIRECT_COMPLEMENTARITY = auto()
     # NOTE: tested in test_ocp_motor
 
 
 class CrossComplementarityMode(Enum):
-    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = 0  # nosnoc 1
-    SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = 1  # nosnoc 3
+    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = auto()  # nosnoc 1
+    SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = auto()  # nosnoc 3
     # NOTE: tested in simple_sim_tests
 
 
 class IrkRepresentation(Enum):
-    INTEGRAL = 0
-    DIFFERENTIAL = 1
-    DIFFERENTIAL_LIFT_X = 2
+    INTEGRAL = auto()
+    DIFFERENTIAL = auto()
+    DIFFERENTIAL_LIFT_X = auto()
     # NOTE: tested in test_ocp
 
 
 class HomotopyUpdateRule(Enum):
-    LINEAR = 0
-    SUPERLINEAR = 1
+    LINEAR = auto()
+    SUPERLINEAR = auto()
 
 
 class ConstraintHandling(Enum):
-    EXACT = 0
-    LEAST_SQUARES = 1
+    EXACT = auto()
+    LEAST_SQUARES = auto()
 
 class PssMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).
     """
     # NOTE: tested in simple_sim_tests, test_ocp_motor
-    STEWART = 0
+    STEWART = auto()
     """
     Stewart representaion
 
@@ -71,7 +71,7 @@ class PssMode(Enum):
     lambda_i >= 0;    for all i = 1,..., n_sys
     theta_i >= 0;     for all i = 1,..., n_sys
     """
-    STEP = 1
+    STEP = auto()
     """
     Step representaion
 
