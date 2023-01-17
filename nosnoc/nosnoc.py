@@ -1240,7 +1240,7 @@ class NosnocSolver():
             prob.model.x0 = value
         elif field == 'x':
             if value.shape[0] == self.opts.N_stages:
-                # Shape is equal to the number of stages
+                # Shape is equal to the number of control stages
                 for i, sub_idx in enumerate(prob.ind_x):
                     for ssub_idx in sub_idx:
                         for sssub_idx in ssub_idx:
@@ -1253,9 +1253,11 @@ class NosnocSolver():
                         for sssub_idx in ssub_idx:
                             prob.w0[sssub_idx] = value[i, :]
                         i += 1
+            else:
+                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
 
             if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
-                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
+                raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')
         elif field == 'u':
             prob.w0[prob.ind_u] = value
         elif field == 'p_global':
