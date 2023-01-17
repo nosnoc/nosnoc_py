@@ -966,13 +966,10 @@ class NosnocProblem(NosnocFormulationObject):
         print("g:")
         print_casadi_vector(self.g)
         print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
-        print("w:")
-        print_casadi_vector(self.w)
-        print(f"lbw, ubw\n{np.vstack((self.lbw, self.ubw)).T}")
-        print("w0")
-        for xx in self.w0:
-            print(xx)
-        print(f"cost:\n{self.cost}")
+        print("\nw \t\t\t w0 \t\t lbw \t\t ubw:")
+        for i in range(len(self.lbw)):
+            print(f"{self.w[i].name():<15} \t {self.w0[i]:4f} \t {self.lbw[i]:3f} \t {self.ubw[i]:3f}")
+        print(f"\ncost:\n{self.cost}")
 
 
     def is_sim_problem(self):
