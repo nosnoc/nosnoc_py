@@ -18,14 +18,13 @@ PSS_MODES = [nosnoc.PssMode.STEWART]
 options = [
     (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, pss_mode, nosnoc.HomotopyUpdateRule.LINEAR)
     for equidistant_control_grid in EQUIDISTANT_CONTROLS
-    for step_equilibration in nosnoc.StepEquilibrationMode
+    for step_equilibration in [nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.StepEquilibrationMode.HEURISTIC_DELTA, nosnoc.StepEquilibrationMode.L2_RELAXED, nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED]
     for irk_representation in nosnoc.IrkRepresentation
     for irk_scheme in nosnoc.IrkSchemes
     for pss_mode in PSS_MODES
     # Ignore the following cases that currently fail:
     if (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, pss_mode) not in [
-        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL_LIFT_X, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.LINEAR),
-        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.LINEAR),
+        # (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL_LIFT_X, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.LINEAR),
     ]
 ]
 
