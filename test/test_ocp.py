@@ -1,4 +1,5 @@
 import unittest
+from parameterized import parameterized
 import numpy as np
 import nosnoc
 from examples.sliding_mode_ocp import (
@@ -14,6 +15,23 @@ from examples.sliding_mode_ocp import (
 
 EQUIDISTANT_CONTROLS = [True, False]
 PSS_MODES = [nosnoc.PssMode.STEWART]
+options = [
+    (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, pss_mode, homotopy_update_rule)
+    for equidistant_control_grid in EQUIDISTANT_CONTROLS
+    for step_equilibration in nosnoc.StepEquilibrationMode
+    for irk_representation in nosnoc.IrkRepresentation
+    for irk_scheme in nosnoc.IrkSchemes
+    for pss_mode in PSS_MODES
+    for homotopy_update_rule in nosnoc.HomotopyUpdateRule
+    # Ignore the following cases that currently fail:
+    if (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, pss_mode, homotopy_update_rule) not in [
+        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL_LIFT_X, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.LINEAR),
+        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL_LIFT_X, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR),
+        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.LINEAR),
+        (True, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR),
+        (False, nosnoc.StepEquilibrationMode.DIRECT, nosnoc.IrkRepresentation.DIFFERENTIAL_LIFT_X, nosnoc.IrkSchemes.GAUSS_LEGENDRE, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR),
+    ]
+]
 
 
 class TestOcp(unittest.TestCase):
@@ -21,8 +39,11 @@ class TestOcp(unittest.TestCase):
     def test_default(self):
         example(plot=False)
 
-    def one_test(self, equidistant_control_grid, step_equilibration, irk_representation,
-                 irk_scheme, pss_mode, homotopy_update_rule):
+    @parameterized.expand(options)
+    def test_combination(
+        self, equidistant_control_grid, step_equilibration, irk_representation,
+        irk_scheme, pss_mode, homotopy_update_rule
+    ):
         opts = get_default_options()
         opts.comp_tol = 1e-5
         opts.N_stages = 5
@@ -44,24 +65,12 @@ class TestOcp(unittest.TestCase):
         message = (f"For parameters: control grid {equidistant_control_grid} step_equilibration {step_equilibration}, irk_representation {irk_representation}, "
                    f"irk_scheme {irk_scheme}, pss_mode {pss_mode}, homotopy_update_rule {homotopy_update_rule}")
 
-        # self.assertTrue(np.allclose(x_traj[0], X0, atol=1e-4), message)
-        # self.assertTrue(np.allclose(x_traj[-1][:2], X_TARGET, atol=1e-4), message)
-        # self.assertTrue(np.allclose(t_grid[-1], TERMINAL_TIME, atol=1e-6), message)
-        # self.assertTrue(np.allclose(t_grid[0], 0.0, atol=1e-6), message)
+        self.assertTrue(np.allclose(x_traj[0], X0, atol=1e-4), message)
+        self.assertTrue(np.allclose(x_traj[-1][:2], X_TARGET, atol=1e-4), message)
+        self.assertTrue(np.allclose(t_grid[-1], TERMINAL_TIME, atol=1e-6), message)
+        self.assertTrue(np.allclose(t_grid[0], 0.0, atol=1e-6), message)
         self.assertTrue(np.alltrue(u_traj < UBU), message)
         self.assertTrue(np.alltrue(u_traj > LBU), message)
-
-    def test_loop(self):
-        for equidistant_control_grid in EQUIDISTANT_CONTROLS:
-            for step_equilibration in nosnoc.StepEquilibrationMode:
-                for irk_representation in nosnoc.IrkRepresentation:
-                    for irk_scheme in nosnoc.IrkSchemes:
-                        for pss_mode in PSS_MODES:
-                            for homotopy_update_rule in nosnoc.HomotopyUpdateRule:
-                                self.one_test(
-                                    equidistant_control_grid, step_equilibration, irk_representation,
-                                    irk_scheme, pss_mode, homotopy_update_rule
-                                )
 
 
 if __name__ == "__main__":

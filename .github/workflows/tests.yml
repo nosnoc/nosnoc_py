@@ -20,7 +20,7 @@ jobs:
         source env/bin/activate
         which python
         pip install -e .
-        pip install pytest pytest-cov
+        pip install -r requirements-test.txt
 
     - name: Run tests
       shell: bash

@@ -1064,7 +1064,6 @@ class NosnocSolver():
             print(f"{opts=}")
             print("\nerror creating solver for problem above:\n")
             print(f"\nerror is \n\n: {err}")
-            breakpoint()
 
     def initialize(self):
         opts = self.opts
