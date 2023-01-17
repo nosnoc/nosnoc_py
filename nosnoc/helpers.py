@@ -41,9 +41,10 @@ class NosnocSimLooper:
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy))
 
     def run(self) -> None:
+        """Run the simulation loop."""
         for i in range(self.Nsim):
             # set values
-            self.solver.set("x", self.xcurrent)
+            self.solver.set("x0", self.xcurrent)
             if self.w_init is not None:
                 self.solver.set("w", self.w_init[i])
             if self.p_values is not None:

@@ -1060,9 +1060,8 @@ class NosnocSolver():
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
-            print("\nerror creating solver for problem above:\n")
-            print(f"\nerror is \n\n: {err}")
-            breakpoint()
+            print("\nerror creating solver for problem above.")
+            raise err
 
     def initialize(self):
         opts = self.opts
@@ -1230,13 +1229,37 @@ class NosnocSolver():
     # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
-        :param field: in ["x", "p_global", "p_time_var", "w"]
+        Set values.
+
+        :param field: in ["x0", "x", "u", "p_global", "p_time_var", "w"]
         :param value: np.ndarray: numerical value of appropriate size
         """
         prob = self.problem
         dims = prob.model.dims
-        if field == 'x':
+        if field == 'x0':
             prob.model.x0 = value
+        elif field == 'x':
+            if value.shape[0] == self.opts.N_stages:
+                # Shape is equal to the number of control stages
+                for i, sub_idx in enumerate(prob.ind_x):
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+            elif value.shape[0] == sum(self.opts.Nfe_list):
+                # Shape is equal to the number of finite elements
+                i = 0
+                for sub_idx in prob.ind_x:
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+                        i += 1
+            else:
+                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
+
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')
+        elif field == 'u':
+            prob.w0[prob.ind_u] = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value

@@ -1,0 +1,4 @@
+# Additional test requirements
+pytest
+pytest-cov
+parameterized
