@@ -414,8 +414,6 @@ class FiniteElementZero(FiniteElementBase):
         super().__init__()
         dims = model.dims
 
-        # Indices for x are currently a list of N_stages * N_finite_elements
-        # within each cell n_s IRK stages
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
