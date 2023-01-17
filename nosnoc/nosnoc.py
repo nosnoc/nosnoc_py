@@ -1069,10 +1069,6 @@ class NosnocSolver():
         prob = self.problem
         x0 = prob.model.x0
 
-        # print("\nw \t\t\t w0 \t\t w0_original:")
-        # for i in range(len(prob.w0)):
-        #     print(f"{prob.w[i].name():<15} \t {prob.w0[i]:4f} \t {prob.w0_original[i]:3f}")
-
         if opts.initialization_strategy in [InitializationStrategy.ALL_XCURRENT_W0_START, InitializationStrategy.ALL_XCURRENT_WOPT_PREV]:
             for ind in prob.ind_x:
                 prob.w0[ind] = x0
