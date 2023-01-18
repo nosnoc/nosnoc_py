@@ -1106,7 +1106,11 @@ class NosnocSolverBase(ABC):
 
 class NosnocSolver(NosnocSolverBase):
     """
-    Main solver class which generates and solves an NLP based on the given options, dynamic model, and (optionally) the ocp data.
+    Main solver class which solves the nonsmooth problem by applying a homotopy
+    and solving the NLP subproblems using IPOPT.
+
+    The nonsmooth problem is formulated internally based on the given options,
+    dynamic model, and (optionally) the ocp data.
     """
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         """Constructor.
