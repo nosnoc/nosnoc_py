@@ -873,7 +873,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ocp = ocp
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
-        self.stages: list[list[FiniteElementBase]] = []
+        self.stages: list[list[FiniteElement]] = []
 
         # Index vectors
         self.ind_x = create_empty_list_matrix((opts.N_stages,))
