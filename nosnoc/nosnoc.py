@@ -693,13 +693,14 @@ class FiniteElement(FiniteElementBase):
 
 
 
-    def create_complementarity(self, x: List[SX], y: SX, sigma: SX) -> None:
+    def create_complementarity(self, x: List[SX], y: SX, sigma: SX, tau: SX) -> None:
         """
         adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
         :param x: list of SX
         :param y: SX
         :param sigma: smoothing parameter
+        :param tau: another smoothing parameter
         """
         opts = self.opts
 
@@ -715,6 +716,23 @@ class FiniteElement(FiniteElementBase):
             for j in range(n):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
+            if len(x) != 1:
+                raise Exception("not supported")
+            g_comp = SX.zeros(4*n, 1)
+            # classic FB
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+            # augment 1
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j+n] = (x_i[j] - sigma) * sqrt(tau) * 1e0
+                g_comp[j+2*n] = (y[j] - sigma) * sqrt(tau) * 1e0
+            # augment 2
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j+3*n] = 1e3* (g_comp[j]) * sqrt(1+(x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
@@ -728,29 +746,29 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: SX) -> None:
+    def create_complementarity_constraints(self, sigma_p: SX, tau: SX) -> None:
         opts = self.opts
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)],
-                                            self.Theta(stage=j), sigma_p)
+                                            self.Theta(stage=j), sigma_p, tau)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 self.create_complementarity([self.Theta(stage=j)],
-                            self.prev_fe.Lambda(stage=-1), sigma_p)
+                            self.prev_fe.Lambda(stage=-1), sigma_p, tau)
                 for jj in range(opts.n_s):
                     # within fe
                     self.create_complementarity([self.Theta(stage=j)],
-                                    self.Lambda(stage=jj), sigma_p)
+                                    self.Lambda(stage=jj), sigma_p, tau)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
                 # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
-                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
+                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau)
         return
 
-    def step_equilibration(self, sigma_p: SX) -> None:
+    def step_equilibration(self, sigma_p: SX, tau: SX) -> None:
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
@@ -782,7 +800,7 @@ class FiniteElement(FiniteElementBase):
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
             self.add_constraint(nu_k*delta_h_ki)
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT_COMPLEMENTARITY:
-            self.create_complementarity([nu_k], delta_h_ki, sigma_p)
+            self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau)
             # self.add_constraint(nu_k)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
         #     self.add_constraint(tanh(nu_k)*delta_h_ki)
@@ -892,13 +910,14 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
-        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p)
+        tau = SX.sym('tau')  # homotopy parameter
+        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
         # Generate all the variables we need
         self.__create_primal_variables()
 
         fe: FiniteElement
-        stage: List[FiniteElementBase]
+        stage: List[FiniteElement]
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
@@ -907,10 +926,10 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                fe.create_complementarity_constraints(sigma_p)
+                fe.create_complementarity_constraints(sigma_p, tau)
 
                 # 3) Step Equilibration
-                fe.step_equilibration(sigma_p)
+                fe.step_equilibration(sigma_p, tau)
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
@@ -1217,9 +1236,10 @@ class NosnocSolver(NosnocSolverBase):
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
+        tau_val = 1.0
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k]), lambda00, x0))
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k, tau_val]), lambda00, x0))
 
             # solve NLP
             t = time.time()
@@ -1271,7 +1291,7 @@ class NosnocSolver(NosnocSolverBase):
 
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol])
+            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol*1e2, 1e-5])
             g_val = prob.g_fun(w_opt, p_val).full().flatten()
             if max(abs(g_val)) > threshold:
                 print("\nconstraint violations:")
