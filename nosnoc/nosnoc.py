@@ -952,7 +952,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
         # copy original w0
-        self.w0_original = copy(self.w0)
+        self.w0_original = self.w0.copy()
 
         # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
@@ -1191,7 +1191,8 @@ class NosnocSolver(NosnocSolverBase):
             # print(f"{missing_indices=}")
 
     def solve(self) -> dict:
-        """ Solves the NLP with the currently stored parameters.
+        """
+        Solves the NLP with the currently stored parameters.
 
         :return: Returns a dictionary containing ... TODO document all fields
         """
@@ -1285,6 +1286,7 @@ class NosnocSolver(NosnocSolverBase):
         results["nlp_iter"] = nlp_iter
         results["w_all"] = w_all
         results["w_sol"] = w_opt
+        results["cost_val"] = cost_val
 
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
