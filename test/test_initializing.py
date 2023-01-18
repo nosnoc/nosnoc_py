@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 import nosnoc
-from examples.sliding_mode_ocp import get_sliding_mode_ocp_description, get_default_options, X0, TERMINAL_TIME
+from examples.sliding_mode_ocp import get_sliding_mode_ocp_description, get_default_options, TERMINAL_TIME
 
 
 class TestInitialization(unittest.TestCase):

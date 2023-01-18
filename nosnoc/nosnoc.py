@@ -24,10 +24,11 @@ class NosnocModel:
 
     :param x: state variables
     :param F: set of state equations for the different regions
+    :param x0: initial state
     :param c: set of region boundaries
     :param S: determination of the boundaries region connecting
         different state equations with each boundary zone
-    :param x0: initial state
+    :param g_Stewart: List of stewart functions to define the regions (instead of S & c)
     :param u: controls
     :param p_time_var: time varying parameters
     :param p_global: global parameters
@@ -40,13 +41,13 @@ class NosnocModel:
 
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
-
     def __init__(self,
                  x: SX,
                  F: List[SX],
-                 c: List[SX],
-                 S: List[np.ndarray],
-                 x0: np.ndarray,
+                 x0: Optional[np.ndarray],
+                 c: Optional[List[SX]] = None,
+                 S: Optional[List[np.ndarray]] = None,
+                 g_Stewart: List[SX] = None,
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: SX = SX.sym('p_global_dummy', 0, 1),
@@ -58,6 +59,11 @@ class NosnocModel:
         self.F: List[SX] = F
         self.c: List[SX] = c
         self.S: List[np.ndarray] = S
+        self.g_Stewart = g_Stewart
+        # Either c and S or g is given!
+        if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
+            raise ValueError("Provide either c and S or g, not both!")
+
         self.x0: np.ndarray = x0
         self.p_time_var: SX = p_time_var
         self.p_global: SX = p_global
@@ -80,16 +86,38 @@ class NosnocModel:
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
         n_sys = len(self.F)
-        n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+        if self.g_Stewart:
+            n_c_sys = [0]  # No c used!
+        else:
+            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
         # sanity checks
         if not isinstance(self.F, list):
             raise ValueError("model.F should be a list.")
-        if not isinstance(self.c, list):
-            raise ValueError("model.c should be a list.")
-        if not isinstance(self.S, list):
-            raise ValueError("model.S should be a list.")
+        for i, f in enumerate(self.F):
+            if f.shape[1] == 1:
+                raise Warning(f"model.F item {i} is not a switching system!")
+
+        if self.g_Stewart:
+            if opts.pss_mode != PssMode.STEWART:
+                raise ValueError("model.g_Stewart is used and pss_mode should be STEWART")
+            if not isinstance(self.g_Stewart, list):
+                raise ValueError("model.g_Stewart should be a list.")
+            for i, g_Stewart in enumerate(self.g_Stewart):
+                if g_Stewart.shape[0] != self.F[i].shape[1]:
+                    raise ValueError(f"Dimensions g_Stewart and F for item {i} should be equal!")
+        else:
+            if not isinstance(self.c, list):
+                raise ValueError("model.c should be a list.")
+            if not isinstance(self.S, list):
+                raise ValueError("model.S should be a list.")
+            if len(self.c) != len(self.S):
+                raise ValueError("model.c and model.S should have the same length!")
+            for i, (fi, Si) in enumerate(zip(self.F, self.S)):
+                if fi.shape[1] != Si.shape[0]:
+                    raise ValueError(f"model.F item {i} and S {i} should have the same number of columns")
 
         # parameters
         n_p_glob = casadi_length(self.p_global)
@@ -116,8 +144,11 @@ class NosnocModel:
         self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys,
                                n_p_time_var=n_p_time_var, n_p_glob=n_p_glob)
 
-        # g_Stewart
-        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        if self.g_Stewart:
+            g_Stewart_list = self.g_Stewart
+        else:
+            g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
@@ -182,7 +213,6 @@ class NosnocModel:
         # CasADi functions for indicator and region constraint functions
         self.z = z
         self.g_Stewart_fun = Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
-        self.c_fun = Function('c_fun', [self.x, self.p], [casadi_vertcat_list(self.c)])
 
         # dynamics
         self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
@@ -199,6 +229,8 @@ class NosnocModel:
         """
         smoothing_parameter: larger -> smoother, smaller -> more exact
         """
+        if self.g_Stewart:
+            raise NotImplementedError()
         if smoothing_parameter <= 0:
             raise ValueError("smoothing_parameter should be > 0")
 
