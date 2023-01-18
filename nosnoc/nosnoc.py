@@ -967,12 +967,15 @@ class NosnocProblem(NosnocFormulationObject):
 
 
     def print(self):
-        print("g:")
-        print_casadi_vector(self.g)
-        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
+        # constraints
+        print("lbg\t\t ubg\t\t g_expr")
+        for i in range(len(self.lbg)):
+            print(f"{self.lbg[i]:7} \t {self.ubg[i]:7} \t {self.g[i]}")
+        # variables and bounds
         print("\nw \t\t\t w0 \t\t lbw \t\t ubw:")
         for i in range(len(self.lbw)):
-            print(f"{self.w[i].name():<15} \t {self.w0[i]:4f} \t {self.lbw[i]:3f} \t {self.ubw[i]:3f}")
+            print(f"{self.w[i].name():<15} \t {self.w0[i]:.2e} \t {self.lbw[i]:7} \t {self.ubw[i]:.2e}")
+        # cost
         print(f"\ncost:\n{self.cost}")
 
 
@@ -1030,13 +1033,10 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     return results
 
 
-class NosnocSolver():
-    """ Main solver class which generates and solves an NLP based on the given options, dynamic model, and (optionally) the ocp data.
-    """
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
-        """Constructor.
-        """
+class NosnocSolverBase(ABC):
 
+    @abstractmethod
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None) -> None:
         # preprocess inputs
         opts.preprocess()
         model.preprocess_model(opts)
@@ -1051,12 +1051,76 @@ class NosnocSolver():
 
         # create problem
         problem = NosnocProblem(opts, model, ocp)
-        self.problem = problem
+        self.problem: NosnocProblem = problem
+        return
+
+    # TODO: move this to problem?
+    def set(self, field: str, value: np.ndarray) -> None:
+        """
+        Set values.
+
+        :param field: in ["x0", "x", "u", "p_global", "p_time_var", "w"]
+        :param value: np.ndarray: numerical value of appropriate size
+        """
+        prob = self.problem
+        dims = prob.model.dims
+        if field == 'x0':
+            prob.model.x0 = value
+        elif field == 'x':
+            if value.shape[0] == self.opts.N_stages:
+                # Shape is equal to the number of control stages
+                for i, sub_idx in enumerate(prob.ind_x):
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+            elif value.shape[0] == sum(self.opts.Nfe_list):
+                # Shape is equal to the number of finite elements
+                i = 0
+                for sub_idx in prob.ind_x:
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+                        i += 1
+            else:
+                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
+
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')
+        elif field == 'u':
+            prob.w0[prob.ind_u] = value
+        elif field == 'p_global':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
+        elif field == 'p_time_var':
+            for i in range(self.opts.N_stages):
+                self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
+        elif field == 'w':
+            prob.w0 = value
+            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
+                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
+        else:
+            raise NotImplementedError()
+
+    def print_problem(self):
+        self.problem.print()
+
+class NosnocSolver(NosnocSolverBase):
+    """
+    Main solver class which solves the nonsmooth problem by applying a homotopy
+    and solving the NLP subproblems using IPOPT.
+
+    The nonsmooth problem is formulated internally based on the given options,
+    dynamic model, and (optionally) the ocp data.
+    """
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
+        super().__init__(opts, model, ocp)
 
         # create NLP Solver
         try:
-            prob = {'f': problem.cost, 'x': problem.w, 'g': problem.g, 'p': problem.p}
-            self.solver = nlpsol(model.name, 'ipopt', prob, opts.opts_casadi_nlp)
+            casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
+            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
@@ -1226,52 +1290,3 @@ class NosnocSolver():
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
-    # TODO: move this to problem?
-    def set(self, field: str, value: np.ndarray) -> None:
-        """
-        Set values.
-
-        :param field: in ["x0", "x", "u", "p_global", "p_time_var", "w"]
-        :param value: np.ndarray: numerical value of appropriate size
-        """
-        prob = self.problem
-        dims = prob.model.dims
-        if field == 'x0':
-            prob.model.x0 = value
-        elif field == 'x':
-            if value.shape[0] == self.opts.N_stages:
-                # Shape is equal to the number of control stages
-                for i, sub_idx in enumerate(prob.ind_x):
-                    for ssub_idx in sub_idx:
-                        for sssub_idx in ssub_idx:
-                            prob.w0[sssub_idx] = value[i, :]
-            elif value.shape[0] == sum(self.opts.Nfe_list):
-                # Shape is equal to the number of finite elements
-                i = 0
-                for sub_idx in prob.ind_x:
-                    for ssub_idx in sub_idx:
-                        for sssub_idx in ssub_idx:
-                            prob.w0[sssub_idx] = value[i, :]
-                        i += 1
-            else:
-                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
-
-            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
-                raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')
-        elif field == 'u':
-            prob.w0[prob.ind_u] = value
-        elif field == 'p_global':
-            for i in range(self.opts.N_stages):
-                self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
-        elif field == 'p_time_var':
-            for i in range(self.opts.N_stages):
-                self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
-        elif field == 'w':
-            prob.w0 = value
-            if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
-                raise Warning('full initialization w might be overwritten due to InitializationStrategy != EXTERNAL.')
-        else:
-            raise NotImplementedError()
-
-    def print_problem(self):
-        self.problem.print()
