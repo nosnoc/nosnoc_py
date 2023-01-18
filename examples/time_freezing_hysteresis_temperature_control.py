@@ -92,7 +92,7 @@ def create_temp_control_model_voronoi(u=None):
     # g_13 = -2* z @ z3 + z3.T @ z3;
     # g_14 = -2* z @ z4 + z4.T @ z4;
 
-    g_ind = [g_11, g_12, g_13, g_14]
+    g_ind = [vertcat(g_11, g_12, g_13, g_14)]
 
     # control
     if not u:
@@ -125,7 +125,7 @@ def create_temp_control_model_voronoi(u=None):
     f_12 = f_push_down
     f_13 = f_push_up
     f_14 = 2* f_B - f_push_up
-    F = [f_11, f_12, f_13, f_14]
+    F = [horzcat(f_11, f_12, f_13, f_14)]
 
     # objective
     f_q = (u ** 2) + y ** 2
