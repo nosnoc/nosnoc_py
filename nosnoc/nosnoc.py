@@ -1054,7 +1054,6 @@ class NosnocSolverBase(ABC):
         self.problem: NosnocProblem = problem
         return
 
-    # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
         Set values.
@@ -1103,29 +1102,6 @@ class NosnocSolverBase(ABC):
 
     def print_problem(self):
         self.problem.print()
-
-class NosnocSolver(NosnocSolverBase):
-    """
-    Main solver class which solves the nonsmooth problem by applying a homotopy
-    and solving the NLP subproblems using IPOPT.
-
-    The nonsmooth problem is formulated internally based on the given options,
-    dynamic model, and (optionally) the ocp data.
-    """
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
-        """Constructor.
-        """
-        super().__init__(opts, model, ocp)
-
-        # create NLP Solver
-        try:
-            casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
-            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
-        except Exception as err:
-            self.print_problem()
-            print(f"{opts=}")
-            print("\nerror creating solver for problem above.")
-            raise err
 
     def initialize(self):
         opts = self.opts
@@ -1189,6 +1165,30 @@ class NosnocSolver(NosnocSolverBase):
             # print(prob.w0)
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
+
+
+class NosnocSolver(NosnocSolverBase):
+    """
+    Main solver class which solves the nonsmooth problem by applying a homotopy
+    and solving the NLP subproblems using IPOPT.
+
+    The nonsmooth problem is formulated internally based on the given options,
+    dynamic model, and (optionally) the ocp data.
+    """
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
+        super().__init__(opts, model, ocp)
+
+        # create NLP Solver
+        try:
+            casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
+            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
+        except Exception as err:
+            self.print_problem()
+            print(f"{opts=}")
+            print("\nerror creating solver for problem above.")
+            raise err
 
     def solve(self) -> dict:
         """
