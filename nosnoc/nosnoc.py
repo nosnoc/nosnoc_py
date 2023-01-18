@@ -706,7 +706,7 @@ class FiniteElement(FiniteElementBase):
 
         n = casadi_length(y)
 
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             # g_comp = diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
             g_comp = diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
             # NOTE: this line should be equivalent but yield different results
