@@ -967,12 +967,15 @@ class NosnocProblem(NosnocFormulationObject):
 
 
     def print(self):
-        print("g:")
-        print_casadi_vector(self.g)
-        print(f"lbg, ubg\n{np.vstack((self.lbg, self.ubg)).T}")
+        # constraints
+        print("lbg\t\t ubg\t\t g_expr")
+        for i in range(len(self.lbg)):
+            print(f"{self.lbg[i]:7} \t {self.ubg[i]:7} \t {self.g[i]}")
+        # variables and bounds
         print("\nw \t\t\t w0 \t\t lbw \t\t ubw:")
         for i in range(len(self.lbw)):
-            print(f"{self.w[i].name():<15} \t {self.w0[i]:4f} \t {self.lbw[i]:3f} \t {self.ubw[i]:3f}")
+            print(f"{self.w[i].name():<15} \t {self.w0[i]:.2e} \t {self.lbw[i]:7} \t {self.ubw[i]:.2e}")
+        # cost
         print(f"\ncost:\n{self.cost}")
 
 
