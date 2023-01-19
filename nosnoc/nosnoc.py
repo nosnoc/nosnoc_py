@@ -36,6 +36,7 @@ class NosnocModel:
         (for each control stage)
     :param p_global_val: values of the global parameters
     :param v_global: additional timefree optimization variables
+    :param t_var: time variable (for time freezing)
     :param name: name of the model
     """
 
@@ -54,6 +55,7 @@ class NosnocModel:
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
+                 t_var: Optional[SX] = None,
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
@@ -71,6 +73,7 @@ class NosnocModel:
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
         self.u: SX = u
+        self.t_var: SX = t_var
         self.name: str = name
 
         self.dims: NosnocDims = None
@@ -122,15 +125,15 @@ class NosnocModel:
         # parameters
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
-            raise Exception(f"dimension of p_global_val and p_global mismatch.",
-                    f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+            raise Exception("dimension of p_global_val and p_global mismatch.",
+                            f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
 
         n_p_time_var = casadi_length(self.p_time_var)
         if self.p_time_var_val is None:
             self.p_time_var_val = np.zeros((opts.N_stages, n_p_time_var))
         if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
-            raise Exception(f"dimension of p_time_var_val and p_time_var mismatch.",
-                    f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+            raise Exception("dimension of p_time_var_val and p_time_var mismatch.",
+                            f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = vertcat(self.p_time_var, self.p_global)
@@ -220,6 +223,11 @@ class NosnocModel:
         # lp kkt conditions without bilinear complementarity terms
         self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
         self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
+        if self.t_var is not None:
+            self.t_fun = Function("t_fun", [self.x], [self.t_var])
+        elif opts.time_freezing:
+            raise ValueError("Please provide t_var for time freezing!")
+
         self.lambda00_fun = Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = Function('std_compl_res_fun', [z, self.p], [std_compl_res])
@@ -973,6 +981,13 @@ class NosnocProblem(NosnocFormulationObject):
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
+
+            if opts.time_freezing and opts.equidistant_control_grid:
+                t_now = opts.terminal_time / opts.N_stages * (k + 1)
+                Xk_end = stage[-1].w[stage[-1].ind_x[-1]]
+                self.add_constraint(model.t_fun(Xk_end) - t_now,
+                                    [-opts.time_freezing_tolerance],
+                                    [opts.time_freezing_tolerance])
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:

@@ -81,6 +81,7 @@ class NosnocOpts:
     opts_casadi_nlp['ipopt']['mu_oracle'] = 'quality-function'
 
     time_freezing: bool = False
+    time_freezing_tolerance: float = 1e-3
 
     def __repr__(self) -> str:
         out = ''
@@ -102,7 +103,9 @@ class NosnocOpts:
         self.opts_casadi_nlp['ipopt']['mu_target'] = tol_ipopt
 
         if self.time_freezing:
-            raise NotImplementedError()
+            if self.n_s < 3:
+                Warning("Problem might be illposed if n_s < 3 and time freezing")
+            # TODO: Extend checks
 
         if self.max_iter_homotopy == 0:
             self.max_iter_homotopy = int(
