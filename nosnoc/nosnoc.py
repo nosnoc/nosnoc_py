@@ -728,8 +728,8 @@ class FiniteElement(FiniteElementBase):
             aug1_weight = 1e0
             for j in range(n):
                 for x_i in x:
-                    g_comp[j+n] = aug1_weight * (x_i[j] - sigma) * sqrt(tau)
-                g_comp[j+2*n] = aug1_weight * (y[j] - sigma) * sqrt(tau)
+                    g_comp[j+n] = aug1_weight * (x_i[j] - sigma) * tau
+                g_comp[j+2*n] = aug1_weight * (y[j] - sigma) * tau
             # augment 2
             aug2_weight = 1e1
             for j in range(n):
