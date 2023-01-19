@@ -1,3 +1,4 @@
+from typing import Union
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -11,7 +12,7 @@ from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComp
 class NosnocOpts:
 
     # discretization
-    terminal_time: float = 1.0  # TODO: make param?
+    terminal_time: Union[float, int] = 1.0  # TODO: make param?
 
     use_fesd: bool = True  #: Selects use of fesd or normal RK formulation.
     print_level: int = 0  #: higher -> more info
