@@ -962,6 +962,9 @@ class NosnocProblem(NosnocFormulationObject):
 
         fe: FiniteElement
         stage: List[FiniteElement]
+        if opts.time_freezing:
+            t0 = model.t_fun(self.fe0.w[self.fe0.ind_x[-1]])
+
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
@@ -983,7 +986,8 @@ class NosnocProblem(NosnocFormulationObject):
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
 
             if opts.time_freezing and opts.equidistant_control_grid:
-                t_now = opts.terminal_time / opts.N_stages * (k + 1)
+                # TODO: make t0 dynamic (since now it needs to be 0!)
+                t_now = opts.terminal_time / opts.N_stages * (k + 1) + t0
                 Xk_end = stage[-1].w[stage[-1].ind_x[-1]]
                 self.add_constraint(model.t_fun(Xk_end) - t_now,
                                     [-opts.time_freezing_tolerance],
@@ -1151,7 +1155,9 @@ class NosnocSolverBase(ABC):
                             prob.w0[sssub_idx] = value[i, :]
                         i += 1
             else:
-                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
+                raise ValueError("value should have shape matching N_stages "
+                                 f"({self.opts.N_stages}) or sum(Nfe_list) "
+                                 f"({sum(self.opts.Nfe_list)}), shape: {value.shape[0]}")
 
             if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
                 raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')

@@ -231,7 +231,7 @@ def control(with_plot=True):
     stages = 5
     t_end = 5
     X_est, t_grid = simulation(u=1, Tsim=t_end, Nsim=stages, with_plot=False)
-    X_est = np.stack(X_est[1::2])
+    X_est = np.stack(X_est[1:])
 
     opts = create_options()
     model, lbx, ubx, lbu, ubu, f_q, f_terminal, X0 = create_temp_control_model_voronoi()
