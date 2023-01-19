@@ -48,7 +48,7 @@ class NosnocModel:
                  x0: Optional[np.ndarray],
                  c: Optional[List[SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
-                 g_Stewart: List[SX] = None,
+                 g_Stewart: Optional[List[SX]] = None,
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: SX = SX.sym('p_global_dummy', 0, 1),
