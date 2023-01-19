@@ -108,6 +108,58 @@ def main():
     plt.show()
 
 
+
+def main_least_squares():
+    Tsim = 10
+    Nsim = 200
+    Tstep = Tsim / Nsim
+
+    opts = get_default_options()
+    opts.terminal_time = Tstep
+
+    # LSQ
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
+    opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+    opts.print_level = 1
+    opts.sigma_0 = 1e0
+    opts.comp_tol = 1e-8
+
+    model = get_relay_feedback_system_model()
+
+    solver = nosnoc.NosnocSolver(opts, model)
+    n_exec = 1
+    for i in range(n_exec):
+        # simulation loop
+        looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
+        looper.run()
+        results = looper.get_results()
+        if i == 0:
+            timings = results["cpu_nlp"]
+        else:
+            timings = np.minimum(timings, results["cpu_nlp"])
+
+    print(f"max cost_val = {max(results['cost_vals'])}")
+
+    # plot trajectory
+    X_sim = results["X_sim"]
+    t_grid = results["t_grid"]
+    plot_system_trajectory(X_sim, t_grid=t_grid, figure_filename='relay_traj.pdf')
+    plot_algebraic_variables(results, figure_filename='relay_algebraic_traj.pdf')
+    # plot_system_3d(results)
+
+    # plot timings
+    filename = ""
+    filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
+    plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"  # {opts.homotopy_update_rule.name}"
+    nosnoc.plot_timings(results["cpu_nlp"], title=plot_title, figure_filename=filename)
+
+    plt.show()
+
+
+
 def main_rk4_simulation():
     """
     This examples uses a smoothened STEP representation of the system and simulates it with an RK4 integrator.
@@ -206,4 +258,5 @@ def plot_algebraic_variables(results, figure_filename=''):
 
 if __name__ == "__main__":
     main()
+    # main_least_squares()
     # main_rk4_simulation()
