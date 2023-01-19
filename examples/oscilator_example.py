@@ -2,6 +2,7 @@ import nosnoc
 from casadi import SX, vertcat, horzcat
 import numpy as np
 import matplotlib.pyplot as plt
+from sys import argv
 
 OMEGA = 2 * np.pi
 A1 = np.array([[1, OMEGA], [-OMEGA, 1]])
@@ -9,7 +10,7 @@ A2 = np.array([[1, -OMEGA], [OMEGA, 1]])
 R_OSC = 1
 
 
-def get_oscilator_model():
+def get_oscilator_model(use_g_Stewart=False):
 
     # Initial Value
     x0 = np.array([np.exp([-1])[0], 0])
@@ -28,11 +29,16 @@ def get_oscilator_model():
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0)
+    if use_g_Stewart:
+        g_Stewart_list = [-S[i] @ c[i] for i in range(1)]
+        model = nosnoc.NosnocModel(x=x, F=F, g_Stewart=g_Stewart_list, x0=x0)
+    else:
+        model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0)
+
     return model
 
 
-def main():
+def main(use_g_Stewart=False):
     opts = nosnoc.NosnocOpts()
     # opts.irk_representation = "differential"
     opts.use_fesd = True
@@ -43,7 +49,7 @@ def main():
     opts.n_s = 2
     opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
 
-    model = get_oscilator_model()
+    model = get_oscilator_model(use_g_Stewart)
 
     Tsim = np.pi / 2
     Nsim = 29
@@ -162,5 +168,5 @@ def make_object_json_dumpable(input):
         raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
 
 if __name__ == "__main__":
-    main()
+    main(len(argv) > 1)
     # main_least_squares()
