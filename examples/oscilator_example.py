@@ -58,11 +58,66 @@ def main():
     looper.run()
     results = looper.get_results()
 
+    import json
+    json_file = 'oscilator_results_ref.json'
+    with open(json_file, 'w') as f:
+        json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
+    print(f"saved results in {json_file}")
+
     plot_oscilator(results["X_sim"], results["t_grid"])
     nosnoc.plot_timings(results["cpu_nlp"])
-    import pdb
 
-    pdb.set_trace()
+
+def main_least_squares():
+
+    import json
+    json_file = 'oscilator_results_ref.json'
+    with open(json_file, 'r') as f:
+        w_sim_ref = json.load(f)
+
+    opts = nosnoc.NosnocOpts()
+    # opts.irk_representation = "differential"
+    opts.use_fesd = True
+    comp_tol = 1e-7
+    opts.comp_tol = comp_tol
+    # opts.homotopy_update_slope = 0.9  # decrease rate
+    opts.N_finite_elements = 2
+    opts.n_s = 2
+    opts.print_level = 3
+
+    # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
+    opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+    # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
+    opts.sigma_0 = 1e0
+    # opts.gamma_h = np.inf
+    # opts.opts_casadi_nlp['ipopt']['max_iter'] = 0
+    # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
+    opts.homotopy_update_slope = 0.1
+
+    model = get_oscilator_model()
+
+    Tsim = np.pi / 2
+    Nsim = 29
+    Tstep = Tsim / Nsim
+
+    opts.terminal_time = Tstep
+
+    solver = nosnoc.NosnocSolver(opts, model)
+    solver.print_problem()
+    # loop
+    looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
+    # looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim, w_init=w_sim_ref)
+    looper.run()
+    results = looper.get_results()
+    print(f"max cost_val = {max(results['cost_vals']):.2e}")
+
+    plot_oscilator(results["X_sim"], results["t_grid"])
+    nosnoc.plot_timings(results["cpu_nlp"])
+    # breakpoint()
 
 
 def plot_oscilator(X_sim, t_grid, latexify=True):
@@ -98,5 +153,12 @@ def plot_oscilator(X_sim, t_grid, latexify=True):
     plt.show()
 
 
+def make_object_json_dumpable(input):
+    if isinstance(input, (np.ndarray)):
+        return input.tolist()
+    else:
+        raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
+
 if __name__ == "__main__":
     main()
+    # main_least_squares()
