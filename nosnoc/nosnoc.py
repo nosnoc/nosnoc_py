@@ -495,7 +495,7 @@ class FiniteElement(FiniteElementBase):
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             lb_dual = 0.0
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+        else:
             lb_dual = -inf
 
         # RK stage stuff
@@ -725,20 +725,22 @@ class FiniteElement(FiniteElementBase):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
             # augment 1
+            aug1_weight = 1e0
             for j in range(n):
                 for x_i in x:
-                    g_comp[j+n] = (x_i[j] - sigma) * sqrt(tau) * 1e0
-                g_comp[j+2*n] = (y[j] - sigma) * sqrt(tau) * 1e0
+                    g_comp[j+n] = aug1_weight * (x_i[j] - sigma) * sqrt(tau)
+                g_comp[j+2*n] = aug1_weight * (y[j] - sigma) * sqrt(tau)
             # augment 2
+            aug2_weight = 1e1
             for j in range(n):
                 for x_i in x:
-                    g_comp[j+3*n] = 1e3* (g_comp[j]) * sqrt(1+(x_i[j] - y[j])**2)
+                    g_comp[j+3*n] = aug2_weight * (g_comp[j]) * sqrt(1+(x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
             lb_comp = -np.inf * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER]:
+        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER, MpccMode.FISCHER_BURMEISTER_IP_AUG]:
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
 
@@ -1236,9 +1238,10 @@ class NosnocSolver(NosnocSolverBase):
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
-        tau_val = 1.0
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
+            tau_val = sigma_k
+            # tau_val = sigma_k**1.5*1e3
             p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k, tau_val]), lambda00, x0))
 
             # solve NLP
