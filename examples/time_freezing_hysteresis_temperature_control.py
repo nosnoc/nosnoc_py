@@ -29,7 +29,7 @@ def create_options():
     # in penalty methods  1: J = J+(1/p)*J_comp (direct)  , 0 : J = p*J+J_comp (inverse)
     opts.objective_scaling_direct = 0
     # === Penalty/Relaxation paraemetr ===
-    # starting smouothing parameter
+    # initial smoothing parameter
     opts.sigma_0 = 1e1
     # end smoothing parameter
     opts.sigma_N = 1e-3  # 1e-10
