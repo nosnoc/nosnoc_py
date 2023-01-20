@@ -1305,9 +1305,10 @@ class NosnocSolver(NosnocSolverBase):
         w0 = prob.w0
 
         w_all = [w0.copy()]
-        complementarity_stats = opts.max_iter_homotopy * [None]
-        cpu_time_nlp = opts.max_iter_homotopy * [None]
-        nlp_iter = opts.max_iter_homotopy * [None]
+        n_iter_polish = opts.max_iter_homotopy + 1
+        complementarity_stats = n_iter_polish * [None]
+        cpu_time_nlp = n_iter_polish * [None]
+        nlp_iter = n_iter_polish * [None]
 
         if opts.print_level:
             print('-------------------------------------------')
@@ -1371,7 +1372,7 @@ class NosnocSolver(NosnocSolverBase):
                         sigma_k**opts.homotopy_update_exponent))
 
         if opts.do_polishing_step:
-            w_opt = self.polish_solution(w_opt, lambda00, x0)
+            w_opt, cpu_time_nlp[n_iter_polish-1], nlp_iter[n_iter_polish-1] = self.polish_solution(w_opt, lambda00, x0)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -1417,14 +1418,37 @@ class NosnocSolver(NosnocSolverBase):
 
         w_fix_zero = w_guess < eps_sigma
         w_fix_zero[ind_dont_set] = False
+        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
+
+        w_fix_one = np.abs(w_guess - 1.0) < eps_sigma
+        w_fix_one[ind_dont_set] = False
+        ind_fix_one = np.where(w_fix_one)[0].tolist()
+
         lbw = prob.lbw.copy()
         ubw = prob.ubw.copy()
-        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
         lbw[ind_fix_zero] = 0.0
         ubw[ind_fix_zero] = 0.0
+        lbw[ind_fix_one] = 1.0
+        ubw[ind_fix_one] = 1.0
 
+        # breakpoint()
+        lbg = prob.lbg.copy()
+        ubg = prob.ubg.copy()
+        # # remove some complementarity constraints
+        # w_zero_sym = prob.w[ind_fix_zero]
+        # set(flatten(prob.ind_theta)).intersection(ind_fix_zero)
+        # ind_theta_zero_list = list(set(flatten(prob.ind_theta)).intersection(ind_fix_zero))
+        # theta_zero = prob.w[ind_theta_zero_list]
+        # for ig in flatten(prob.ind_comp):
+        #     g_cand = prob.g[ig]
+        #     if any(which_depends(g_cand, theta_zero)):
+        #         lbg[ig] = -inf
+        #         ubg[ig] = +inf
+        #         print(f"removing g[{ig}]: {prob.g[ig]}")
+
+        # fix some variables
         if opts.print_level:
-            print(f"setting {len(ind_fix_zero)} variables to zero.")
+            print(f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0.")
         for i_ctrl in range(opts.N_stages):
             for i_fe in range(opts.Nfe_list[i_ctrl]):
                 w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
@@ -1435,8 +1459,8 @@ class NosnocSolver(NosnocSolverBase):
             # solve NLP
             t = time.time()
             sol = self.solver(x0=w_guess,
-                              lbg=prob.lbg,
-                              ubg=prob.ubg,
+                              lbg=lbg,
+                              ubg=ubg,
                               lbx=lbw,
                               ubx=ubw,
                               p=p_val)
@@ -1457,6 +1481,4 @@ class NosnocSolver(NosnocSolverBase):
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
 
-        breakpoint()
-
-        return w_opt
+        return w_opt, cpu_time_nlp, nlp_iter

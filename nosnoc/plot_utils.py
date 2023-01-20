@@ -24,7 +24,7 @@ def latexify_plot():
     matplotlib.rcParams.update(params)
 
 
-def plot_timings(timings, latexify=True, title='', figure_filename=''):
+def plot_timings(timings: np.ndarray, latexify=True, title='', figure_filename=''):
     # latexify plot
     if latexify:
         latexify_plot()
@@ -43,7 +43,7 @@ def plot_timings(timings, latexify=True, title='', figure_filename=''):
     mean_cpu = np.mean(np.sum(timings, axis=1))
     plt.plot(x_range,
              mean_cpu * np.ones(2,),
-             label=f'mean {mean_cpu:.3f}',
+             label=f'mean/step {mean_cpu:.3f}',
              linestyle=':',
              color='black')
     plt.ylabel('CPU time [s]')
