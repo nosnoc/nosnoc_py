@@ -24,10 +24,11 @@ class NosnocModel:
 
     :param x: state variables
     :param F: set of state equations for the different regions
+    :param x0: initial state
     :param c: set of region boundaries
     :param S: determination of the boundaries region connecting
         different state equations with each boundary zone
-    :param x0: initial state
+    :param g_Stewart: List of stewart functions to define the regions (instead of S & c)
     :param u: controls
     :param p_time_var: time varying parameters
     :param p_global: global parameters
@@ -35,29 +36,36 @@ class NosnocModel:
         (for each control stage)
     :param p_global_val: values of the global parameters
     :param v_global: additional timefree optimization variables
+    :param t_var: time variable (for time freezing)
     :param name: name of the model
     """
 
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
-
     def __init__(self,
                  x: SX,
                  F: List[SX],
-                 c: List[SX],
-                 S: List[np.ndarray],
-                 x0: np.ndarray,
+                 x0: Optional[np.ndarray],
+                 c: Optional[List[SX]] = None,
+                 S: Optional[List[np.ndarray]] = None,
+                 g_Stewart: Optional[List[SX]] = None,
                  u: SX = SX.sym('u_dummy', 0, 1),
                  p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: SX = SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
                  v_global: SX = SX.sym('v_global_dummy', 0, 1),
+                 t_var: Optional[SX] = None,
                  name: str = 'nosnoc'):
         self.x: SX = x
         self.F: List[SX] = F
         self.c: List[SX] = c
         self.S: List[np.ndarray] = S
+        self.g_Stewart = g_Stewart
+        # Either c and S or g is given!
+        if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
+            raise ValueError("Provide either c and S or g, not both!")
+
         self.x0: np.ndarray = x0
         self.p_time_var: SX = p_time_var
         self.p_global: SX = p_global
@@ -65,6 +73,7 @@ class NosnocModel:
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
         self.u: SX = u
+        self.t_var: SX = t_var
         self.name: str = name
 
         self.dims: NosnocDims = None
@@ -80,29 +89,51 @@ class NosnocModel:
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
         n_sys = len(self.F)
-        n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+        if self.g_Stewart:
+            n_c_sys = [0]  # No c used!
+        else:
+            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
         # sanity checks
         if not isinstance(self.F, list):
             raise ValueError("model.F should be a list.")
-        if not isinstance(self.c, list):
-            raise ValueError("model.c should be a list.")
-        if not isinstance(self.S, list):
-            raise ValueError("model.S should be a list.")
+        for i, f in enumerate(self.F):
+            if f.shape[1] == 1:
+                raise Warning(f"model.F item {i} is not a switching system!")
+
+        if self.g_Stewart:
+            if opts.pss_mode != PssMode.STEWART:
+                raise ValueError("model.g_Stewart is used and pss_mode should be STEWART")
+            if not isinstance(self.g_Stewart, list):
+                raise ValueError("model.g_Stewart should be a list.")
+            for i, g_Stewart in enumerate(self.g_Stewart):
+                if g_Stewart.shape[0] != self.F[i].shape[1]:
+                    raise ValueError(f"Dimensions g_Stewart and F for item {i} should be equal!")
+        else:
+            if not isinstance(self.c, list):
+                raise ValueError("model.c should be a list.")
+            if not isinstance(self.S, list):
+                raise ValueError("model.S should be a list.")
+            if len(self.c) != len(self.S):
+                raise ValueError("model.c and model.S should have the same length!")
+            for i, (fi, Si) in enumerate(zip(self.F, self.S)):
+                if fi.shape[1] != Si.shape[0]:
+                    raise ValueError(f"model.F item {i} and S {i} should have the same number of columns")
 
         # parameters
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
-            raise Exception(f"dimension of p_global_val and p_global mismatch.",
-                    f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+            raise Exception("dimension of p_global_val and p_global mismatch.",
+                            f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
 
         n_p_time_var = casadi_length(self.p_time_var)
         if self.p_time_var_val is None:
             self.p_time_var_val = np.zeros((opts.N_stages, n_p_time_var))
         if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
-            raise Exception(f"dimension of p_time_var_val and p_time_var mismatch.",
-                    f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+            raise Exception("dimension of p_time_var_val and p_time_var mismatch.",
+                            f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = vertcat(self.p_time_var, self.p_global)
@@ -116,8 +147,11 @@ class NosnocModel:
         self.dims = NosnocDims(n_x=n_x, n_u=n_u, n_sys=n_sys, n_c_sys=n_c_sys, n_f_sys=n_f_sys,
                                n_p_time_var=n_p_time_var, n_p_glob=n_p_glob)
 
-        # g_Stewart
-        g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        if self.g_Stewart:
+            g_Stewart_list = self.g_Stewart
+        else:
+            g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+
         g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
@@ -182,7 +216,6 @@ class NosnocModel:
         # CasADi functions for indicator and region constraint functions
         self.z = z
         self.g_Stewart_fun = Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
-        self.c_fun = Function('c_fun', [self.x, self.p], [casadi_vertcat_list(self.c)])
 
         # dynamics
         self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
@@ -190,6 +223,11 @@ class NosnocModel:
         # lp kkt conditions without bilinear complementarity terms
         self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
         self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
+        if self.t_var is not None:
+            self.t_fun = Function("t_fun", [self.x], [self.t_var])
+        elif opts.time_freezing:
+            raise ValueError("Please provide t_var for time freezing!")
+
         self.lambda00_fun = Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = Function('std_compl_res_fun', [z, self.p], [std_compl_res])
@@ -199,6 +237,8 @@ class NosnocModel:
         """
         smoothing_parameter: larger -> smoother, smaller -> more exact
         """
+        if self.g_Stewart:
+            raise NotImplementedError()
         if smoothing_parameter <= 0:
             raise ValueError("smoothing_parameter should be > 0")
 
@@ -922,6 +962,9 @@ class NosnocProblem(NosnocFormulationObject):
 
         fe: FiniteElement
         stage: List[FiniteElement]
+        if opts.time_freezing:
+            t0 = model.t_fun(self.fe0.w[self.fe0.ind_x[-1]])
+
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
@@ -941,6 +984,14 @@ class NosnocProblem(NosnocFormulationObject):
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
+
+            if opts.time_freezing and opts.equidistant_control_grid:
+                # TODO: make t0 dynamic (since now it needs to be 0!)
+                t_now = opts.terminal_time / opts.N_stages * (k + 1) + t0
+                Xk_end = stage[-1].w[stage[-1].ind_x[-1]]
+                self.add_constraint(model.t_fun(Xk_end) - t_now,
+                                    [-opts.time_freezing_tolerance],
+                                    [opts.time_freezing_tolerance])
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
@@ -1104,7 +1155,9 @@ class NosnocSolverBase(ABC):
                             prob.w0[sssub_idx] = value[i, :]
                         i += 1
             else:
-                raise ValueError("value should have shape matching N_stages or sum(Nfe_list)")
+                raise ValueError("value should have shape matching N_stages "
+                                 f"({self.opts.N_stages}) or sum(Nfe_list) "
+                                 f"({sum(self.opts.Nfe_list)}), shape: {value.shape[0]}")
 
             if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
                 raise Warning('initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.')

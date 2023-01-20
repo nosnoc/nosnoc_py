@@ -1,11 +1,22 @@
 import numpy as np
+from typing import Union, List, get_origin, get_args
 import casadi as ca
 
 
 def validate(obj: object) -> bool:
     for attr, expected_type in obj.__annotations__.items():
         value = getattr(obj, attr)
-        if not isinstance(value, expected_type):
+        if get_origin(expected_type) is Union:
+            if not isinstance(value, get_args(expected_type)):
+                raise TypeError(
+                    f"object {type(obj)} does not match type annotations. Attribute {attr} should be of type {expected_type}, got {type(value)}"
+                )
+        elif get_origin(expected_type) is List:
+            if not isinstance(value, list):
+                raise TypeError(
+                    f"object {type(obj)} does not match type annotations. Attribute {attr} should be of type {expected_type}, got {type(value)}"
+                )
+        elif not isinstance(value, expected_type):
             raise TypeError(
                 f"object {type(obj)} does not match type annotations. Attribute {attr} should be of type {expected_type}, got {type(value)}"
             )
