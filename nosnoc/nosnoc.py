@@ -1431,9 +1431,8 @@ class NosnocSolver(NosnocSolverBase):
         lbw[ind_fix_one] = 1.0
         ubw[ind_fix_one] = 1.0
 
-        # breakpoint()
-        lbg = prob.lbg.copy()
-        ubg = prob.ubg.copy()
+        # lbg = prob.lbg.copy()
+        # ubg = prob.ubg.copy()
         # # remove some complementarity constraints
         # w_zero_sym = prob.w[ind_fix_zero]
         # set(flatten(prob.ind_theta)).intersection(ind_fix_zero)
@@ -1459,8 +1458,8 @@ class NosnocSolver(NosnocSolverBase):
             # solve NLP
             t = time.time()
             sol = self.solver(x0=w_guess,
-                              lbg=lbg,
-                              ubg=ubg,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
                               lbx=lbw,
                               ubx=ubw,
                               p=p_val)
