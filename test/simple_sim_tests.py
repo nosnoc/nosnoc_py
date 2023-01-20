@@ -180,6 +180,21 @@ class SimpleTests(unittest.TestCase):
             except:
                 raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
 
+    def test_polishing(self):
+        model = get_simplest_model_switch()
+
+        opts = get_default_options()
+        opts.print_level = 1
+        opts.do_polishing_step = True
+        opts.comp_tol = 1e-3
+        try:
+            test_opts(opts, model=model)
+        except:
+            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+
 
 if __name__ == "__main__":
     unittest.main()
+    # uncomment to run single test locally
+    # simple_test = SimpleTests()
+    # simple_test.test_polishing()
