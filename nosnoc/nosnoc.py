@@ -1352,6 +1352,9 @@ class NosnocSolver(NosnocSolverBase):
                     min(opts.homotopy_update_slope * sigma_k,
                         sigma_k**opts.homotopy_update_exponent))
 
+        if opts.do_polishing_step:
+            w_opt = self.polish_solution(w_opt, lambda00, x0)
+
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
 
@@ -1378,3 +1381,64 @@ class NosnocSolver(NosnocSolverBase):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
+    def polish_solution(self, w_guess, lambda00, x0):
+        opts = self.opts
+        if opts.pss_mode != PssMode.STEWART:
+            raise NotImplementedError()
+        prob = self.problem
+
+        eps_sigma = 1e1 * opts.comp_tol
+
+        ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha + prob.ind_theta + prob.ind_mu)
+        ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global + prob.ind_v)
+        # sanity check
+        ind_all = ind_set + ind_dont_set
+        for iw in range(len(w_guess)):
+            if iw not in ind_all:
+                raise Exception(f"w[{iw}] = {prob.w[iw]} not handled proprerly")
+
+        w_fix_zero = w_guess < eps_sigma
+        w_fix_zero[ind_dont_set] = False
+        lbw = prob.lbw.copy()
+        ubw = prob.ubw.copy()
+        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
+        lbw[ind_fix_zero] = 0.0
+        ubw[ind_fix_zero] = 0.0
+
+        if opts.print_level:
+            print(f"setting {len(ind_fix_zero)} variables to zero.")
+        for i_ctrl in range(opts.N_stages):
+            for i_fe in range(opts.Nfe_list[i_ctrl]):
+                w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
+
+            sigma_k, tau_val = 0.0, 0.0
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k, tau_val]), lambda00, x0))
+
+            # solve NLP
+            t = time.time()
+            sol = self.solver(x0=w_guess,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
+                              lbx=lbw,
+                              ubx=ubw,
+                              p=p_val)
+            cpu_time_nlp = time.time() - t
+
+            # print and process solution
+            solver_stats = self.solver.stats()
+            status = solver_stats['return_status']
+            nlp_iter = solver_stats['iter_count']
+            nlp_res = norm_inf(sol['g']).full()[0][0]
+            cost_val = norm_inf(sol['f']).full()[0][0]
+            w_opt = sol['x'].full().flatten()
+
+            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
+            if opts.print_level:
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res,
+                                    cost_val, cpu_time_nlp, nlp_iter, status)
+            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
+                print(f"Warning: IPOPT exited with status {status}")
+
+        breakpoint()
+
+        return w_opt
