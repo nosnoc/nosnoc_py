@@ -250,6 +250,8 @@ class NosnocOcp:
 
     1) constraints of the form:
     lbu <= u <= ubu
+    lbx <= x <= ubx
+    lbv_global <= v_global <= ubv_global
     g_terminal(x_terminal) = 0
 
     2) cost of the form:
@@ -495,7 +497,7 @@ class FiniteElement(FiniteElementBase):
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             lb_dual = 0.0
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+        else:
             lb_dual = -inf
 
         # RK stage stuff
@@ -693,19 +695,20 @@ class FiniteElement(FiniteElementBase):
 
 
 
-    def create_complementarity(self, x: List[SX], y: SX, sigma: SX) -> None:
+    def create_complementarity(self, x: List[SX], y: SX, sigma: SX, tau: SX) -> None:
         """
         adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
         :param x: list of SX
         :param y: SX
         :param sigma: smoothing parameter
+        :param tau: another smoothing parameter
         """
         opts = self.opts
 
         n = casadi_length(y)
 
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode. SCHOLTES_INEQ]:
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             # g_comp = diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
             g_comp = diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
             # NOTE: this line should be equivalent but yield different results
@@ -715,12 +718,31 @@ class FiniteElement(FiniteElementBase):
             for j in range(n):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
+            if len(x) != 1:
+                raise Exception("not supported")
+            g_comp = SX.zeros(4*n, 1)
+            # classic FB
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+            # augment 1
+            aug1_weight = 1e0
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j+n] = aug1_weight * (x_i[j] - sigma) * tau
+                g_comp[j+2*n] = aug1_weight * (y[j] - sigma) * tau
+            # augment 2
+            aug2_weight = 1e1
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j+3*n] = aug2_weight * (g_comp[j]) * sqrt(1+(x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
             lb_comp = -np.inf * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER]:
+        elif opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER, MpccMode.FISCHER_BURMEISTER_IP_AUG]:
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
 
@@ -728,29 +750,29 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: SX) -> None:
+    def create_complementarity_constraints(self, sigma_p: SX, tau: SX) -> None:
         opts = self.opts
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)],
-                                            self.Theta(stage=j), sigma_p)
+                                            self.Theta(stage=j), sigma_p, tau)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 self.create_complementarity([self.Theta(stage=j)],
-                            self.prev_fe.Lambda(stage=-1), sigma_p)
+                            self.prev_fe.Lambda(stage=-1), sigma_p, tau)
                 for jj in range(opts.n_s):
                     # within fe
                     self.create_complementarity([self.Theta(stage=j)],
-                                    self.Lambda(stage=jj), sigma_p)
+                                    self.Lambda(stage=jj), sigma_p, tau)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
                 # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
-                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p)
+                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau)
         return
 
-    def step_equilibration(self, sigma_p: SX) -> None:
+    def step_equilibration(self, sigma_p: SX, tau: SX) -> None:
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
@@ -782,7 +804,7 @@ class FiniteElement(FiniteElementBase):
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
             self.add_constraint(nu_k*delta_h_ki)
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT_COMPLEMENTARITY:
-            self.create_complementarity([nu_k], delta_h_ki, sigma_p)
+            self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau)
             # self.add_constraint(nu_k)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
         #     self.add_constraint(tanh(nu_k)*delta_h_ki)
@@ -873,7 +895,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ocp = ocp
 
         h_ctrl_stage = opts.terminal_time / opts.N_stages
-        self.stages: list[list[FiniteElementBase]] = []
+        self.stages: list[list[FiniteElement]] = []
 
         # Index vectors
         self.ind_x = create_empty_list_matrix((opts.N_stages,))
@@ -892,13 +914,14 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
-        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p)
+        tau = SX.sym('tau')  # homotopy parameter
+        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
         # Generate all the variables we need
         self.__create_primal_variables()
 
         fe: FiniteElement
-        stage: List[FiniteElementBase]
+        stage: List[FiniteElement]
         for k, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[k]]
             for _, fe in enumerate(stage):
@@ -907,10 +930,10 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                fe.create_complementarity_constraints(sigma_p)
+                fe.create_complementarity_constraints(sigma_p, tau)
 
                 # 3) Step Equilibration
-                fe.step_equilibration(sigma_p)
+                fe.step_equilibration(sigma_p, tau)
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
@@ -952,7 +975,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
 
         # copy original w0
-        self.w0_original = copy(self.w0)
+        self.w0_original = self.w0.copy()
 
         # LEAST_SQUARES reformulation
         if opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
@@ -1054,7 +1077,6 @@ class NosnocSolverBase(ABC):
         self.problem: NosnocProblem = problem
         return
 
-    # TODO: move this to problem?
     def set(self, field: str, value: np.ndarray) -> None:
         """
         Set values.
@@ -1103,29 +1125,6 @@ class NosnocSolverBase(ABC):
 
     def print_problem(self):
         self.problem.print()
-
-class NosnocSolver(NosnocSolverBase):
-    """
-    Main solver class which solves the nonsmooth problem by applying a homotopy
-    and solving the NLP subproblems using IPOPT.
-
-    The nonsmooth problem is formulated internally based on the given options,
-    dynamic model, and (optionally) the ocp data.
-    """
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
-        """Constructor.
-        """
-        super().__init__(opts, model, ocp)
-
-        # create NLP Solver
-        try:
-            casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
-            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
-        except Exception as err:
-            self.print_problem()
-            print(f"{opts=}")
-            print("\nerror creating solver for problem above.")
-            raise err
 
     def initialize(self):
         opts = self.opts
@@ -1190,8 +1189,33 @@ class NosnocSolver(NosnocSolverBase):
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
 
+
+class NosnocSolver(NosnocSolverBase):
+    """
+    Main solver class which solves the nonsmooth problem by applying a homotopy
+    and solving the NLP subproblems using IPOPT.
+
+    The nonsmooth problem is formulated internally based on the given options,
+    dynamic model, and (optionally) the ocp data.
+    """
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
+        super().__init__(opts, model, ocp)
+
+        # create NLP Solver
+        try:
+            casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
+            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
+        except Exception as err:
+            self.print_problem()
+            print(f"{opts=}")
+            print("\nerror creating solver for problem above.")
+            raise err
+
     def solve(self) -> dict:
-        """ Solves the NLP with the currently stored parameters.
+        """
+        Solves the NLP with the currently stored parameters.
 
         :return: Returns a dictionary containing ... TODO document all fields
         """
@@ -1218,7 +1242,9 @@ class NosnocSolver(NosnocSolverBase):
 
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k]), lambda00, x0))
+            tau_val = sigma_k
+            # tau_val = sigma_k**1.5*1e3
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k, tau_val]), lambda00, x0))
 
             # solve NLP
             t = time.time()
@@ -1270,7 +1296,7 @@ class NosnocSolver(NosnocSolverBase):
 
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol])
+            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol*1e2, 1e-5])
             g_val = prob.g_fun(w_opt, p_val).full().flatten()
             if max(abs(g_val)) > threshold:
                 print("\nconstraint violations:")
@@ -1285,6 +1311,7 @@ class NosnocSolver(NosnocSolverBase):
         results["nlp_iter"] = nlp_iter
         results["w_all"] = w_all
         results["w_sol"] = w_opt
+        results["cost_val"] = cost_val
 
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
