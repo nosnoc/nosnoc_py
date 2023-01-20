@@ -911,9 +911,6 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha[ctrl_idx].append(increment_indices(fe.ind_alpha, w_len))
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
-        # constraint indices
-        g_len = casadi_length(self.g)
-        self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
@@ -929,6 +926,14 @@ class NosnocProblem(NosnocFormulationObject):
         self.ubw = np.concatenate((self.ubw, ub))
         self.w0 = np.concatenate((self.w0, initial))
         return
+
+    def add_fe_constraints(self, fe: FiniteElement, ctrl_idx: int):
+        g_len = casadi_length(self.g)
+        self.add_constraint(fe.g, fe.lbg, fe.ubg)
+        # constraint indices
+        self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
+        return
+
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
@@ -978,8 +983,8 @@ class NosnocProblem(NosnocFormulationObject):
         if opts.time_freezing:
             t0 = model.t_fun(self.fe0.w[self.fe0.ind_x[-1]])
 
-        for k, stage in enumerate(self.stages):
-            Uk = self.w[self.ind_u[k]]
+        for ctrl_idx, stage in enumerate(self.stages):
+            Uk = self.w[self.ind_u[ctrl_idx]]
             for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
@@ -993,7 +998,7 @@ class NosnocProblem(NosnocFormulationObject):
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
-                self.add_constraint(fe.g, fe.lbg, fe.ubg)
+                self.add_fe_constraints(fe, ctrl_idx)
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
