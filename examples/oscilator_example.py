@@ -40,7 +40,6 @@ def get_oscilator_model(use_g_Stewart=False):
 
 def main(use_g_Stewart=False):
     opts = nosnoc.NosnocOpts()
-    # opts.irk_representation = "differential"
     opts.use_fesd = True
     comp_tol = 1e-6
     opts.comp_tol = comp_tol
@@ -74,7 +73,6 @@ def main(use_g_Stewart=False):
     #     json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
     # print(f"saved results in {json_file}")
 
-
 def main_least_squares():
 
     # load reference solution
@@ -84,11 +82,9 @@ def main_least_squares():
     #     w_sim_ref = json.load(f)
 
     opts = nosnoc.NosnocOpts()
-    # opts.irk_representation = "differential"
     opts.use_fesd = True
     comp_tol = 1e-7
     opts.comp_tol = comp_tol
-    # opts.homotopy_update_slope = 0.9  # decrease rate
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.print_level = 3
@@ -128,8 +124,42 @@ def main_least_squares():
     # breakpoint()
 
 
-def plot_oscilator(X_sim, t_grid, latexify=True):
+def main_polishing():
 
+    opts = nosnoc.NosnocOpts()
+    opts.comp_tol = 1e-4
+    opts.print_level = 3
+
+    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
+    # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    opts.do_polishing_step = True
+    opts.homotopy_update_slope = 0.1
+
+    model = get_oscilator_model()
+
+    Tsim = np.pi / 2
+    Nsim = 29
+    Tstep = Tsim / Nsim
+
+    opts.terminal_time = Tstep
+
+    solver = nosnoc.NosnocSolver(opts, model)
+    solver.print_problem()
+    # loop
+    looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
+    looper.run()
+    results = looper.get_results()
+    print(f"max cost_val = {max(results['cost_vals']):.2e}")
+
+    plot_oscilator(results["X_sim"], results["t_grid"])
+    nosnoc.plot_timings(results["cpu_nlp"])
+
+
+def plot_oscilator(X_sim, t_grid, latexify=True):
+    if latexify:
+        nosnoc.latexify_plot()
     plt.figure()
     plt.subplot(1, 2, 1)
     plt.plot(t_grid, X_sim)
@@ -170,3 +200,4 @@ def make_object_json_dumpable(input):
 if __name__ == "__main__":
     main(len(argv) > 1)
     # main_least_squares()
+    # main_polishing()
