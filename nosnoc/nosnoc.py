@@ -937,7 +937,7 @@ class NosnocProblem(NosnocFormulationObject):
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElement]] = []
 
-        # Index vectors
+        # Index vectors of optimization variables
         self.ind_x = create_empty_list_matrix((opts.N_stages,))
         self.ind_x_cont = create_empty_list_matrix((opts.N_stages,))
         self.ind_v = create_empty_list_matrix((opts.N_stages,))
@@ -1242,6 +1242,15 @@ class NosnocSolverBase(ABC):
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
 
+    def _print_iter_stats(self, sigma_k,
+            complementarity_residual,
+            nlp_res,
+            cost_val,
+            cpu_time_nlp,
+            nlp_iter,
+            status):
+        print(f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e}' +
+              f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
 
 class NosnocSolver(NosnocSolverBase):
     """
@@ -1323,9 +1332,8 @@ class NosnocSolver(NosnocSolverBase):
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
-                print(
-                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cost_val:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
-                )
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res,
+                                    cost_val, cpu_time_nlp[ii], nlp_iter[ii], status)
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
 
