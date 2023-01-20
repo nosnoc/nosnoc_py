@@ -86,13 +86,12 @@ def create_temp_control_model_voronoi(u=None):
     cost = SX.sym('cost')
 
     x = vertcat(y, w, t, cost)
-    n_x = x.shape[0]
 
     # Inital Value
     X0 = np.array([y0, w0, t0, cost0]).T
     # Range
-    lbx = -inf * np.ones((n_x,))
-    ubx = inf * np.ones((n_x,))
+    lbx = np.array([y1-1, 0, 0, 0])
+    ubx = np.array([inf, 1, inf, inf])
 
     # linear transformation for rescaling of the switching function.
     psi = (y - y1) / (y2 - y1)
@@ -107,7 +106,7 @@ def create_temp_control_model_voronoi(u=None):
         u_comb = None
         s = 1
 
-    lbu = np.array([1, 0.5])
+    lbu = np.array([0.1, 0.5])
     ubu = np.array([100, 20])
 
     # discriminant functions via voronoi
@@ -120,10 +119,9 @@ def create_temp_control_model_voronoi(u=None):
 
     # System dynamics:
     # Heating:
-    y_des = 19
-    f_cost = (y - y_des)**2
-    f_A = vertcat(lambda_cool_down * y + u, 0, 1, f_cost)
-    f_B = vertcat(lambda_cool_down * y, 0, 1, f_cost)
+    # y_des = 19
+    f_A = vertcat(lambda_cool_down * y + u, 0, 1, u)
+    f_B = vertcat(lambda_cool_down * y, 0, 1, 0)
 
     a_push = 5
     f_push_down = vertcat(0, -a_push * (psi - 1)**2 / (1 + (psi - 1)**2), 0, 0)
@@ -228,10 +226,7 @@ def simulation(u=20, Tsim=3, Nsim=30, with_plot=True):
 
 def control(with_plot=True):
     """Control the system."""
-    stages = 5
     t_end = 5
-    X_est, t_grid = simulation(u=1, Tsim=t_end, Nsim=stages, with_plot=False)
-    X_est = np.stack(X_est[1:])
 
     opts = create_options()
     model, lbx, ubx, lbu, ubu, f_q, f_terminal, X0 = create_temp_control_model_voronoi()
@@ -239,17 +234,14 @@ def control(with_plot=True):
     opts.n_s = 3
     opts.N_stages = 10
     opts.terminal_time = t_end
-    opts.initialization_strategy = nosnoc.InitializationStrategy.EXTERNAL
     opts.time_freezing = True
     opts.time_freezing_tolerance = 0.1
-    opts.sigma_N = 1e-2
 
     ocp = nosnoc.NosnocOcp(
         lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal,
         lbx=lbx, ubx=ubx
     )
     solver = nosnoc.NosnocSolver(opts, model, ocp)
-    solver.set("x", X_est)
     results = solver.solve()
     print("Dominant modes:")
     print([np.argmax(i) for i in results["theta_list"]])
@@ -261,4 +253,5 @@ def control(with_plot=True):
 
 
 if __name__ == "__main__":
+    simulation()
     control()
