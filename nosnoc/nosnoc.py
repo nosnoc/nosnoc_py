@@ -250,6 +250,8 @@ class NosnocOcp:
 
     1) constraints of the form:
     lbu <= u <= ubu
+    lbx <= x <= ubx
+    lbv_global <= v_global <= ubv_global
     g_terminal(x_terminal) = 0
 
     2) cost of the form:
