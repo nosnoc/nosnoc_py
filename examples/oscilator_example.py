@@ -58,22 +58,24 @@ def main():
     looper.run()
     results = looper.get_results()
 
-    import json
-    json_file = 'oscilator_results_ref.json'
-    with open(json_file, 'w') as f:
-        json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
-    print(f"saved results in {json_file}")
 
     plot_oscilator(results["X_sim"], results["t_grid"])
     nosnoc.plot_timings(results["cpu_nlp"])
+    # store solution
+    # import json
+    # json_file = 'oscilator_results_ref.json'
+    # with open(json_file, 'w') as f:
+    #     json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
+    # print(f"saved results in {json_file}")
 
 
 def main_least_squares():
 
-    import json
-    json_file = 'oscilator_results_ref.json'
-    with open(json_file, 'r') as f:
-        w_sim_ref = json.load(f)
+    # load reference solution
+    # import json
+    # json_file = 'oscilator_results_ref.json'
+    # with open(json_file, 'r') as f:
+    #     w_sim_ref = json.load(f)
 
     opts = nosnoc.NosnocOpts()
     # opts.irk_representation = "differential"
