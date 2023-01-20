@@ -1431,20 +1431,6 @@ class NosnocSolver(NosnocSolverBase):
         lbw[ind_fix_one] = 1.0
         ubw[ind_fix_one] = 1.0
 
-        # lbg = prob.lbg.copy()
-        # ubg = prob.ubg.copy()
-        # # remove some complementarity constraints
-        # w_zero_sym = prob.w[ind_fix_zero]
-        # set(flatten(prob.ind_theta)).intersection(ind_fix_zero)
-        # ind_theta_zero_list = list(set(flatten(prob.ind_theta)).intersection(ind_fix_zero))
-        # theta_zero = prob.w[ind_theta_zero_list]
-        # for ig in flatten(prob.ind_comp):
-        #     g_cand = prob.g[ig]
-        #     if any(which_depends(g_cand, theta_zero)):
-        #         lbg[ig] = -inf
-        #         ubg[ig] = +inf
-        #         print(f"removing g[{ig}]: {prob.g[ig]}")
-
         # fix some variables
         if opts.print_level:
             print(f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0.")
