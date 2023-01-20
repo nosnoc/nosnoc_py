@@ -426,7 +426,7 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, symbolic: SX, lb=None, ub=None):
+    def add_constraint(self, symbolic: SX, lb=None, ub=None, index: Optional[list]=None):
         n = casadi_length(symbolic)
         if lb is None:
             lb = np.zeros((n,))
@@ -434,6 +434,11 @@ class NosnocFormulationObject(ABC):
             ub = np.zeros((n,))
         if len(lb) != n or len(ub) != n:
             raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+
+        if index is not None:
+            ng = casadi_length(self.g)
+            new_indices = list(range(ng, ng + n))
+            index.append(new_indices)
 
         self.g = vertcat(self.g, symbolic)
         self.lbg = np.concatenate((self.lbg, lb))
@@ -526,6 +531,8 @@ class FiniteElement(FiniteElementBase):
         self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_h = []
+
+        self.ind_comp = []
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -786,7 +793,7 @@ class FiniteElement(FiniteElementBase):
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
 
-        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
         return
 
@@ -904,6 +911,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha[ctrl_idx].append(increment_indices(fe.ind_alpha, w_len))
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
+        # constraint indices
+        g_len = casadi_length(self.g)
+        self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
@@ -951,6 +961,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_u = []
         self.ind_h = []
         self.ind_v_global = []
+
+        # Index vectors within constraints g
+        self.ind_comp = create_empty_list_matrix((opts.N_stages,))
 
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
