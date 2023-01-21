@@ -5,7 +5,7 @@ from copy import copy
 from dataclasses import dataclass, field
 
 import numpy as np
-from casadi import SX, vertcat, horzcat, sum1, inf, Function, diag, nlpsol, fabs, tanh, mmin, transpose, fmax, fmin, exp, sqrt, norm_inf
+import casadi as ca
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
@@ -43,23 +43,23 @@ class NosnocModel:
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
     def __init__(self,
-                 x: SX,
-                 F: List[SX],
+                 x: ca.SX,
+                 F: List[ca.SX],
                  x0: Optional[np.ndarray],
-                 c: Optional[List[SX]] = None,
+                 c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
-                 g_Stewart: Optional[List[SX]] = None,
-                 u: SX = SX.sym('u_dummy', 0, 1),
-                 p_time_var: SX = SX.sym('p_tim_var_dummy', 0, 1),
-                 p_global: SX = SX.sym('p_global_dummy', 0, 1),
+                 g_Stewart: Optional[List[ca.SX]] = None,
+                 u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
+                 p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
+                 p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
-                 v_global: SX = SX.sym('v_global_dummy', 0, 1),
-                 t_var: Optional[SX] = None,
+                 v_global: ca.SX = ca.SX.sym('v_global_dummy', 0, 1),
+                 t_var: Optional[ca.SX] = None,
                  name: str = 'nosnoc'):
-        self.x: SX = x
-        self.F: List[SX] = F
-        self.c: List[SX] = c
+        self.x: ca.SX = x
+        self.F: List[ca.SX] = F
+        self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
         # Either c and S or g is given!
@@ -67,13 +67,13 @@ class NosnocModel:
             raise ValueError("Provide either c and S or g, not both!")
 
         self.x0: np.ndarray = x0
-        self.p_time_var: SX = p_time_var
-        self.p_global: SX = p_global
+        self.p_time_var: ca.SX = p_time_var
+        self.p_global: ca.SX = p_global
         self.p_time_var_val: np.ndarray = p_time_var_val
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
-        self.u: SX = u
-        self.t_var: SX = t_var
+        self.u: ca.SX = u
+        self.t_var: ca.SX = t_var
         self.name: str = name
 
         self.dims: NosnocDims = None
@@ -136,8 +136,8 @@ class NosnocModel:
                             f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
-        self.p = vertcat(self.p_time_var, self.p_global)
-        self.p_ctrl_stages = [SX.sym(f'p_stage{i}', n_p) for i in range(opts.N_stages)]
+        self.p = ca.vertcat(self.p_time_var, self.p_global)
+        self.p_ctrl_stages = [ca.SX.sym(f'p_stage{i}', n_p) for i in range(opts.N_stages)]
 
         self.p_val_ctrl_stages = np.zeros((opts.N_stages, n_p))
         for i in range(opts.N_stages):
@@ -172,66 +172,66 @@ class NosnocModel:
                         if S_temp[j, k] != 0:
                             upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) +
                                                        S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
-                    upsilon_temp = vertcat(upsilon_temp, upsilon_ij)
-                upsilon = horzcat(upsilon, upsilon_temp)
+                    upsilon_temp = ca.vertcat(upsilon_temp, upsilon_ij)
+                upsilon = ca.horzcat(upsilon, upsilon_temp)
 
         # start empty
-        g_lift = SX.zeros((0, 1))
-        g_switching = SX.zeros((0, 1))
-        g_convex = SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
-        lambda00_expr = SX.zeros(0, 0)
-        std_compl_res = SX.zeros(1)  # residual of standard complementarity
+        g_lift = ca.SX.zeros((0, 1))
+        g_switching = ca.SX.zeros((0, 1))
+        g_convex = ca.SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
+        lambda00_expr = ca.SX.zeros(0, 0)
+        std_compl_res = ca.SX.zeros(1)  # residual of standard complementarity
 
         z = fe.rk_stage_z(0)
 
         # Reformulate the Filippov ODE into a DCS
-        f_x = SX.zeros((n_x, 1))
+        f_x = ca.SX.zeros((n_x, 1))
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(n_sys):
                 f_x = f_x + self.F[ii] @ fe.w[fe.ind_theta[0][ii]]
-                g_switching = vertcat(
+                g_switching = ca.vertcat(
                     g_switching,
                     g_Stewart_list[ii] - fe.w[fe.ind_lam[0][ii]] + fe.w[fe.ind_mu[0][ii]])
-                g_convex = vertcat(g_convex, sum1(fe.w[fe.ind_theta[0][ii]]) - 1)
-                std_compl_res += fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
-                lambda00_expr = vertcat(lambda00_expr,
-                                        g_Stewart_list[ii] - mmin(g_Stewart_list[ii]))
+                g_convex = ca.vertcat(g_convex, ca.sum1(fe.w[fe.ind_theta[0][ii]]) - 1)
+                std_compl_res += ca.fabs(fe.w[fe.ind_lam[0][ii]].T @ fe.w[fe.ind_theta[0][ii]])
+                lambda00_expr = ca.vertcat(lambda00_expr,
+                                        g_Stewart_list[ii] - ca.mmin(g_Stewart_list[ii]))
         elif opts.pss_mode == PssMode.STEP:
             for ii in range(n_sys):
                 f_x = f_x + self.F[ii] @ upsilon[:, ii]
-                g_switching = vertcat(
+                g_switching = ca.vertcat(
                     g_switching,
                     self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
-                std_compl_res += transpose(fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
-                std_compl_res += transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
+                std_compl_res += ca.transpose(fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
+                std_compl_res += ca.transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
                     np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
-                lambda00_expr = vertcat(lambda00_expr, -fmin(self.c[ii], 0), fmax(self.c[ii], 0))
+                lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0), ca.fmax(self.c[ii], 0))
 
-        mu00_stewart = casadi_vertcat_list([mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
+        mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
 
         # collect all algebraic equations
-        g_z_all = vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
+        g_z_all = ca.vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
 
         # CasADi functions for indicator and region constraint functions
         self.z = z
-        self.g_Stewart_fun = Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
+        self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
 
         # dynamics
-        self.f_x_fun = Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
+        self.f_x_fun = ca.Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
 
         # lp kkt conditions without bilinear complementarity terms
-        self.g_z_switching_fun = Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
-        self.g_z_all_fun = Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
+        self.g_z_switching_fun = ca.Function('g_z_switching_fun', [self.x, z, self.u, self.p], [g_switching])
+        self.g_z_all_fun = ca.Function('g_z_all_fun', [self.x, z, self.u, self.p], [g_z_all])
         if self.t_var is not None:
-            self.t_fun = Function("t_fun", [self.x], [self.t_var])
+            self.t_fun = ca.Function("t_fun", [self.x], [self.t_var])
         elif opts.time_freezing:
             raise ValueError("Please provide t_var for time freezing!")
 
-        self.lambda00_fun = Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
+        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
-        self.std_compl_res_fun = Function('std_compl_res_fun', [z, self.p], [std_compl_res])
-        self.mu00_stewart_fun = Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
+        self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
+        self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
 
     def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
         """
@@ -245,26 +245,26 @@ class NosnocModel:
         dims = self.dims
 
         # smooth step function
-        y = SX.sym('y')
-        smooth_step_fun = Function('smooth_step_fun', [y],
-                                   [(tanh(1 / smoothing_parameter * y) + 1) / 2])
+        y = ca.SX.sym('y')
+        smooth_step_fun = ca.Function('smooth_step_fun', [y],
+                                   [(ca.tanh(1 / smoothing_parameter * y) + 1) / 2])
 
         lambda_smooth = []
         g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(dims.n_sys)]
 
-        theta_list = [SX.zeros(nf) for nf in dims.n_f_sys]
+        theta_list = [ca.SX.zeros(nf) for nf in dims.n_f_sys]
         mu_smooth_list = []
-        f_x_smooth = SX.zeros((dims.n_x, 1))
+        f_x_smooth = ca.SX.zeros((dims.n_x, 1))
         for s in range(dims.n_sys):
             n_c: int = dims.n_c_sys[s]
             alpha_expr_s = casadi_vertcat_list([smooth_step_fun(self.c[s][i]) for i in range(n_c)])
 
-            min_in = SX.sym('min_in', dims.n_f_sys[s])
-            min_out = sum1(casadi_vertcat_list([min_in[i]*exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
-                      sum1(casadi_vertcat_list([exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
-            smooth_min_fun = Function('smooth_min_fun', [min_in], [min_out])
+            min_in = ca.SX.sym('min_in', dims.n_f_sys[s])
+            min_out = ca.sum1(casadi_vertcat_list([min_in[i]*ca.exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))])) / \
+                      ca.sum1(casadi_vertcat_list([ca.exp(-1/smoothing_parameter * min_in[i]) for i in range(casadi_length(min_in))]))
+            smooth_min_fun = ca.Function('smooth_min_fun', [min_in], [min_out])
             mu_smooth_list.append(-smooth_min_fun(g_Stewart_list[s]))
-            lambda_smooth = vertcat(lambda_smooth,
+            lambda_smooth = ca.vertcat(lambda_smooth,
                                     g_Stewart_list[s] - smooth_min_fun(g_Stewart_list[s]))
 
             for i in range(dims.n_f_sys[s]):
@@ -278,10 +278,10 @@ class NosnocModel:
         theta_smooth = casadi_vertcat_list(theta_list)
         mu_smooth = casadi_vertcat_list(mu_smooth_list)
 
-        self.f_x_smooth_fun = Function('f_x_smooth_fun', [self.x], [f_x_smooth])
-        self.theta_smooth_fun = Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
-        self.mu_smooth_fun = Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
-        self.lambda_smooth_fun = Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
+        self.f_x_smooth_fun = ca.Function('f_x_smooth_fun', [self.x], [f_x_smooth])
+        self.theta_smooth_fun = ca.Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
+        self.mu_smooth_fun = ca.Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
+        self.lambda_smooth_fun = ca.Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
 
 
 class NosnocOcp:
@@ -305,9 +305,9 @@ class NosnocOcp:
                  ubu: np.ndarray = np.ones((0,)),
                  lbx: np.ndarray = np.ones((0,)),
                  ubx: np.ndarray = np.ones((0,)),
-                 f_q: SX = SX.zeros(1),
-                 f_terminal: SX = SX.zeros(1),
-                 g_terminal: SX = SX.zeros(0),
+                 f_q: ca.SX = ca.SX.zeros(1),
+                 f_terminal: ca.SX = ca.SX.zeros(1),
+                 g_terminal: ca.SX = ca.SX.zeros(0),
                  lbv_global: np.ndarray = np.ones((0,)),
                  ubv_global: np.ndarray = np.ones((0,)),
                  v_global_guess: np.ndarray = np.ones((0,)),
@@ -317,42 +317,42 @@ class NosnocOcp:
         self.ubu: np.ndarray = ubu
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
-        self.f_q: SX = f_q
-        self.f_terminal: SX = f_terminal
-        self.g_terminal: SX = g_terminal
+        self.f_q: ca.SX = f_q
+        self.f_terminal: ca.SX = f_terminal
+        self.g_terminal: ca.SX = g_terminal
         self.lbv_global: np.ndarray = lbv_global
         self.ubv_global: np.ndarray = ubv_global
         self.v_global_guess: np.ndarray = v_global_guess
 
     def preprocess_ocp(self, model: NosnocModel):
         dims: NosnocDims = model.dims
-        self.g_terminal_fun = Function('g_terminal_fun', [model.x, model.p, model.v_global], [self.g_terminal])
-        self.f_q_T_fun = Function('f_q_T_fun', [model.x, model.p, model.v_global], [self.f_terminal])
-        self.f_q_fun = Function('f_q_fun', [model.x, model.u, model.p, model.v_global], [self.f_q])
+        self.g_terminal_fun = ca.Function('g_terminal_fun', [model.x, model.p, model.v_global], [self.g_terminal])
+        self.f_q_T_fun = ca.Function('f_q_T_fun', [model.x, model.p, model.v_global], [self.f_terminal])
+        self.f_q_fun = ca.Function('f_q_fun', [model.x, model.u, model.p, model.v_global], [self.f_q])
 
         if len(self.lbx) == 0:
-            self.lbx = -inf * np.ones((dims.n_x,))
+            self.lbx = -np.inf * np.ones((dims.n_x,))
         elif len(self.lbx) != dims.n_x:
             raise ValueError("lbx should be empty or of lenght n_x.")
         if len(self.ubx) == 0:
-            self.ubx = inf * np.ones((dims.n_x,))
+            self.ubx = np.inf * np.ones((dims.n_x,))
         elif len(self.ubx) != dims.n_x:
             raise ValueError("ubx should be empty or of lenght n_x.")
 
         # global variables
         n_v_global = casadi_length(model.v_global)
         if len(self.lbv_global) == 0:
-            self.lbv_global = -inf * np.ones((n_v_global,))
+            self.lbv_global = -np.inf * np.ones((n_v_global,))
         if self.lbv_global.shape != (n_v_global,):
             raise Exception("lbv_global and v_global have inconsistent shapes.")
 
         if len(self.ubv_global) == 0:
-            self.ubv_global = -inf * np.ones((n_v_global,))
+            self.ubv_global = -np.inf * np.ones((n_v_global,))
         if self.ubv_global.shape != (n_v_global,):
             raise Exception("ubv_global and v_global have inconsistent shapes.")
 
         if len(self.v_global_guess) == 0:
-            self.v_global_guess = -inf * np.ones((n_v_global,))
+            self.v_global_guess = -np.inf * np.ones((n_v_global,))
         if self.v_global_guess.shape != (n_v_global,):
             raise Exception("v_global_guess and v_global have inconsistent shapes.")
 
@@ -374,18 +374,18 @@ class NosnocFormulationObject(ABC):
     @abstractmethod
     def __init__(self):
         # optimization variables with initial guess, bounds
-        self.w: SX = SX([])
+        self.w: ca.SX = ca.SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
         self.ubw: np.array = np.array([])
 
         # constraints and bounds
-        self.g: SX = SX([])
+        self.g: ca.SX = ca.SX([])
         self.lbg: np.array = np.array([])
         self.ubg: np.array = np.array([])
 
         # cost
-        self.cost: SX = SX.zeros(1)
+        self.cost: ca.SX = ca.SX.zeros(1)
 
         # index lists
         self.ind_x: list
@@ -397,7 +397,7 @@ class NosnocFormulationObject(ABC):
         return repr(self.__dict__)
 
     def add_variable(self,
-                     symbolic: SX,
+                     symbolic: ca.SX,
                      index: list,
                      lb: np.array,
                      ub: np.array,
@@ -411,7 +411,7 @@ class NosnocFormulationObject(ABC):
             raise Exception(
                 f'add_variable, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}')
 
-        self.w = vertcat(self.w, symbolic)
+        self.w = ca.vertcat(self.w, symbolic)
         self.lbw = np.concatenate((self.lbw, lb))
         self.ubw = np.concatenate((self.ubw, ub))
         self.w0 = np.concatenate((self.w0, initial))
@@ -426,7 +426,7 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, symbolic: SX, lb=None, ub=None, index: Optional[list]=None):
+    def add_constraint(self, symbolic: ca.SX, lb=None, ub=None, index: Optional[list]=None):
         n = casadi_length(symbolic)
         if lb is None:
             lb = np.zeros((n,))
@@ -440,7 +440,7 @@ class NosnocFormulationObject(ABC):
             new_indices = list(range(ng, ng + n))
             index.append(new_indices)
 
-        self.g = vertcat(self.g, symbolic)
+        self.g = ca.vertcat(self.g, symbolic)
         self.lbg = np.concatenate((self.lbg, lb))
         self.ubg = np.concatenate((self.ubg, ub))
 
@@ -450,7 +450,7 @@ class NosnocFormulationObject(ABC):
 class FiniteElementBase(NosnocFormulationObject):
 
     def Lambda(self, stage=slice(None), sys=slice(None)):
-        return vertcat(self.w[flatten(self.ind_lam[stage][sys])],
+        return ca.vertcat(self.w[flatten(self.ind_lam[stage][sys])],
                        self.w[flatten(self.ind_lambda_n[stage][sys])],
                        self.w[flatten(self.ind_lambda_p[stage][sys])])
 
@@ -468,21 +468,21 @@ class FiniteElementZero(FiniteElementBase):
 
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
-        self.add_variable(SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
+        self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
 
         # lambda00
         if opts.pss_mode == PssMode.STEWART:
             for ij in range(dims.n_sys):
-                self.add_variable(SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
-                                  -inf * np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                self.add_variable(ca.SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
+                                  -np.inf * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_f_sys[ij]), 0, ij)
         elif opts.pss_mode == PssMode.STEP:
             for ij in range(dims.n_sys):
-                self.add_variable(SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_n,
-                                  -inf * np.ones(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
+                self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_n,
+                                  -np.inf * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
-                self.add_variable(SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_p,
-                                  -inf * np.ones(dims.n_c_sys[ij]), inf * np.ones(dims.n_c_sys[ij]),
+                self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]), self.ind_lambda_p,
+                                  -np.inf * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                                   opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
 
 
@@ -535,7 +535,7 @@ class FiniteElement(FiniteElementBase):
         self.ind_comp = []
 
         # create variables
-        h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
+        h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
         ubh = (1 + opts.gamma_h) * h0
@@ -545,61 +545,61 @@ class FiniteElement(FiniteElementBase):
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
             lb_dual = 0.0
         else:
-            lb_dual = -inf
+            lb_dual = -np.inf
 
         # RK stage stuff
         for ii in range(opts.n_s):
             # state derivatives
             if (opts.irk_representation
                     in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
-                self.add_variable(SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_v,
-                                  -inf * np.ones(dims.n_x), inf * np.ones(dims.n_x),
+                self.add_variable(ca.SX.sym(f'V_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_v,
+                                  -np.inf * np.ones(dims.n_x), np.inf * np.ones(dims.n_x),
                                   np.zeros(dims.n_x), ii)
             # states
             if (opts.irk_representation
                     in [IrkRepresentation.INTEGRAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
-                self.add_variable(SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
+                self.add_variable(ca.SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
                                   ocp.lbx, ocp.ubx, model.x0, ii)
             # algebraic variables
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_theta, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        ca.SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_theta, lb_dual*np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, lb_dual*np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual*np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
-                    self.add_variable(SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
-                                      self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
+                    self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
+                                      self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
                                       opts.init_mu * np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
+                        ca.SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
                         self.ind_alpha, lb_dual*np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
                         opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n,
                             lb_dual*np.ones(dims.n_c_sys[ij]),
-                        inf * np.ones(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
+                        ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual*np.ones(dims.n_c_sys[ij]),
-                        inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         ii, ij)
 
         # Add right boundary points if needed
@@ -608,53 +608,53 @@ class FiniteElement(FiniteElementBase):
                 # add lambdas
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]), inf * np.ones(dims.n_f_sys[ij]),
+                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
-                    self.add_variable(SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
-                                      self.ind_mu, -inf * np.ones(1), inf * np.ones(1),
+                    self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
+                                      self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
                                       opts.init_mu * np.ones(1), opts.n_s, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
+                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_n, lb_dual*np.ones(dims.n_c_sys[ij]),
-                        inf * np.ones(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
+                        ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                dims.n_c_sys[ij]), self.ind_lambda_p, lb_dual * np.ones(dims.n_c_sys[ij]),
-                        inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]), opts.init_mu * np.ones(dims.n_c_sys[ij]),
                         opts.n_s, ij)
 
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
-            self.add_variable(SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
+            self.add_variable(ca.SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
                               ocp.lbx, ocp.ubx, model.x0, -1)
 
-    def add_step_size_variable(self, symbolic: SX, lb: float, ub: float, initial: float):
+    def add_step_size_variable(self, symbolic: ca.SX, lb: float, ub: float, initial: float):
         self.ind_h = casadi_length(self.w)
-        self.w = vertcat(self.w, symbolic)
+        self.w = ca.vertcat(self.w, symbolic)
 
         self.lbw = np.append(self.lbw, lb)
         self.ubw = np.append(self.ubw, ub)
         self.w0 = np.append(self.w0, initial)
         return
 
-    def rk_stage_z(self, stage) -> SX:
+    def rk_stage_z(self, stage) -> ca.SX:
         idx = np.concatenate((flatten(self.ind_theta[stage]), flatten(self.ind_lam[stage]),
                               flatten(self.ind_mu[stage]), flatten(self.ind_alpha[stage]),
                               flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage])))
         return self.w[idx]
 
-    def Theta(self, stage=slice(None), sys=slice(None)) -> SX:
-        return vertcat(
+    def Theta(self, stage=slice(None), sys=slice(None)) -> ca.SX:
+        return ca.vertcat(
             self.w[flatten(self.ind_theta[stage][sys])],
             self.w[flatten(self.ind_alpha[stage][sys])],
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
@@ -663,7 +663,7 @@ class FiniteElement(FiniteElementBase):
     def get_Theta_list(self) -> list:
         return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
 
-    def sum_Theta(self) -> SX:
+    def sum_Theta(self) -> ca.SX:
         return casadi_sum_list(self.get_Theta_list())
 
     def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
@@ -677,10 +677,10 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Lambdas)
 
 
-    def h(self) -> SX:
+    def h(self) -> ca.SX:
         return self.w[self.ind_h]
 
-    def forward_simulation(self, ocp: NosnocOcp, Uk: SX) -> None:
+    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
         opts = self.opts
         model = self.model
 
@@ -742,12 +742,12 @@ class FiniteElement(FiniteElementBase):
 
 
 
-    def create_complementarity(self, x: List[SX], y: SX, sigma: SX, tau: SX) -> None:
+    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
         """
         adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
-        :param x: list of SX
-        :param y: SX
+        :param x: list of ca.SX
+        :param y: ca.SX
         :param sigma: smoothing parameter
         :param tau: another smoothing parameter
         """
@@ -756,23 +756,23 @@ class FiniteElement(FiniteElementBase):
         n = casadi_length(y)
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
-            # g_comp = diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
-            g_comp = diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
+            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
+            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
             # NOTE: this line should be equivalent but yield different results
-            # g_comp = casadi_sum_list([diag(x_i) @ y for x_i in x]) - sigma
+            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            g_comp = SX.zeros(n, 1)
+            g_comp = ca.SX.zeros(n, 1)
             for j in range(n):
                 for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
             if len(x) != 1:
                 raise Exception("not supported")
-            g_comp = SX.zeros(4*n, 1)
+            g_comp = ca.SX.zeros(4*n, 1)
             # classic FB
             for j in range(n):
                 for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
             # augment 1
             aug1_weight = 1e0
             for j in range(n):
@@ -783,7 +783,7 @@ class FiniteElement(FiniteElementBase):
             aug2_weight = 1e1
             for j in range(n):
                 for x_i in x:
-                    g_comp[j+3*n] = aug2_weight * (g_comp[j]) * sqrt(1+(x_i[j] - y[j])**2)
+                    g_comp[j+3*n] = aug2_weight * (g_comp[j]) * ca.sqrt(1+(x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
@@ -797,7 +797,7 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: SX, tau: SX) -> None:
+    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
         opts = self.opts
         if not opts.use_fesd:
             for j in range(opts.n_s):
@@ -819,7 +819,7 @@ class FiniteElement(FiniteElementBase):
                 self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau)
         return
 
-    def step_equilibration(self, sigma_p: SX, tau: SX) -> None:
+    def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX) -> None:
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
@@ -845,7 +845,7 @@ class FiniteElement(FiniteElementBase):
             nu_k = nu_k * eta_k[jjj]
 
         if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-            self.cost += opts.rho_h * tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
+            self.cost += opts.rho_h * ca.tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
             self.cost += opts.rho_h * nu_k * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
@@ -854,7 +854,7 @@ class FiniteElement(FiniteElementBase):
             self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau)
             # self.add_constraint(nu_k)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
-        #     self.add_constraint(tanh(nu_k)*delta_h_ki)
+        #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
         return
 
 
@@ -862,7 +862,7 @@ class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
-        Uk = SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
+        Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu,
                           np.zeros((self.model.dims.n_u,)))
 
@@ -882,8 +882,8 @@ class NosnocProblem(NosnocFormulationObject):
         lambda00 = self.fe0.Lambda()
 
         # lambda00 is parameter
-        self.p = vertcat(self.p, lambda00)
-        self.p = vertcat(self.p, x0)
+        self.p = ca.vertcat(self.p, lambda00)
+        self.p = ca.vertcat(self.p, x0)
 
         # v_global
         self.add_variable(self.model.v_global, self.ind_v_global, self.ocp.lbv_global, self.ocp.ubv_global,
@@ -913,7 +913,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
-    def _add_primal_vector(self, symbolic: SX, lb: np.array, ub, initial):
+    def _add_primal_vector(self, symbolic: ca.SX, lb: np.array, ub, initial):
         n = casadi_length(symbolic)
 
         if len(lb) != n or len(ub) != n or len(initial) != n:
@@ -921,7 +921,7 @@ class NosnocProblem(NosnocFormulationObject):
                 f'_add_primal_vector, inconsistent dimension: {symbolic=}, {lb=}, {ub=}, {initial=}'
             )
 
-        self.w = vertcat(self.w, symbolic)
+        self.w = ca.vertcat(self.w, symbolic)
         self.lbw = np.concatenate((self.lbw, lb))
         self.ubw = np.concatenate((self.ubw, ub))
         self.w0 = np.concatenate((self.w0, initial))
@@ -971,9 +971,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_comp = create_empty_list_matrix((opts.N_stages,))
 
         # setup parameters, lambda00 is added later:
-        sigma_p = SX.sym('sigma_p')  # homotopy parameter
-        tau = SX.sym('tau')  # homotopy parameter
-        self.p = vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
+        sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
+        tau = ca.SX.sym('tau')  # homotopy parameter
+        self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
         # Generate all the variables we need
         self.__create_primal_variables()
@@ -1015,9 +1015,9 @@ class NosnocProblem(NosnocFormulationObject):
         if opts.use_fesd:
             J_comp = 0.0
             for fe in flatten(self.stages):
-                sum_abs_lam = casadi_sum_list([fabs(lam) for lam in fe.get_Lambdas_incl_last_prev_fe()])
-                sum_abs_theta = casadi_sum_list([fabs(t) for t in fe.get_Theta_list()])
-                J_comp += sum1(diag(sum_abs_theta) @ sum_abs_lam)
+                sum_abs_lam = casadi_sum_list([ca.fabs(lam) for lam in fe.get_Lambdas_incl_last_prev_fe()])
+                sum_abs_theta = casadi_sum_list([ca.fabs(t) for t in fe.get_Theta_list()])
+                J_comp += ca.sum1(ca.diag(sum_abs_theta) @ sum_abs_lam)
         else:
             J_comp = casadi_sum_list([
                 model.std_compl_res_fun(fe.rk_stage_z(j), fe.p)
@@ -1038,10 +1038,10 @@ class NosnocProblem(NosnocFormulationObject):
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
-        # CasADi Functions
-        self.cost_fun = Function('cost_fun', [self.w], [self.cost])
-        self.comp_res = Function('comp_res', [self.w, self.p], [J_comp])
-        self.g_fun = Function('g_fun', [self.w, self.p], [self.g])
+        # CasADi ca.Functions
+        self.cost_fun = ca.Function('cost_fun', [self.w], [self.cost])
+        self.comp_res = ca.Function('comp_res', [self.w, self.p], [J_comp])
+        self.g_fun = ca.Function('g_fun', [self.w, self.p], [self.g])
 
         # copy original w0
         self.w0_original = self.w0.copy()
@@ -1053,7 +1053,7 @@ class NosnocProblem(NosnocFormulationObject):
                 if self.lbg[ii] != 0.0:
                     raise Exception(f"least_squares constraint handling only supported if all lbg, ubg == 0.0, got {self.lbg[ii]=}, {self.ubg[ii]=}, {self.g[ii]=}")
                 self.cost += self.g[ii] ** 2
-            self.g = SX([])
+            self.g = ca.SX([])
             self.lbg = np.array([])
             self.ubg = np.array([])
 
@@ -1286,7 +1286,7 @@ class NosnocSolver(NosnocSolverBase):
         # create NLP Solver
         try:
             casadi_nlp = {'f': self.problem.cost, 'x': self.problem.w, 'g': self.problem.g, 'p': self.problem.p}
-            self.solver = nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
+            self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
@@ -1341,8 +1341,8 @@ class NosnocSolver(NosnocSolverBase):
             solver_stats = self.solver.stats()
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
-            nlp_res = norm_inf(sol['g']).full()[0][0]
-            cost_val = norm_inf(sol['f']).full()[0][0]
+            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -1455,8 +1455,8 @@ class NosnocSolver(NosnocSolverBase):
             solver_stats = self.solver.stats()
             status = solver_stats['return_status']
             nlp_iter = solver_stats['iter_count']
-            nlp_res = norm_inf(sol['g']).full()[0][0]
-            cost_val = norm_inf(sol['f']).full()[0][0]
+            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
 
             complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
