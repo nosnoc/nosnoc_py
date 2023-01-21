@@ -9,6 +9,8 @@ A1 = np.array([[1, OMEGA], [-OMEGA, 1]])
 A2 = np.array([[1, -OMEGA], [OMEGA, 1]])
 R_OSC = 1
 
+TSIM = np.pi / 2
+X_SOL = np.array([np.exp(TSIM-1) * np.cos(2*np.pi * (TSIM-1)), -np.exp(TSIM-1) * np.sin(2*np.pi*(TSIM-1))])
 
 def get_oscilator_model(use_g_Stewart=False):
 
@@ -41,18 +43,18 @@ def get_oscilator_model(use_g_Stewart=False):
 def main(use_g_Stewart=False):
     opts = nosnoc.NosnocOpts()
     opts.use_fesd = True
-    comp_tol = 1e-6
+    comp_tol = 1e-10
     opts.comp_tol = comp_tol
     opts.homotopy_update_slope = 0.1  # decrease rate
     opts.N_finite_elements = 2
-    opts.n_s = 2
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
+    opts.n_s = 4
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    opts.print_level = 1
 
     model = get_oscilator_model(use_g_Stewart)
 
-    Tsim = np.pi / 2
     Nsim = 29
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
 
     opts.terminal_time = Tstep
 
@@ -63,9 +65,11 @@ def main(use_g_Stewart=False):
     looper.run()
     results = looper.get_results()
 
+    error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+    print(f"error wrt exact solution {error:.2e}")
 
     plot_oscilator(results["X_sim"], results["t_grid"])
-    nosnoc.plot_timings(results["cpu_nlp"])
+    # nosnoc.plot_timings(results["cpu_nlp"])
     # store solution
     # import json
     # json_file = 'oscilator_results_ref.json'
@@ -104,9 +108,8 @@ def main_least_squares():
 
     model = get_oscilator_model()
 
-    Tsim = np.pi / 2
     Nsim = 29
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
 
     opts.terminal_time = Tstep
 
@@ -119,8 +122,11 @@ def main_least_squares():
     results = looper.get_results()
     print(f"max cost_val = {max(results['cost_vals']):.2e}")
 
-    plot_oscilator(results["X_sim"], results["t_grid"])
-    nosnoc.plot_timings(results["cpu_nlp"])
+    error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+    print(f"error wrt exact solution {error:.2e}")
+
+    # plot_oscilator(results["X_sim"], results["t_grid"])
+    # nosnoc.plot_timings(results["cpu_nlp"])
     # breakpoint()
 
 
@@ -132,16 +138,15 @@ def main_polishing():
 
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
-    # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.do_polishing_step = True
     opts.homotopy_update_slope = 0.1
 
     model = get_oscilator_model()
 
-    Tsim = np.pi / 2
     Nsim = 29
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
 
     opts.terminal_time = Tstep
 
