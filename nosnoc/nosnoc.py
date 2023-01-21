@@ -1005,7 +1005,7 @@ class NosnocProblem(NosnocFormulationObject):
 
             if opts.time_freezing and opts.equidistant_control_grid:
                 # TODO: make t0 dynamic (since now it needs to be 0!)
-                t_now = opts.terminal_time / opts.N_stages * (k + 1) + t0
+                t_now = opts.terminal_time / opts.N_stages * (ctrl_idx + 1) + t0
                 Xk_end = stage[-1].w[stage[-1].ind_x[-1]]
                 self.add_constraint(model.t_fun(Xk_end) - t_now,
                                     [-opts.time_freezing_tolerance],
