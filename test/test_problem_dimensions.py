@@ -11,6 +11,7 @@ N_FINITE_ELEMENT_VALUES = range(2, 5)
 
 # TODO: add control stages instead of just simulation
 class TestProblemDimension(unittest.TestCase):
+
     def test_w(self):
         model = get_simplest_model_sliding()
 

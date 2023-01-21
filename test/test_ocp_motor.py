@@ -10,13 +10,11 @@ from examples.motor_with_friction_ocp import (
 import nosnoc
 import numpy as np
 
+options = [(step_equilibration, pss_mode)
+           for pss_mode in nosnoc.PssMode
+           for step_equilibration in nosnoc.StepEquilibrationMode
+           if step_equilibration != nosnoc.StepEquilibrationMode.DIRECT]
 
-options = [
-    (step_equilibration, pss_mode)
-    for pss_mode in nosnoc.PssMode
-    for step_equilibration in nosnoc.StepEquilibrationMode
-    if step_equilibration != nosnoc.StepEquilibrationMode.DIRECT
-]
 
 class TestOcpMotor(unittest.TestCase):
 
