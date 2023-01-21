@@ -17,7 +17,10 @@ class TestParametericOcp(unittest.TestCase):
 
         results_with_global_var = solve_paramteric_example(with_global_var=True)
         self.assertTrue(np.allclose(np.ones((1,)), results_with_global_var["v_global"], atol=1e-7))
-        self.assertTrue(np.allclose(np.array(ref_results["x_list"]), np.array(results_with_global_var["x_list"]), atol=1e-7))
+        self.assertTrue(
+            np.allclose(np.array(ref_results["x_list"]),
+                        np.array(results_with_global_var["x_list"]),
+                        atol=1e-7))
 
 
 if __name__ == "__main__":

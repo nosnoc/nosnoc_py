@@ -42,7 +42,7 @@ class TestValidation(unittest.TestCase):
 
     def test_switching_system_wrong_S_shape(self):
         x = SX.sym('x')
-        F = [horzcat(-x, 2*x)]
+        F = [horzcat(-x, 2 * x)]
         c = [x + x**2]
         S = [np.array([-1])]
         X0 = np.array([0])

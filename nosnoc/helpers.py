@@ -6,7 +6,12 @@ from .nosnoc import NosnocSolver
 
 class NosnocSimLooper:
 
-    def __init__(self, solver: NosnocSolver, x0: np.ndarray, Nsim: int, p_values: Optional[np.ndarray]=None, w_init: Optional[list]=None):
+    def __init__(self,
+                 solver: NosnocSolver,
+                 x0: np.ndarray,
+                 Nsim: int,
+                 p_values: Optional[np.ndarray] = None,
+                 w_init: Optional[list] = None):
         """
         :param solver: NosnocSolver to be called in a loop
         :param x0: np.ndarray: initial state
@@ -39,7 +44,7 @@ class NosnocSimLooper:
         self.cost_vals = []
         self.w_init = w_init
 
-        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy+1))
+        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + 1))
 
     def run(self) -> None:
         """Run the simulation loop."""
@@ -63,7 +68,6 @@ class NosnocSimLooper:
             self.w_sim += [results["w_sol"]]
             self.w_all += [results["w_all"]]
             self.cost_vals.append(results["cost_val"])
-
 
     def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))

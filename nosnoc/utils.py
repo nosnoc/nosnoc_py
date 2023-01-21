@@ -55,7 +55,7 @@ def casadi_sum_list(input: list):
 
 
 # Note this is not generalized, it expects equivalent depth, greater than `layer`
-def flatten_layer(L: list, layer: int=0):
+def flatten_layer(L: list, layer: int = 0):
     if layer == 0:
         # Check if already flat
         if any(isinstance(e, list) for e in L):
@@ -72,6 +72,7 @@ def flatten(L):
         return [a for i in L for a in flatten(i)]
     else:
         return [L]
+
 
 def flatten_outer_layers(L: list, n_layers: int):
     for _ in range(n_layers):

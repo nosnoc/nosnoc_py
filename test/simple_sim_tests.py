@@ -56,7 +56,6 @@ def test_opts(opts, model):
     assert errors["x_end"] < tol
 
 
-
 class SimpleTests(unittest.TestCase):
 
     def test_default(self):
@@ -165,7 +164,6 @@ class SimpleTests(unittest.TestCase):
             print(f"Test failed with setting:\n {opts=} \n{model=}")
             # TODO: Fix test!
             pass
-
 
     def test_initializations(self):
         model = get_simplest_model_switch()
