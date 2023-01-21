@@ -426,7 +426,7 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, symbolic: SX, lb=None, ub=None):
+    def add_constraint(self, symbolic: SX, lb=None, ub=None, index: Optional[list]=None):
         n = casadi_length(symbolic)
         if lb is None:
             lb = np.zeros((n,))
@@ -434,6 +434,11 @@ class NosnocFormulationObject(ABC):
             ub = np.zeros((n,))
         if len(lb) != n or len(ub) != n:
             raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+
+        if index is not None:
+            ng = casadi_length(self.g)
+            new_indices = list(range(ng, ng + n))
+            index.append(new_indices)
 
         self.g = vertcat(self.g, symbolic)
         self.lbg = np.concatenate((self.lbg, lb))
@@ -526,6 +531,8 @@ class FiniteElement(FiniteElementBase):
         self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_h = []
+
+        self.ind_comp = []
 
         # create variables
         h = SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -786,7 +793,7 @@ class FiniteElement(FiniteElementBase):
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
 
-        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp)
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
         return
 
@@ -920,6 +927,14 @@ class NosnocProblem(NosnocFormulationObject):
         self.w0 = np.concatenate((self.w0, initial))
         return
 
+    def add_fe_constraints(self, fe: FiniteElement, ctrl_idx: int):
+        g_len = casadi_length(self.g)
+        self.add_constraint(fe.g, fe.lbg, fe.ubg)
+        # constraint indices
+        self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
+        return
+
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         super().__init__()
@@ -937,7 +952,7 @@ class NosnocProblem(NosnocFormulationObject):
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         self.stages: list[list[FiniteElement]] = []
 
-        # Index vectors
+        # Index vectors of optimization variables
         self.ind_x = create_empty_list_matrix((opts.N_stages,))
         self.ind_x_cont = create_empty_list_matrix((opts.N_stages,))
         self.ind_v = create_empty_list_matrix((opts.N_stages,))
@@ -952,6 +967,9 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_h = []
         self.ind_v_global = []
 
+        # Index vectors within constraints g
+        self.ind_comp = create_empty_list_matrix((opts.N_stages,))
+
         # setup parameters, lambda00 is added later:
         sigma_p = SX.sym('sigma_p')  # homotopy parameter
         tau = SX.sym('tau')  # homotopy parameter
@@ -965,8 +983,8 @@ class NosnocProblem(NosnocFormulationObject):
         if opts.time_freezing:
             t0 = model.t_fun(self.fe0.w[self.fe0.ind_x[-1]])
 
-        for k, stage in enumerate(self.stages):
-            Uk = self.w[self.ind_u[k]]
+        for ctrl_idx, stage in enumerate(self.stages):
+            Uk = self.w[self.ind_u[ctrl_idx]]
             for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
@@ -980,14 +998,14 @@ class NosnocProblem(NosnocFormulationObject):
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
-                self.add_constraint(fe.g, fe.lbg, fe.ubg)
+                self.add_fe_constraints(fe, ctrl_idx)
 
             if opts.use_fesd and opts.equidistant_control_grid:
                 self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
 
             if opts.time_freezing and opts.equidistant_control_grid:
                 # TODO: make t0 dynamic (since now it needs to be 0!)
-                t_now = opts.terminal_time / opts.N_stages * (k + 1) + t0
+                t_now = opts.terminal_time / opts.N_stages * (ctrl_idx + 1) + t0
                 Xk_end = stage[-1].w[stage[-1].ind_x[-1]]
                 self.add_constraint(model.t_fun(Xk_end) - t_now,
                                     [-opts.time_freezing_tolerance],
@@ -1242,6 +1260,15 @@ class NosnocSolverBase(ABC):
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
 
+    def _print_iter_stats(self, sigma_k,
+            complementarity_residual,
+            nlp_res,
+            cost_val,
+            cpu_time_nlp,
+            nlp_iter,
+            status):
+        print(f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e}' +
+              f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
 
 class NosnocSolver(NosnocSolverBase):
     """
@@ -1278,9 +1305,10 @@ class NosnocSolver(NosnocSolverBase):
         w0 = prob.w0
 
         w_all = [w0.copy()]
-        complementarity_stats = opts.max_iter_homotopy * [None]
-        cpu_time_nlp = opts.max_iter_homotopy * [None]
-        nlp_iter = opts.max_iter_homotopy * [None]
+        n_iter_polish = opts.max_iter_homotopy + 1
+        complementarity_stats = n_iter_polish * [None]
+        cpu_time_nlp = n_iter_polish * [None]
+        nlp_iter = n_iter_polish * [None]
 
         if opts.print_level:
             print('-------------------------------------------')
@@ -1323,9 +1351,8 @@ class NosnocSolver(NosnocSolverBase):
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
-                print(
-                    f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e} \t {cost_val:.2e} \t {cpu_time_nlp[ii]:3f} \t {nlp_iter[ii]} \t {status}'
-                )
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res,
+                                    cost_val, cpu_time_nlp[ii], nlp_iter[ii], status)
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
 
@@ -1343,6 +1370,9 @@ class NosnocSolver(NosnocSolverBase):
                     opts.sigma_N,
                     min(opts.homotopy_update_slope * sigma_k,
                         sigma_k**opts.homotopy_update_exponent))
+
+        if opts.do_polishing_step:
+            w_opt, cpu_time_nlp[n_iter_polish-1], nlp_iter[n_iter_polish-1] = self.polish_solution(w_opt, lambda00, x0)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -1370,3 +1400,70 @@ class NosnocSolver(NosnocSolverBase):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
+    def polish_solution(self, w_guess, lambda00, x0):
+        opts = self.opts
+        if opts.pss_mode != PssMode.STEWART:
+            raise NotImplementedError()
+        prob = self.problem
+
+        eps_sigma = 1e1 * opts.comp_tol
+
+        ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha + prob.ind_theta + prob.ind_mu)
+        ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global + prob.ind_v)
+        # sanity check
+        ind_all = ind_set + ind_dont_set
+        for iw in range(len(w_guess)):
+            if iw not in ind_all:
+                raise Exception(f"w[{iw}] = {prob.w[iw]} not handled proprerly")
+
+        w_fix_zero = w_guess < eps_sigma
+        w_fix_zero[ind_dont_set] = False
+        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
+
+        w_fix_one = np.abs(w_guess - 1.0) < eps_sigma
+        w_fix_one[ind_dont_set] = False
+        ind_fix_one = np.where(w_fix_one)[0].tolist()
+
+        lbw = prob.lbw.copy()
+        ubw = prob.ubw.copy()
+        lbw[ind_fix_zero] = 0.0
+        ubw[ind_fix_zero] = 0.0
+        lbw[ind_fix_one] = 1.0
+        ubw[ind_fix_one] = 1.0
+
+        # fix some variables
+        if opts.print_level:
+            print(f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0.")
+        for i_ctrl in range(opts.N_stages):
+            for i_fe in range(opts.Nfe_list[i_ctrl]):
+                w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
+
+            sigma_k, tau_val = 0.0, 0.0
+            p_val = np.concatenate((prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k, tau_val]), lambda00, x0))
+
+            # solve NLP
+            t = time.time()
+            sol = self.solver(x0=w_guess,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
+                              lbx=lbw,
+                              ubx=ubw,
+                              p=p_val)
+            cpu_time_nlp = time.time() - t
+
+            # print and process solution
+            solver_stats = self.solver.stats()
+            status = solver_stats['return_status']
+            nlp_iter = solver_stats['iter_count']
+            nlp_res = norm_inf(sol['g']).full()[0][0]
+            cost_val = norm_inf(sol['f']).full()[0][0]
+            w_opt = sol['x'].full().flatten()
+
+            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
+            if opts.print_level:
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res,
+                                    cost_val, cpu_time_nlp, nlp_iter, status)
+            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
+                print(f"Warning: IPOPT exited with status {status}")
+
+        return w_opt, cpu_time_nlp, nlp_iter

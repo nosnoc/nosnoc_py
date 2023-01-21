@@ -60,6 +60,9 @@ class NosnocOpts:
     step_equilibration_sigma: float = 0.1
     rho_h: float = 1.0
 
+    # polishing step
+    do_polishing_step = False
+
     # OCP only
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
