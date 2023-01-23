@@ -61,7 +61,7 @@ class NosnocOpts:
     rho_h: float = 1.0
 
     # polishing step
-    do_polishing_step = False
+    do_polishing_step: bool = False
 
     # OCP only
     N_stages: int = 1
