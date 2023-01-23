@@ -75,8 +75,6 @@ class OscilatorTests(unittest.TestCase):
 
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
         opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED
-        # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-        # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
 
         results = solve_oscilator(opts, do_plot=False)
         errors = compute_errors(results)

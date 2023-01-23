@@ -54,6 +54,7 @@ def test_opts(opts, model):
     assert errors["t_end"] < tol
     assert errors["x_switch"] < tol
     assert errors["x_end"] < tol
+    return results
 
 
 class SimpleTests(unittest.TestCase):
@@ -150,20 +151,26 @@ class SimpleTests(unittest.TestCase):
 
         opts = get_default_options()
         opts.print_level = 2
+        opts.N_finite_elements = 2
         opts.n_s = 3
-        opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-        opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+
         opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+        opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+        opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+
+        # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
         opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
-        opts.initialization_strategy = nosnoc.InitializationStrategy.EXTERNAL
-        opts.sigma_0 = 1e-3
-        opts.gamma_h = 1.0
+
+        opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+        # opts.fix_active_set_fe0 = True
+        opts.do_polishing_step
+        opts.sigma_0 = 1e0
+        opts.gamma_h = np.inf
         try:
-            test_opts(opts, model=model)
+            results = test_opts(opts, model=model)
+            print(results["t_grid"])
         except:
-            print(f"Test failed with setting:\n {opts=} \n{model=}")
-            # TODO: Fix test!
-            pass
+            raise Exception(f"Test failed with setting:\n {opts=}")
 
     def test_initializations(self):
         model = get_simplest_model_switch()
@@ -176,7 +183,7 @@ class SimpleTests(unittest.TestCase):
             try:
                 test_opts(opts, model=model)
             except:
-                raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                raise Exception(f"Test failed with setting:\n {opts=}")
 
     def test_polishing(self):
         model = get_simplest_model_switch()
@@ -195,4 +202,4 @@ if __name__ == "__main__":
     unittest.main()
     # uncomment to run single test locally
     # simple_test = SimpleTests()
-    # simple_test.test_polishing()
+    # simple_test.test_least_squares_problem()
