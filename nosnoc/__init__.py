@@ -5,3 +5,6 @@ from .helpers import NosnocSimLooper
 from .utils import casadi_length, print_casadi_vector, flatten_layer
 from .plot_utils import plot_timings, plot_iterates, latexify_plot
 from .rk_utils import rk4
+
+import warnings
+warnings.simplefilter("always")
