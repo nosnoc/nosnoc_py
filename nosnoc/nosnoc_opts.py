@@ -8,6 +8,12 @@ from .utils import validate
 from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling
 
 
+def _assign(dictionary, keys, value):
+    """Assign a value."""
+    for key in keys:
+        dictionary[key] = value
+
+
 @dataclass
 class NosnocOpts:
 
@@ -80,15 +86,29 @@ class NosnocOpts:
     opts_casadi_nlp['ipopt']['max_iter'] = 500
     opts_casadi_nlp['ipopt']['print_level'] = 0
     opts_casadi_nlp['ipopt']['bound_relax_factor'] = 0
-    tol_ipopt = 1e-10
-    opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
-    opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
-    opts_casadi_nlp['ipopt']['compl_inf_tol'] = tol_ipopt
+    tol_ipopt = property(
+        fget=lambda s: s.opts_casadi_nlp['ipopt']['tol'],
+        fset=lambda s, v: _assign(
+            s.opts_casadi_nlp['ipopt'],
+            ['tol', 'dual_inf_tol', 'compl_inf_tol', 'mu_target'], v
+        ),
+        doc="Ipopt tolerance."
+    )
+    opts_casadi_nlp['ipopt']['tol'] = None
+    opts_casadi_nlp['ipopt']['dual_inf_tol'] = None
+    opts_casadi_nlp['ipopt']['compl_inf_tol'] = None
     opts_casadi_nlp['ipopt']['mu_strategy'] = 'adaptive'
     opts_casadi_nlp['ipopt']['mu_oracle'] = 'quality-function'
 
     time_freezing: bool = False
     time_freezing_tolerance: float = 1e-3
+
+    # Usabillity:
+    nlp_max_iter = property(
+        fget=lambda s: s.opts_casadi_nlp["ipopt"]["max_iter"],
+        fset=lambda s, v: _assign(s.opts_casadi_nlp["ipopt"], ["max_iter"], v),
+        doc="Maximum amount of iterations for the subsolver."
+    )
 
     def __repr__(self) -> str:
         out = ''
@@ -97,17 +117,13 @@ class NosnocOpts:
         return out
 
     def preprocess(self):
-        validate(self)
-
-        # self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
-        # TODO: clean this up: only do this if not set by user.
         # IPOPT tol should be smaller than outer tol, but not too much
         # Note IPOPT option list: https://coin-or.github.io/Ipopt/OPTIONS.html
-        tol_ipopt = self.comp_tol * 1e-2
-        self.opts_casadi_nlp['ipopt']['tol'] = tol_ipopt
-        self.opts_casadi_nlp['ipopt']['dual_inf_tol'] = tol_ipopt
-        self.opts_casadi_nlp['ipopt']['compl_inf_tol'] = tol_ipopt
-        self.opts_casadi_nlp['ipopt']['mu_target'] = tol_ipopt
+        if self.tol_ipopt is None:
+            self.tol_ipopt = self.comp_tol * 1e-2
+
+        validate(self)
+        # self.opts_casadi_nlp['ipopt']['print_level'] = self.print_level
 
         if self.time_freezing:
             if self.n_s < 3:
