@@ -68,6 +68,27 @@ class OscilatorTests(unittest.TestCase):
         assert errors["x_end"] < tol
 
 
+    def test_fix_active_set(self):
+        opts = get_default_options()
+        opts.print_level = 0
+        opts.fix_active_set_fe0 = True
+
+        opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+        opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED
+        # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+        # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+
+        results = solve_oscilator(opts, do_plot=False)
+        errors = compute_errors(results)
+
+        print(errors)
+        tol = 1e-5
+        assert errors["t_switch"] < tol
+        assert errors["t_end"] < tol
+        assert errors["x_switch"] < tol
+        assert errors["x_end"] < tol
+
+
 if __name__ == "__main__":
     unittest.main()
     # uncomment to run single test locally
