@@ -1351,7 +1351,7 @@ class NosnocSolver(NosnocSolverBase):
         self.initialize()
         opts = self.opts
         prob = self.problem
-        w0 = prob.w0
+        w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
         n_iter_polish = opts.max_iter_homotopy + 1
@@ -1370,6 +1370,43 @@ class NosnocSolver(NosnocSolverBase):
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
+        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
+            lbw = prob.lbw.copy()
+            ubw = prob.ubw.copy()
+
+            # lambda00 != 0.0 -> corresponding thetas on first fe are zero
+            I_active_lam = np.where(lambda00 > 1e1*opts.comp_tol)[0].tolist()
+            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2) # flatten sys
+            w_zero_indices = []
+            for i in range(opts.n_s):
+                tmp = flatten(ind_theta_fe1[i])
+                try:
+                    w_zero_indices += [tmp[i] for i in I_active_lam]
+                except:
+                    breakpoint()
+
+            # if all but one lambda are zero: this theta can be fixed to 1.0, all other thetas are 0.0
+            w_one_indices = []
+            # I_lam_zero = set(range(len(lambda00))).difference( I_active_lam )
+            # n_lam = sum(prob.model.dims.n_f_sys)
+            # if len(I_active_lam) == n_lam - 1:
+            #     for i in range(opts.n_s):
+            #         tmp = flatten(ind_theta_fe1[i])
+            #         w_one_indices += [tmp[i] for i in I_lam_zero]
+            if opts.print_level > 1:
+                print(f"fixing {prob.w[w_one_indices]} = 1. and {prob.w[w_zero_indices]} = 0.")
+                print(f"Since lambda00 = {lambda00}")
+            w0[w_zero_indices] = 0.0
+            lbw[w_zero_indices] = 0.0
+            ubw[w_zero_indices] = 0.0
+            w0[w_one_indices] = 1.0
+            lbw[w_one_indices] = 1.0
+            ubw[w_one_indices] = 1.0
+
+        else:
+            lbw = prob.lbw
+            ubw = prob.ubw
+
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
@@ -1383,8 +1420,8 @@ class NosnocSolver(NosnocSolverBase):
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
-                              lbx=prob.lbw,
-                              ubx=prob.ubw,
+                              lbx=lbw,
+                              ubx=ubw,
                               p=p_val)
             cpu_time_nlp[ii] = time.time() - t
 

@@ -34,6 +34,7 @@ class NosnocOpts:
 
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation
     # used in InitializationStrategy.RK4_smoothed
+    fix_active_set_fe0: bool = False
 
     # initialization - Stewart
     init_theta: float = 1.0
