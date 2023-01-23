@@ -43,7 +43,6 @@ class NosnocOpts:
     # initialization - Step
     init_alpha: float = 1.0  # for step only
     init_beta: float = 1.0
-    init_gamma: float = 1.0
 
     N_finite_elements: int = 2  #
     Nfe_list: list = field(default_factory=list)  #: list of length N_stages, Nfe per stage
