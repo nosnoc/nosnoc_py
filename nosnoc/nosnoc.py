@@ -1404,7 +1404,7 @@ class NosnocSolver(NosnocSolverBase):
             if opts.print_level:
                 self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
-            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
+            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found']:
                 print(f"Warning: IPOPT exited with status {status}")
 
             if complementarity_residual < opts.comp_tol:
