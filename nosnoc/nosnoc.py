@@ -149,7 +149,8 @@ class NosnocModel:
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
             raise Exception("dimension of p_global_val and p_global mismatch.",
-                            f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+                            f"Expected shape ({n_p_glob},), got p_global_val.shape {self.p_global_val.shape},"
+                            f"p_global {self.p_global}, p_global_val {self.p_global_val}")
 
         n_p_time_var = casadi_length(self.p_time_var)
         if self.p_time_var_val is None:
@@ -157,7 +158,9 @@ class NosnocModel:
         if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
             raise Exception(
                 "dimension of p_time_var_val and p_time_var mismatch.",
-                f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+                f"Expected shape: ({opts.N_stages}, {n_p_time_var}), "
+                f"got p_time_var_val.shape {self.p_time_var_val.shape}"
+                f"p_time_var {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = ca.vertcat(self.p_time_var, self.p_global)
