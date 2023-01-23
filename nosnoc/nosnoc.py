@@ -793,11 +793,11 @@ class FiniteElement(FiniteElementBase):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
             # augment 1
-            aug1_weight = 1e0
+            aug1_weight = 1e1
             for j in range(n):
                 for x_i in x:
-                    g_comp[j + n] = aug1_weight * (x_i[j] - sigma) * tau
-                g_comp[j + 2 * n] = aug1_weight * (y[j] - sigma) * tau
+                    g_comp[j + n] = aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
+                g_comp[j + 2 * n] = aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
             # augment 2
             aug2_weight = 1e1
             for j in range(n):
@@ -1409,7 +1409,7 @@ class NosnocSolver(NosnocSolverBase):
 
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
-            tau_val = sigma_k
+            tau_val = sigma_k ** 1.5
             # tau_val = sigma_k**1.5*1e3
             p_val = np.concatenate(
                 (prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k,
