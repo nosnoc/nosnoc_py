@@ -34,6 +34,7 @@ class StepEquilibrationMode(Enum):
     L2_RELAXED = auto()
     DIRECT = auto()
     DIRECT_COMPLEMENTARITY = auto()
+    HEURISTIC_DELTA_H_COMP = auto()
     # NOTE: tested in test_ocp_motor
 
 

@@ -874,7 +874,8 @@ class FiniteElement(FiniteElementBase):
             self.add_constraint(nu_k * delta_h_ki)
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT_COMPLEMENTARITY:
             self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau)
-            # self.add_constraint(nu_k)
+        elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA_H_COMP:
+            self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
         #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
         return
