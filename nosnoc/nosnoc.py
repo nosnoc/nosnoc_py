@@ -1469,14 +1469,17 @@ class NosnocSolver(NosnocSolverBase):
 
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-            threshold = np.max([np.sqrt(cost_val) / 10, opts.comp_tol * 1e2, 1e-5])
+            threshold = np.max([np.sqrt(cost_val) / 100, opts.comp_tol * 1e2, 1e-5])
             g_val = prob.g_fun(w_opt, p_val).full().flatten()
             if max(abs(g_val)) > threshold:
                 print("\nconstraint violations:")
                 for ii in range(len(g_val)):
-                    if g_val[ii] > threshold:
-                        print(f"g_val[{ii}] = {g_val[ii]} expr: {prob.g_lsq[ii]}")
+                    if abs(g_val[ii]) > threshold:
+                        print(f"|g_val[{ii}]| = {abs(g_val[ii]):.2e} expr: {prob.g_lsq[ii]}")
                 print(f"h values: {w_opt[prob.ind_h]}")
+                # print(f"theta values: {w_opt[prob.ind_theta]}")
+                # print(f"lambda values: {w_opt[prob.ind_lam]}")
+                # print_casadi_vector(prob.g_lsq)
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
             prob.w0[:] = w_opt[:]
