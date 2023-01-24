@@ -151,7 +151,7 @@ class SimpleTests(unittest.TestCase):
 
         opts = get_default_options()
         opts.print_level = 2
-        opts.n_s = 3
+        opts.n_s = 2
 
         opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
@@ -176,7 +176,7 @@ class SimpleTests(unittest.TestCase):
             raise Exception(f"Test failed.")
 
 
-    def test_least_squares_problem_new(self):
+    def test_least_squares_problem_opts(self):
         model = get_simplest_model_switch()
 
         for step_equilibration in [nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY, nosnoc.StepEquilibrationMode.DIRECT]:
@@ -198,9 +198,10 @@ class SimpleTests(unittest.TestCase):
 
                 try:
                     results = test_opts(opts, model=model)
-                    print(results["t_grid"])
+                    # print(results["t_grid"])
                 except:
-                    raise Exception(f"Test failed.")
+                    # print(f"Test failed with {fix_as=}, {step_equilibration=}")
+                    raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
 
 
 
