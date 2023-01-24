@@ -793,16 +793,14 @@ class FiniteElement(FiniteElementBase):
                 for x_i in x:
                     g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
             # augment 1
-            aug1_weight = 1e0
             for j in range(n):
                 for x_i in x:
-                    g_comp[j + n] = aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
-                g_comp[j + 2 * n] = aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
+                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
+                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
             # augment 2
-            aug2_weight = 1e-1
             for j in range(n):
                 for x_i in x:
-                    g_comp[j + 3 * n] = aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
+                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
