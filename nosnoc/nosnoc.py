@@ -23,13 +23,15 @@ class NosnocModel:
 
 
     :param x: state variables
-    :param F: set of state equations for the different regions
     :param x0: initial state
+    :param F: set of state equations for the different regions
     :param c: set of region boundaries
     :param S: determination of the boundaries region connecting
         different state equations with each boundary zone
     :param g_Stewart: List of stewart functions to define the regions (instead of S & c)
     :param u: controls
+    :param alpha: optionally provided alpha variables for general inclusions
+    :param f_x: optionally provided rhs used for general inclusions
     :param p_time_var: time varying parameters
     :param p_global: global parameters
     :param p_time_var_val: initial values of the time varying parameters
@@ -44,12 +46,14 @@ class NosnocModel:
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
     def __init__(self,
                  x: ca.SX,
-                 F: List[ca.SX],
                  x0: Optional[np.ndarray],
+                 F: Optional[List[ca.SX]] = None,
                  c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
                  u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
+                 alpha: ca.SX = ca.SX.sym('alpha_dummy', 0, 1),
+                 f_x: Optional[List[ca.SX]] = None,
                  p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
@@ -58,14 +62,18 @@ class NosnocModel:
                  t_var: Optional[ca.SX] = None,
                  name: str = 'nosnoc'):
         self.x: ca.SX = x
+        self.alpha: ca.SX = alpha
         self.F: List[ca.SX] = F
+        self.f_x: List[ca.SX] = f_x
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
         # Either c and S or g is given!
         if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
             raise ValueError("Provide either c and S or g, not both!")
-
+        if not (bool(F is not None) ^ bool((f_x is not None) and (len(alpha) != 0))):
+            raise ValueError("Provide either F (Fillipov) or f_x and alpha")
+        
         self.x0: np.ndarray = x0
         self.p_time_var: ca.SX = p_time_var
         self.p_global: ca.SX = p_global
@@ -88,12 +96,11 @@ class NosnocModel:
         # detect dimensions
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
-        n_sys = len(self.F)
+        n_sys = len(self.F) if self.F is not None else len(self.f_x)
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
         else:
             n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
-
         n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
         # sanity checks

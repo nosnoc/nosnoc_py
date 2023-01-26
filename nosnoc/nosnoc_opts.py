@@ -18,6 +18,8 @@ class NosnocOpts:
     print_level: int = 0  #: higher -> more info
     max_iter_homotopy: int = 0
 
+    general_inclusion: bool = False
+
     initialization_strategy: InitializationStrategy = InitializationStrategy.ALL_XCURRENT_W0_START
 
     irk_representation: IrkRepresentation = IrkRepresentation.INTEGRAL
