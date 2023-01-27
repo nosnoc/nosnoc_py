@@ -9,6 +9,8 @@ A1 = np.array([[1, OMEGA], [-OMEGA, 1]])
 A2 = np.array([[1, -OMEGA], [OMEGA, 1]])
 R_OSC = 1
 
+TSIM = np.pi / 2
+X_SOL = np.array([np.exp(TSIM-1) * np.cos(2*np.pi * (TSIM-1)), -np.exp(TSIM-1) * np.sin(2*np.pi*(TSIM-1))])
 
 def get_oscilator_model(use_g_Stewart=False):
 
@@ -37,23 +39,26 @@ def get_oscilator_model(use_g_Stewart=False):
 
     return model
 
-
-def main(use_g_Stewart=False):
+def get_default_options():
     opts = nosnoc.NosnocOpts()
-    opts.use_fesd = True
-    comp_tol = 1e-6
+    comp_tol = 1e-8
     opts.comp_tol = comp_tol
     opts.homotopy_update_slope = 0.1  # decrease rate
     opts.N_finite_elements = 2
-    opts.n_s = 2
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
+    opts.n_s = 3
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    opts.print_level = 1
+    return opts
+
+
+def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
+    if opts is None:
+        opts = get_default_options()
 
     model = get_oscilator_model(use_g_Stewart)
 
-    Tsim = np.pi / 2
     Nsim = 29
-    Tstep = Tsim / Nsim
-
+    Tstep = TSIM / Nsim
     opts.terminal_time = Tstep
 
     solver = nosnoc.NosnocSolver(opts, model)
@@ -63,15 +68,20 @@ def main(use_g_Stewart=False):
     looper.run()
     results = looper.get_results()
 
+    error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+    print(f"error wrt exact solution {error:.2e}")
 
-    plot_oscilator(results["X_sim"], results["t_grid"])
-    nosnoc.plot_timings(results["cpu_nlp"])
+    if do_plot:
+        plot_oscilator(results["X_sim"], results["t_grid"])
+    # nosnoc.plot_timings(results["cpu_nlp"])
+
     # store solution
     # import json
     # json_file = 'oscilator_results_ref.json'
     # with open(json_file, 'w') as f:
     #     json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
     # print(f"saved results in {json_file}")
+    return results
 
 def main_least_squares():
 
@@ -82,20 +92,17 @@ def main_least_squares():
     #     w_sim_ref = json.load(f)
 
     opts = nosnoc.NosnocOpts()
-    opts.use_fesd = True
     comp_tol = 1e-7
     opts.comp_tol = comp_tol
-    opts.N_finite_elements = 2
-    opts.n_s = 2
-    opts.print_level = 3
+    opts.print_level = 2
 
     # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
     opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
-    # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
+    opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
     opts.sigma_0 = 1e0
     # opts.gamma_h = np.inf
     # opts.opts_casadi_nlp['ipopt']['max_iter'] = 0
@@ -104,9 +111,8 @@ def main_least_squares():
 
     model = get_oscilator_model()
 
-    Tsim = np.pi / 2
     Nsim = 29
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
 
     opts.terminal_time = Tstep
 
@@ -119,41 +125,29 @@ def main_least_squares():
     results = looper.get_results()
     print(f"max cost_val = {max(results['cost_vals']):.2e}")
 
+    error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+    print(f"error wrt exact solution {error:.2e}")
+
+    breakpoint()
     plot_oscilator(results["X_sim"], results["t_grid"])
-    nosnoc.plot_timings(results["cpu_nlp"])
-    # breakpoint()
+    # nosnoc.plot_timings(results["cpu_nlp"])
 
 
 def main_polishing():
 
-    opts = nosnoc.NosnocOpts()
+    opts = get_default_options()
     opts.comp_tol = 1e-4
-    opts.print_level = 3
+    opts.do_polishing_step = True
 
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
-    # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
-    opts.do_polishing_step = True
-    opts.homotopy_update_slope = 0.1
+    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    opts.print_level = 3
 
-    model = get_oscilator_model()
-
-    Tsim = np.pi / 2
-    Nsim = 29
-    Tstep = Tsim / Nsim
-
-    opts.terminal_time = Tstep
-
-    solver = nosnoc.NosnocSolver(opts, model)
-    solver.print_problem()
-    # loop
-    looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
-    looper.run()
-    results = looper.get_results()
+    results = solve_oscilator(opts, do_plots=False)
     print(f"max cost_val = {max(results['cost_vals']):.2e}")
 
-    plot_oscilator(results["X_sim"], results["t_grid"])
     nosnoc.plot_timings(results["cpu_nlp"])
 
 
@@ -198,6 +192,6 @@ def make_object_json_dumpable(input):
         raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
 
 if __name__ == "__main__":
-    main(len(argv) > 1)
+    solve_oscilator(use_g_Stewart=False, do_plot=True)
     # main_least_squares()
     # main_polishing()

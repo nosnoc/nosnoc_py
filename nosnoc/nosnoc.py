@@ -1065,7 +1065,7 @@ class NosnocProblem(NosnocFormulationObject):
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
-        # CasADi ca.Functions
+        # CasADi Functions
         self.cost_fun = ca.Function('cost_fun', [self.w], [self.cost])
         self.comp_res = ca.Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = ca.Function('g_fun', [self.w, self.p], [self.g])
@@ -1351,7 +1351,7 @@ class NosnocSolver(NosnocSolverBase):
         self.initialize()
         opts = self.opts
         prob = self.problem
-        w0 = prob.w0
+        w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
         n_iter_polish = opts.max_iter_homotopy + 1
@@ -1370,6 +1370,43 @@ class NosnocSolver(NosnocSolverBase):
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
+        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
+            lbw = prob.lbw.copy()
+            ubw = prob.ubw.copy()
+
+            # lambda00 != 0.0 -> corresponding thetas on first fe are zero
+            I_active_lam = np.where(lambda00 > 1e1*opts.comp_tol)[0].tolist()
+            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2) # flatten sys
+            w_zero_indices = []
+            for i in range(opts.n_s):
+                tmp = flatten(ind_theta_fe1[i])
+                try:
+                    w_zero_indices += [tmp[i] for i in I_active_lam]
+                except:
+                    breakpoint()
+
+            # if all but one lambda are zero: this theta can be fixed to 1.0, all other thetas are 0.0
+            w_one_indices = []
+            # I_lam_zero = set(range(len(lambda00))).difference( I_active_lam )
+            # n_lam = sum(prob.model.dims.n_f_sys)
+            # if len(I_active_lam) == n_lam - 1:
+            #     for i in range(opts.n_s):
+            #         tmp = flatten(ind_theta_fe1[i])
+            #         w_one_indices += [tmp[i] for i in I_lam_zero]
+            if opts.print_level > 1:
+                print(f"fixing {prob.w[w_one_indices]} = 1. and {prob.w[w_zero_indices]} = 0.")
+                print(f"Since lambda00 = {lambda00}")
+            w0[w_zero_indices] = 0.0
+            lbw[w_zero_indices] = 0.0
+            ubw[w_zero_indices] = 0.0
+            w0[w_one_indices] = 1.0
+            lbw[w_one_indices] = 1.0
+            ubw[w_one_indices] = 1.0
+
+        else:
+            lbw = prob.lbw
+            ubw = prob.ubw
+
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
@@ -1383,8 +1420,8 @@ class NosnocSolver(NosnocSolverBase):
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
-                              lbx=prob.lbw,
-                              ubx=prob.ubw,
+                              lbx=lbw,
+                              ubx=ubw,
                               p=p_val)
             cpu_time_nlp[ii] = time.time() - t
 
@@ -1404,7 +1441,7 @@ class NosnocSolver(NosnocSolverBase):
             if opts.print_level:
                 self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
-            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
+            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found']:
                 print(f"Warning: IPOPT exited with status {status}")
 
             if complementarity_residual < opts.comp_tol:
@@ -1439,6 +1476,7 @@ class NosnocSolver(NosnocSolverBase):
                 for ii in range(len(g_val)):
                     if g_val[ii] > threshold:
                         print(f"g_val[{ii}] = {g_val[ii]} expr: {prob.g_lsq[ii]}")
+                print(f"h values: {w_opt[prob.ind_h]}")
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
             prob.w0[:] = w_opt[:]

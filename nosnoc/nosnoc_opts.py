@@ -34,6 +34,7 @@ class NosnocOpts:
 
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation
     # used in InitializationStrategy.RK4_smoothed
+    fix_active_set_fe0: bool = False
 
     # initialization - Stewart
     init_theta: float = 1.0
@@ -42,7 +43,6 @@ class NosnocOpts:
     # initialization - Step
     init_alpha: float = 1.0  # for step only
     init_beta: float = 1.0
-    init_gamma: float = 1.0
 
     N_finite_elements: int = 2  #
     Nfe_list: list = field(default_factory=list)  #: list of length N_stages, Nfe per stage
@@ -61,7 +61,7 @@ class NosnocOpts:
     rho_h: float = 1.0
 
     # polishing step
-    do_polishing_step = False
+    do_polishing_step: bool = False
 
     # OCP only
     N_stages: int = 1
