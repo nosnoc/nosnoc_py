@@ -63,17 +63,19 @@ class NosnocModel:
                  name: str = 'nosnoc'):
         self.x: ca.SX = x
         self.alpha: ca.SX = alpha
-        self.F: List[ca.SX] = F
+        self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
-        # Either c and S or g is given!
-        if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
-            raise ValueError("Provide either c and S or g, not both!")
-        if not (bool(F is not None) ^ bool((f_x is not None) and (len(alpha) != 0))):
-            raise ValueError("Provide either F (Fillipov) or f_x and alpha")
         
+        if not (bool(F is not None) ^ bool((f_x is not None) and (casadi_length(alpha) != 0))):
+            raise ValueError("Provide either F (Fillipov) or f_x and alpha")
+        # Either c and S or g is given!
+        if F is not None:
+            if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
+                raise ValueError("Provide either c and S or g, not both!")
+
         self.x0: np.ndarray = x0
         self.p_time_var: ca.SX = p_time_var
         self.p_global: ca.SX = p_global
@@ -101,34 +103,43 @@ class NosnocModel:
             n_c_sys = [0]  # No c used!
         else:
             n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
-        n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
+        if self.F is None:  # general inclusion
+            n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
+        else:
+            n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
         # sanity checks
-        if not isinstance(self.F, list):
-            raise ValueError("model.F should be a list.")
-        for i, f in enumerate(self.F):
-            if f.shape[1] == 1:
-                raise Warning(f"model.F item {i} is not a switching system!")
+        if self.F is not None:
+            if self.F is not None and not isinstance(self.F, list):
+                raise ValueError("model.F should be a list.")
+            for i, f in enumerate(self.F):
+                if f.shape[1] == 1:
+                    raise Warning(f"model.F item {i} is not a switching system!")
 
-        if self.g_Stewart:
-            if opts.pss_mode != PssMode.STEWART:
-                raise ValueError("model.g_Stewart is used and pss_mode should be STEWART")
-            if not isinstance(self.g_Stewart, list):
-                raise ValueError("model.g_Stewart should be a list.")
-            for i, g_Stewart in enumerate(self.g_Stewart):
-                if g_Stewart.shape[0] != self.F[i].shape[1]:
-                    raise ValueError(f"Dimensions g_Stewart and F for item {i} should be equal!")
-        else:
+            if self.g_Stewart:
+                if opts.pss_mode != PssMode.STEWART:
+                    raise ValueError("model.g_Stewart is used and pss_mode should be STEWART")
+                if not isinstance(self.g_Stewart, list):
+                    raise ValueError("model.g_Stewart should be a list.")
+                for i, g_Stewart in enumerate(self.g_Stewart):
+                    if g_Stewart.shape[0] != self.F[i].shape[1]:
+                        raise ValueError(f"Dimensions g_Stewart and F for item {i} should be equal!")
+            else:
+                if not isinstance(self.c, list):
+                    raise ValueError("model.c should be a list.")
+                if not isinstance(self.S, list):
+                    raise ValueError("model.S should be a list.")
+                if len(self.c) != len(self.S):
+                    raise ValueError("model.c and model.S should have the same length!")
+                for i, (fi, Si) in enumerate(zip(self.F, self.S)):
+                    if fi.shape[1] != Si.shape[0]:
+                        raise ValueError(
+                            f"model.F item {i} and S {i} should have the same number of columns")
+        else:  # Only check Step because stewart is not allowed for general inclusions
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
-            if not isinstance(self.S, list):
-                raise ValueError("model.S should be a list.")
-            if len(self.c) != len(self.S):
-                raise ValueError("model.c and model.S should have the same length!")
-            for i, (fi, Si) in enumerate(zip(self.F, self.S)):
-                if fi.shape[1] != Si.shape[0]:
-                    raise ValueError(
-                        f"model.F item {i} and S {i} should have the same number of columns")
+            if casadi_length(casadi_vertcat_list(self.c)) != casadi_length(self.alpha):
+                raise ValueError("model.c and model.alpha should have the same length!")
 
         # parameters
         n_p_glob = casadi_length(self.p_global)
@@ -161,12 +172,13 @@ class NosnocModel:
                                n_p_time_var=n_p_time_var,
                                n_p_glob=n_p_glob)
 
-        if self.g_Stewart:
-            g_Stewart_list = self.g_Stewart
-        else:
-            g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
+        if opts.pss_mode == PssMode.STEWART:
+            if self.g_Stewart:
+                g_Stewart_list = self.g_Stewart
+            else:
+                g_Stewart_list = [-self.S[i] @ self.c[i] for i in range(n_sys)]
 
-        g_Stewart = casadi_vertcat_list(g_Stewart_list)
+            g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
         dummy_ocp = NosnocOcp()
@@ -175,7 +187,7 @@ class NosnocModel:
 
         # setup upsilon
         upsilon = []
-        if opts.pss_mode == PssMode.STEP:
+        if opts.pss_mode == PssMode.STEP and self.F is not None:
             for ii in range(self.dims.n_sys):
                 upsilon_temp = []
                 S_temp = self.S[ii]
@@ -199,7 +211,11 @@ class NosnocModel:
         z = fe.rk_stage_z(0)
 
         # Reformulate the Filippov ODE into a DCS
-        f_x = ca.SX.zeros((n_x, 1))
+        if self.F is None:
+            f_x = casadi_vertcat_list(self.f_x)
+            z[0:sum(n_c_sys)] = self.alpha
+        else:
+            f_x = ca.SX.zeros((n_x, 1))
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(n_sys):
@@ -213,25 +229,26 @@ class NosnocModel:
                                            g_Stewart_list[ii] - ca.mmin(g_Stewart_list[ii]))
         elif opts.pss_mode == PssMode.STEP:
             for ii in range(n_sys):
-                f_x = f_x + self.F[ii] @ upsilon[:, ii]
+                if self.F is not None:
+                    f_x = f_x + self.F[ii] @ upsilon[:, ii]
+                    alpha_ii = fe.w[fe.ind_alpha[0][ii]]
+                else:
+                    alpha_ii = self.alpha[ii]
                 g_switching = ca.vertcat(
                     g_switching,
                     self.c[ii] - fe.w[fe.ind_lambda_p[0][ii]] + fe.w[fe.ind_lambda_n[0][ii]])
                 std_compl_res += ca.transpose(
-                    fe.w[fe.ind_lambda_n[0][ii]]) @ fe.w[fe.ind_alpha[0][ii]]
+                    fe.w[fe.ind_lambda_n[0][ii]]) @ alpha_ii
                 std_compl_res += ca.transpose(fe.w[fe.ind_lambda_p[0][ii]]) @ (
-                    np.ones(n_c_sys[ii]) - fe.w[fe.ind_alpha[0][ii]])
+                    np.ones(n_c_sys[ii]) - alpha_ii)
                 lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
-
-        mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
 
         # collect all algebraic equations
         g_z_all = ca.vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
 
         # CasADi functions for indicator and region constraint functions
         self.z = z
-        self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
 
         # dynamics
         self.f_x_fun = ca.Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])
@@ -248,7 +265,10 @@ class NosnocModel:
         self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
-        self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
+        if opts.pss_mode == PssMode.STEWART:
+            mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
+            self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
+            self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
 
     def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
         """
