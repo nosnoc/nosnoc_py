@@ -60,6 +60,10 @@ class NosnocOpts:
     step_equilibration_sigma: float = 0.1
     rho_h: float = 1.0
 
+    # for MpccMode.FISCHER_BURMEISTER_IP_AUG
+    fb_ip_aug1_weight: float = 1e0
+    fb_ip_aug2_weight: float = 1e-1
+
     # polishing step
     do_polishing_step: bool = False
 

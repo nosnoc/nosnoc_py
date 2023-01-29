@@ -151,26 +151,59 @@ class SimpleTests(unittest.TestCase):
 
         opts = get_default_options()
         opts.print_level = 2
-        opts.N_finite_elements = 2
-        opts.n_s = 3
+        opts.n_s = 2
 
         opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+
         opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+        # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
 
         # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
         opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
 
         opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
         # opts.fix_active_set_fe0 = True
-        opts.do_polishing_step
         opts.sigma_0 = 1e0
         opts.gamma_h = np.inf
+
+        # opts.comp_tol = 1e-5
+        # opts.do_polishing_step = True
         try:
             results = test_opts(opts, model=model)
             print(results["t_grid"])
         except:
-            raise Exception(f"Test failed with setting:\n {opts=}")
+            raise Exception(f"Test failed.")
+
+
+    def test_least_squares_problem_opts(self):
+        model = get_simplest_model_switch()
+
+        for step_equilibration in [nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY, nosnoc.StepEquilibrationMode.DIRECT]:
+            for fix_as in [True, False]:
+                opts = get_default_options()
+                opts.fix_active_set_fe0 = fix_as
+                opts.print_level = 2
+
+                opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+                opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+
+                opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+
+                opts.step_equilibration = step_equilibration
+
+                opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+                opts.sigma_0 = 1e0
+                opts.gamma_h = np.inf
+
+                try:
+                    results = test_opts(opts, model=model)
+                    # print(results["t_grid"])
+                except:
+                    # print(f"Test failed with {fix_as=}, {step_equilibration=}")
+                    raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
+
+
 
     def test_initializations(self):
         model = get_simplest_model_switch()
