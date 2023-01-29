@@ -47,18 +47,17 @@ def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
 def solve_oscilator_fast(opts=None, use_g_Stewart=False, do_plot=True):
     opts = nosnoc.NosnocOpts()
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
-    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.terminal_time = TSTEP
 
     opts.print_level = 2
 
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
 
     model = get_oscilator_model(use_g_Stewart)
     model.x0 = X0
 
-    solver = nosnoc.NosnocFastLSQSolver(opts, model)
+    solver = nosnoc.NosnocFastSolver(opts, model)
     results = solver.solve()
 
     x_out = results["x_all_list"][-1]
@@ -68,7 +67,7 @@ def solve_oscilator_fast(opts=None, use_g_Stewart=False, do_plot=True):
     breakpoint()
 
 if __name__ == "__main__":
-    solve_oscilator()
+    # solve_oscilator()
     solve_oscilator_fast()
 
 

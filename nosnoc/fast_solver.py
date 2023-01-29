@@ -12,12 +12,12 @@ from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 
 
-class NosnocFastLSQSolver(NosnocSolverBase):
+class NosnocFastSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)
         prob = self.problem
-
-        self.fun_g_jac_gw = ca.Function('jac_g', [prob.w, prob.p], [prob.g, ca.jacobian(prob.g, prob.w)])
+        breakpoint()
+        # self.fun_g_jac_gw = ca.Function('jac_g', [prob.w, prob.p], [prob.g, ca.jacobian(prob.g, prob.w)])
 
 
     def solve(self) -> dict:
