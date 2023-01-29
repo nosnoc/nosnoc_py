@@ -21,6 +21,12 @@ class NosnocModel:
 
     where S_i denotes the rows of S.
 
+    An alternate model can be used if your system cannot be defined as a Fillipov system.
+    in that case user can provide an \alpha vector (analogous to the \alpha defined in
+    the step reformulation) with the same size as c, along with the expression for \dot{x}.
+    This alpha vector is then used as in the Step reformulation to do switch detection.
+
+    \dot{x} = f_x(x,u,\alpha,p)
 
     :param x: state variables
     :param x0: initial state
@@ -103,14 +109,11 @@ class NosnocModel:
             n_c_sys = [0]  # No c used!
         else:
             n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
-        if self.F is None:  # general inclusion
-            n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
-        else:
-            n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
 
         # sanity checks
         if self.F is not None:
-            if self.F is not None and not isinstance(self.F, list):
+            n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
+            if not isinstance(self.F, list):
                 raise ValueError("model.F should be a list.")
             for i, f in enumerate(self.F):
                 if f.shape[1] == 1:
@@ -136,6 +139,7 @@ class NosnocModel:
                         raise ValueError(
                             f"model.F item {i} and S {i} should have the same number of columns")
         else:  # Only check Step because stewart is not allowed for general inclusions
+            n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
             if casadi_length(casadi_vertcat_list(self.c)) != casadi_length(self.alpha):
