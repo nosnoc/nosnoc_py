@@ -72,7 +72,7 @@ class NosnocSimLooper:
     def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))
         results = {
-            "X_sim": self.X_sim,
+            "X_sim": np.array(self.X_sim),
             "cpu_nlp": np.nan_to_num(self.cpu_nlp),
             "time_steps": self.time_steps,
             "t_grid": self.t_grid,
