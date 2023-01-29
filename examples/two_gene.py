@@ -73,10 +73,18 @@ def plot_results(results):
     plt.figure()
     for result in results:
         plt.plot(result["X_sim"][:, 0], result["X_sim"][:, 1])
+        plt.quiver(result["X_sim"][:-1, 0],
+                   result["X_sim"][:-1, 1],
+                   np.diff(result["X_sim"][:, 0]),
+                   np.diff(result["X_sim"][:, 1]),
+                   scale=100,
+                   width=0.01)
     plt.vlines(theta_1, ymin=-15.0, ymax=15.0, linestyles='dotted')
     plt.hlines(theta_2, xmin=-15.0, xmax=15.0, linestyles='dotted')
     plt.ylim(0, 13)
     plt.xlim(0, 13)
+    plt.xlabel('x_1')
+    plt.ylabel('x_2')
     plt.show()
 
 
