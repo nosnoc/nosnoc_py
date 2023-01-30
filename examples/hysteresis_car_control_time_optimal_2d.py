@@ -1,4 +1,12 @@
-"""Gearbox example with multiple modes."""
+"""
+Gearbox example with multiple modes.
+
+Extension of the original model with two modes to three modes. The modes are still
+given using one auxillary variable and one switching function. The voronoi regions
+are thus given in a 2D space. It can easily be extended to N modes but the
+hysteresis curves may not overlap.
+"""
+
 
 import nosnoc
 import casadi as ca
@@ -54,7 +62,7 @@ def create_options():
     opts.comp_tol = 1e-14
 
     # IPOPT Settings
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts.nlp_max_iter = 500
 
     # New setting: time freezing settings
     opts.initial_theta = 0.5
@@ -130,7 +138,7 @@ def create_gearbox_voronoi(u=None, q_goal=None, mode=Stages.STAGE_2,
 
     # Traject
     f_q = 0
-    g_q = 0
+    g_path = 0
     g_terminal = ca.vertcat(q-q_goal, v-v_goal)
     f_terminal = t
 
@@ -188,7 +196,7 @@ def create_gearbox_voronoi(u=None, q_goal=None, mode=Stages.STAGE_2,
             x=X, F=F, g_Stewart=g_ind, x0=X0, t_var=t,
             name="gearbox"
         )
-    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal
+    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal
 
 
 def plot(x_list, t_grid, u_list, t_grid_u):
@@ -229,7 +237,7 @@ def plot(x_list, t_grid, u_list, t_grid_u):
 def simulation(u=25, Tsim=6, Nsim=30, with_plot=True):
     """Simulate the temperature control system with a fixed input."""
     opts = create_options()
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(u=u, q_goal=q_goal)
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(u=u, q_goal=q_goal)
     Tstep = Tsim / Nsim
     opts.N_finite_elements = 2
     opts.N_stages = 1
@@ -250,7 +258,7 @@ def simulation(u=25, Tsim=6, Nsim=30, with_plot=True):
 def control():
     """Execute one Control step."""
     N = 15
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(
         q_goal=q_goal,
     )
     opts = create_options()

@@ -41,7 +41,7 @@ def create_options():
     opts.comp_tol = 1e-14
 
     # IPOPT Settings
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts.nlp_max_iter = 500
 
     # New setting: time freezing settings
     opts.initial_theta = 0.5

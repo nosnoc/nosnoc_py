@@ -1,4 +1,11 @@
-"""Gearbox example with multiple modes."""
+"""
+Gearbox example with multiple modes.
+
+Extension of the original model with two modes to three modes. The modes are
+given by two auxillary variables and one switching function. The voronoi-regions
+are thus given in a 3D space. The hysteresis curves can overlap in this
+3D space and are solved faster than the 2D version.
+"""
 
 import nosnoc
 import casadi as ca
@@ -64,7 +71,7 @@ def create_options():
     opts.comp_tol = 1e-14
 
     # IPOPT Settings
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts.nlp_max_iter = 500
 
     # New setting: time freezing settings
     opts.initial_theta = 0.5
@@ -148,11 +155,11 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
 
     # Traject
     f_q = 0
-    g_q = 0
+    g_path = 0
     if use_traject:
         if use_traject_constraint:
             print("use trajectory as constraint")
-            g_q = p_traj - q
+            g_path = p_traj - q
         else:
             print("use trajectory as cost")
             f_q = 0.001 * (p_traj - q)**2
@@ -219,7 +226,7 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
             p_global=u, p_global_val=np.array([0]),
             name="gearbox"
         )
-    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal
+    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal
 
 
 def plot(x_list, t_grid, u_list, t_grid_u):
@@ -263,7 +270,7 @@ def plot(x_list, t_grid, u_list, t_grid_u):
 def simulation(u=25, Tsim=6, Nsim=30, with_plot=True):
     """Simulate the temperature control system with a fixed input."""
     opts = create_options()
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(
         use_simulation=True, q_goal=q_goal
     )
     Tstep = Tsim / Nsim
@@ -291,7 +298,7 @@ def control():
     """Execute one Control step."""
     N = 5
     # traject = np.array([[q_goal * (i + 1) / N for i in range(N)]]).T
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(
         q_goal=q_goal,
     )
     opts = create_options()

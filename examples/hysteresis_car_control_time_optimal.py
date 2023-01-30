@@ -1,4 +1,15 @@
-"""Gearbox example with multiple modes."""
+"""
+Gearbox example with two modes.
+
+This is the original gearbox example as described in the matlab implementation
+and described in the paper:
+
+    Continuous Optimization for Control of Hybrid Systems with Hysteresis via Time-Freezing
+    A. Nurkanović, M. Diehl
+    IEEE Control Systems Letters (2022)
+
+It is extended to follow a trajectory in addition to going to one end-position.
+"""
 
 import nosnoc
 import casadi as ca
@@ -45,7 +56,7 @@ def create_options():
     opts.comp_tol = 1e-14
 
     # IPOPT Settings
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts.nlp_max_iter = 500
 
     # New setting: time freezing settings
     opts.initial_theta = 0.5
@@ -54,8 +65,7 @@ def create_options():
     return opts
 
 
-def create_gearbox_voronoi(u=None, q_goal=None, traject=None,
-                           use_traject=False, use_traject_constraint=True):
+def create_gearbox_voronoi(u=None, q_goal=None, traject=None, use_traject=False):
     """Create a gearbox."""
     if not use_traject and q_goal is None:
         raise Exception("You should provide a traject or a q_goal")
@@ -104,14 +114,9 @@ def create_gearbox_voronoi(u=None, q_goal=None, traject=None,
 
     # Traject
     f_q = 0
-    g_q = 0
     if use_traject:
-        if use_traject_constraint:
-            print("use trajectory as constraint")
-            g_q = p_traj - q
-        else:
-            print("use trajectory as cost")
-            f_q = 0.001 * (p_traj - q)**2
+        print("use trajectory as cost")
+        f_q = 0.001 * (p_traj - q)**2
 
         g_terminal = ca.vertcat(q-p_traj, v-v_goal)
     else:
@@ -151,7 +156,7 @@ def create_gearbox_voronoi(u=None, q_goal=None, traject=None,
             x=X, F=F, g_Stewart=g_ind, x0=X0, t_var=t,
             name="gearbox"
         )
-    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal
+    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_terminal
 
 
 def plot(x_list, t_grid, u_list, t_grid_u):
@@ -195,7 +200,7 @@ def plot(x_list, t_grid, u_list, t_grid_u):
 def simulation(u=25, Tsim=3, Nsim=30, with_plot=True):
     """Simulate the temperature control system with a fixed input."""
     opts = create_options()
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(u=u, q_goal=q_goal)
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_terminal = create_gearbox_voronoi(u=u, q_goal=q_goal)
     Tstep = Tsim / Nsim
     opts.N_finite_elements = 2
     opts.N_stages = 1
@@ -215,7 +220,7 @@ def control():
     """Execute one Control step."""
     N = 3
     traject = np.array([[q_goal * (i + 1) / N for i in range(N)]]).T
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_q, g_terminal = create_gearbox_voronoi(
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_terminal = create_gearbox_voronoi(
         q_goal=q_goal, traject=traject, use_traject=True
     )
     opts = create_options()
