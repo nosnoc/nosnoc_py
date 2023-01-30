@@ -2,7 +2,7 @@ import unittest
 from parameterized import parameterized
 import numpy as np
 import nosnoc
-from examples.sliding_mode_ocp import (
+from examples.sliding_mode_ocp.sliding_mode_ocp import (
     solve_ocp,
     example,
     get_default_options,

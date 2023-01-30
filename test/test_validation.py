@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from casadi import SX, horzcat, vertcat
 import nosnoc
-from examples.sliding_mode_ocp import get_default_options, get_sliding_mode_ocp_description
+from examples.sliding_mode_ocp.sliding_mode_ocp import get_default_options, get_sliding_mode_ocp_description
 
 
 class TestValidation(unittest.TestCase):
