@@ -1,15 +1,18 @@
-from typing import Optional, List
+
 from abc import ABC, abstractmethod
+from typing import Optional
+
+import casadi as ca
+import numpy as np
 import time
 
-import numpy as np
-import casadi as ca
-
+from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
-from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices
+from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling
+from nosnoc.ocp import NosnocOcp
+from nosnoc.problem import NosnocProblem
 from nosnoc.rk_utils import rk4_on_timegrid
-from nosnoc.formulation import NosnocProblem, NosnocModel, NosnocOcp, get_results_from_primal_vector
+from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, flatten_outer_layers
 
 
 class NosnocSolverBase(ABC):
@@ -226,7 +229,7 @@ class NosnocSolver(NosnocSolverBase):
 
             # lambda00 != 0.0 -> corresponding thetas on first fe are zero
             I_active_lam = np.where(lambda00 > 1e1*opts.comp_tol)[0].tolist()
-            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2) # flatten sys
+            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2)  # flatten sys
             w_zero_indices = []
             for i in range(opts.n_s):
                 tmp = flatten(ind_theta_fe1[i])
@@ -412,3 +415,51 @@ class NosnocSolver(NosnocSolverBase):
                 print(f"Warning: IPOPT exited with status {status}")
 
         return w_opt, cpu_time_nlp, nlp_iter
+
+
+def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
+    opts = prob.opts
+
+    results = dict()
+    results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
+    # TODO: improve naming here?
+    results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
+
+    x0 = prob.model.x0
+    ind_x_all = flatten_outer_layers(prob.ind_x, 2)
+    results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
+    results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+
+    results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
+    results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
+    # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
+    # if opts.pss_mode == PssMode.STEP:
+    results["alpha_list"] = [
+        w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)
+    ]
+    results["lambda_n_list"] = [
+        w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_n)
+    ]
+    results["lambda_p_list"] = [
+        w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_p)
+    ]
+
+    if opts.use_fesd:
+        time_steps = w_opt[prob.ind_h]
+    else:
+        t_stages = opts.terminal_time / opts.N_stages
+        for Nfe in opts.Nfe_list:
+            time_steps = Nfe * [t_stages / Nfe]
+    results["time_steps"] = time_steps
+
+    # results relevant for OCP:
+    results["x_traj"] = [x0] + results["x_list"]
+    results["u_traj"] = results["u_list"]  # duplicate name
+    t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
+    results["t_grid"] = t_grid
+    u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
+    results["t_grid_u"] = [t_grid[i] for i in u_grid]
+
+    results["v_global"] = w_opt[prob.ind_v_global]
+
+    return results

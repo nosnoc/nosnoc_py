@@ -1,5 +1,5 @@
 import numpy as np
-from casadi import SX, horzcat, vertcat, sum2
+from casadi import SX, horzcat, sum2
 import matplotlib.pyplot as plt
 
 import nosnoc
@@ -51,7 +51,7 @@ def get_irma_model(switch_on):
 
     f_x = [-gamma*x + sum2(kappa*s)]
 
-    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=alpha, c=c, x0=X0, name='irma')
+    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=X0, name='irma')
 
     return model
 
