@@ -56,7 +56,7 @@ class NosnocModel:
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
                  u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
-                 alpha: ca.SX = ca.SX.sym('alpha_dummy', 0, 1),
+                 alpha: List[ca.SX] = [],
                  f_x: Optional[List[ca.SX]] = None,
                  p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
@@ -73,7 +73,7 @@ class NosnocModel:
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
 
-        if not (bool(F is not None) ^ bool((f_x is not None) and (casadi_length(alpha) != 0))):
+        if not (bool(F is not None) ^ bool((f_x is not None) and (casadi_length(casadi_vertcat_list(alpha)) != 0))):
             raise ValueError("Provide either F (Fillipov) or f_x and alpha")
         # Either c and S or g is given!
         if F is not None:
@@ -140,7 +140,7 @@ class NosnocModel:
             n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
-            if casadi_length(casadi_vertcat_list(self.c)) != casadi_length(self.alpha):
+            if casadi_length(casadi_vertcat_list(self.c)) != casadi_length(casadi_vertcat_list(self.alpha)):
                 raise ValueError("model.c and model.alpha should have the same length!")
 
         # parameters
@@ -218,7 +218,7 @@ class NosnocModel:
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
             f_x = casadi_vertcat_list(self.f_x)
-            z[0:sum(n_c_sys)] = self.alpha
+            z[0:sum(n_c_sys)] = casadi_vertcat_list(self.alpha)
         else:
             f_x = ca.SX.zeros((n_x, 1))
 
