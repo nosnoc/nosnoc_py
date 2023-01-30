@@ -105,7 +105,7 @@ def main_least_squares():
     opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
     opts.sigma_0 = 1e0
     # opts.gamma_h = np.inf
-    # opts.opts_casadi_nlp['ipopt']['max_iter'] = 0
+    # opts.nlp_max_iter = 0
     # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     opts.homotopy_update_slope = 0.1
 

@@ -149,7 +149,8 @@ class NosnocModel:
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
             raise Exception("dimension of p_global_val and p_global mismatch.",
-                            f"Got p_global: {self.p_global}, p_global_val {self.p_global_val}")
+                            f"Expected shape ({n_p_glob},), got p_global_val.shape {self.p_global_val.shape},"
+                            f"p_global {self.p_global}, p_global_val {self.p_global_val}")
 
         n_p_time_var = casadi_length(self.p_time_var)
         if self.p_time_var_val is None:
@@ -157,7 +158,9 @@ class NosnocModel:
         if not self.p_time_var_val.shape == (opts.N_stages, n_p_time_var):
             raise Exception(
                 "dimension of p_time_var_val and p_time_var mismatch.",
-                f"Got p_time_var: {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+                f"Expected shape: ({opts.N_stages}, {n_p_time_var}), "
+                f"got p_time_var_val.shape {self.p_time_var_val.shape}"
+                f"p_time_var {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = ca.vertcat(self.p_time_var, self.p_global)
@@ -348,6 +351,9 @@ class NosnocOcp:
             lbx: np.ndarray = np.ones((0,)),
             ubx: np.ndarray = np.ones((0,)),
             f_q: ca.SX = ca.SX.zeros(1),
+            g_path: ca.SX = ca.SX.zeros(0),
+            lbg: np.ndarray = np.ones((0,)),
+            ubg: np.ndarray = np.ones((0,)),
             f_terminal: ca.SX = ca.SX.zeros(1),
             g_terminal: ca.SX = ca.SX.zeros(0),
             lbv_global: np.ndarray = np.ones((0,)),
@@ -360,6 +366,9 @@ class NosnocOcp:
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
         self.f_q: ca.SX = f_q
+        self.g_path: ca.SX = g_path
+        self.lbg: np.ndarray = lbg
+        self.ubg: np.ndarray = ubg
         self.f_terminal: ca.SX = f_terminal
         self.g_terminal: ca.SX = g_terminal
         self.lbv_global: np.ndarray = lbv_global
@@ -374,6 +383,7 @@ class NosnocOcp:
                                      [self.f_terminal])
         self.f_q_fun = ca.Function('f_q_fun', [model.x, model.u, model.p, model.v_global],
                                    [self.f_q])
+        self.g_path_fun = ca.Function('g_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path])
 
         if len(self.lbx) == 0:
             self.lbx = -np.inf * np.ones((dims.n_x,))
@@ -475,6 +485,8 @@ class NosnocFormulationObject(ABC):
 
     def add_constraint(self, symbolic: ca.SX, lb=None, ub=None, index: Optional[list] = None):
         n = casadi_length(symbolic)
+        if n == 0:
+            return
         if lb is None:
             lb = np.zeros((n,))
         if ub is None:
@@ -763,6 +775,9 @@ class FiniteElement(FiniteElementBase):
             # Dynamics excluding complementarities
             fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
+            gqj = ocp.g_path_fun(X_fe[j], Uk, self.p, model.v_global)
+            self.add_constraint(gqj, ocp.lbg, ocp.ubg)
+
             # path constraint
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
             self.add_constraint(gj)

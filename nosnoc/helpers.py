@@ -27,7 +27,8 @@ class NosnocSimLooper:
         self.p_values = p_values
         if self.p_values is not None:
             if self.p_values.shape != (Nsim, solver.problem.model.dims.n_p_glob):
-                raise ValueError("p_values should have shape (Nsim, n_p_glob).")
+                raise ValueError("p_values should have shape (Nsim, n_p_glob). "
+                                 f"Expected ({Nsim}, {solver.problem.model.dims.n_p_glob}), got {self.p_values.shape}")
 
         # create
         self.solver: NosnocSolver = solver
