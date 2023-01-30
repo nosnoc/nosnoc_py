@@ -1,7 +1,7 @@
 from typing import Optional
 
 import numpy as np
-from .nosnoc import NosnocSolver
+from .solver import NosnocSolver
 
 
 class NosnocSimLooper:

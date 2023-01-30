@@ -1,4 +1,5 @@
-from .nosnoc import NosnocSolver, NosnocProblem, NosnocModel, NosnocOcp, get_results_from_primal_vector
+from .solver import NosnocSolver
+from .formulation import NosnocProblem, NosnocModel, NosnocOcp, get_results_from_primal_vector
 from .nosnoc_opts import NosnocOpts
 from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling
 from .helpers import NosnocSimLooper

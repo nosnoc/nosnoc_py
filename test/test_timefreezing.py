@@ -1,5 +1,5 @@
 import unittest
-from examples.time_freezing_hysteresis_temperature_control import control
+from examples.temperature_control.time_freezing_hysteresis_temperature_control import control
 
 
 class TestTimeFreezing(unittest.TestCase):

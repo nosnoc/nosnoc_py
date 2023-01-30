@@ -1,6 +1,6 @@
 import unittest
-from examples.parametric_cart_pole_with_friction import solve_paramteric_example
-from examples.cart_pole_with_friction import solve_example
+from examples.cart_pole_with_friction.parametric_cart_pole_with_friction import solve_paramteric_example
+from examples.cart_pole_with_friction.cart_pole_with_friction import solve_example
 import numpy as np
 
 

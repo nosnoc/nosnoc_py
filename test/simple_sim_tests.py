@@ -1,4 +1,4 @@
-from examples.simplest_example import (
+from examples.simplest.simplest_example import (
     TOL,
     get_default_options,
     X0,

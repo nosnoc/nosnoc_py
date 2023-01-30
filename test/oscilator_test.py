@@ -1,4 +1,4 @@
-from examples.oscilator_example import (
+from examples.oscilator.oscilator_example import (
     get_default_options,
     TSIM,
     X_SOL,

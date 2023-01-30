@@ -1,6 +1,6 @@
 import unittest
 from parameterized import parameterized
-from examples.motor_with_friction_ocp import (
+from examples.motor_with_friction.motor_with_friction_ocp import (
     solve_ocp,
     example,
     get_default_options,

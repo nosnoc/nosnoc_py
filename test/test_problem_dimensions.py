@@ -1,5 +1,5 @@
 import unittest
-from examples.simplest_example import (
+from examples.simplest.simplest_example import (
     get_default_options,
     get_simplest_model_sliding,
 )
