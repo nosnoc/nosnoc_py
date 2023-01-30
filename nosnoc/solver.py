@@ -1,8 +1,6 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
 import time
-from copy import copy
-from dataclasses import dataclass, field
 
 import numpy as np
 import casadi as ca

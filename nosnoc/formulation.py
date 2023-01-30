@@ -1,6 +1,5 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
-import time
 from copy import copy
 from dataclasses import dataclass, field
 
@@ -73,7 +72,7 @@ class NosnocModel:
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
-        
+
         if not (bool(F is not None) ^ bool((f_x is not None) and (casadi_length(alpha) != 0))):
             raise ValueError("Provide either F (Fillipov) or f_x and alpha")
         # Either c and S or g is given!
@@ -202,8 +201,8 @@ class NosnocModel:
                     for k in range(len(S_temp[0, :])):
                         # create multiafine term
                         if S_temp[j, k] != 0:
-                            upsilon_ij = upsilon_ij * (0.5 * (1 - S_temp[j, k]) +
-                                                       S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
+                            upsilon_ij *= (0.5 * (1 - S_temp[j, k]) +
+                                           S_temp[j, k] * fe.w[fe.ind_alpha[0][ii]][k])
                     upsilon_temp = ca.vertcat(upsilon_temp, upsilon_ij)
                 upsilon = ca.horzcat(upsilon, upsilon_temp)
 
