@@ -54,7 +54,7 @@ class NosnocModel:
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
                  u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
-                 alpha: List[ca.SX] = [],
+                 alpha: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
                  p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
@@ -71,7 +71,7 @@ class NosnocModel:
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
 
-        if not (bool(F is not None) ^ bool((f_x is not None) and (casadi_length(casadi_vertcat_list(alpha)) != 0))):
+        if not (bool(F is not None) ^ bool((f_x is not None) and (alpha is not None))):
             raise ValueError("Provide either F (Fillipov) or f_x and alpha")
         # Either c and S or g is given!
         if F is not None:
@@ -184,7 +184,7 @@ class NosnocModel:
             g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
-        if len(self.alpha) != 0:
+        if self.alpha is not None:
             theta, lam, mu, _, lambda_n, lambda_p = self.create_stage_vars(opts)
             alpha = self.alpha
         else:
@@ -213,6 +213,7 @@ class NosnocModel:
         lambda00_expr = ca.SX.zeros(0, 0)
         std_compl_res = ca.SX.zeros(1)  # residual of standard complementarity
 
+        # Note: this is the order of z used by FiniteElement
         z = ca.vertcat(casadi_vertcat_list(theta),
                        casadi_vertcat_list(lam),
                        casadi_vertcat_list(mu),
