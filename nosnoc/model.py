@@ -184,7 +184,7 @@ class NosnocModel:
             g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
         # create dummy finite element - only use first stage
-        if self.alpha is not None:
+        if len(self.alpha) != 0:
             theta, lam, mu, _, lambda_n, lambda_p = self.create_stage_vars(opts)
             alpha = self.alpha
         else:
