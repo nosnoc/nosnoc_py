@@ -46,7 +46,7 @@ def get_two_gene_model(x0):
 
     f_x = [-gamma*x + kappa*s]
 
-    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=alpha, c=c, x0=x0, name='two_gene')
+    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=x0, name='two_gene')
 
     return model
 
