@@ -36,6 +36,9 @@ class NosnocFormulationObject(ABC):
         self.ind_lambda_n: list
         self.ind_lambda_p: list
 
+        # list of complementarity pairs
+        self.comp_list: list
+
     def __repr__(self):
         return repr(self.__dict__)
 
@@ -145,6 +148,8 @@ class NosnocFormulationObject(ABC):
 
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
+        self.comp_list.append(((x, y)))
+
         return
 
 
@@ -239,6 +244,7 @@ class FiniteElement(FiniteElementBase):
         self.ind_h = []
 
         self.ind_comp = []
+        self.comp_list = [] # list of tuples that should be complements
 
         # create variables
         h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -498,6 +504,7 @@ class FiniteElement(FiniteElementBase):
                 # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
                 self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau)
+
         return
 
     def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX) -> None:
@@ -620,6 +627,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(fe.g, fe.lbg, fe.ubg)
         # constraint indices
         self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
+        self.comp_list += fe.comp_list
         return
 
     def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
@@ -665,11 +673,14 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Index vectors within constraints g
         self.ind_comp = create_empty_list_matrix((opts.N_stages,))
+        self.comp_list = []
 
         # setup parameters, lambda00 is added later:
         sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
         tau = ca.SX.sym('tau')  # homotopy parameter
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
+        self.sigma = sigma_p
+        self.tau = tau
 
         # Generate all the variables we need
         self.__create_primal_variables()
