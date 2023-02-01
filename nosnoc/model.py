@@ -54,8 +54,13 @@ class NosnocModel:
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
                  u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
+                 z: ca.SX = ca.SX.sym('z_dummy', 0, 1),
+                 z0: Optional[np.ndarray] = None,
+                 lbz: Optional[np.ndarray] = None,
+                 ubz: Optional[np.ndarray] = None,
                  alpha: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
+                 g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
                  p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
@@ -67,6 +72,7 @@ class NosnocModel:
         self.alpha: ca.SX = alpha
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
+        self.g_z: ca.SX = g_z
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
@@ -85,8 +91,13 @@ class NosnocModel:
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
         self.u: ca.SX = u
+        self.z: ca.SX = z
         self.t_var: ca.SX = t_var
         self.name: str = name
+        if z0 is not None:
+            z0 = np.zeros(casadi_length(self.z))
+        else:
+            self.z0 = z0
 
         self.dims: NosnocDims = None
 
@@ -100,6 +111,7 @@ class NosnocModel:
         # detect dimensions
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
+        n_z = casadi_length(self.z)
         n_sys = len(self.F) if self.F is not None else len(self.f_x)
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
@@ -173,7 +185,8 @@ class NosnocModel:
                                n_c_sys=n_c_sys,
                                n_f_sys=n_f_sys,
                                n_p_time_var=n_p_time_var,
-                               n_p_glob=n_p_glob)
+                               n_p_glob=n_p_glob,
+                               n_z=n_z)
 
         if opts.pss_mode == PssMode.STEWART:
             if self.g_Stewart:
@@ -219,7 +232,8 @@ class NosnocModel:
                        casadi_vertcat_list(mu),
                        casadi_vertcat_list(alpha),
                        casadi_vertcat_list(lambda_n),
-                       casadi_vertcat_list(lambda_p))
+                       casadi_vertcat_list(lambda_p),
+                       self.z)
 
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
@@ -254,10 +268,10 @@ class NosnocModel:
                                            ca.fmax(self.c[ii], 0))
 
         # collect all algebraic equations
-        g_z_all = ca.vertcat(g_switching, g_convex, g_lift)  # g_lift_forces
+        g_z_all = ca.vertcat(g_switching, g_convex, g_lift, self.g_z)  # g_lift_forces
 
         # CasADi functions for indicator and region constraint functions
-        self.z = z
+        self.z_all = z
 
         # dynamics
         self.f_x_fun = ca.Function('f_x_fun', [self.x, z, self.u, self.p, self.v_global], [f_x])

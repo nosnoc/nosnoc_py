@@ -178,6 +178,7 @@ class FiniteElement(FiniteElementBase):
         self.ind_alpha = create_empty_list_matrix((n_s, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
+        self.ind_z = create_empty_list_matrix((n_s,))
         self.ind_h = []
 
         self.ind_comp = []
@@ -251,6 +252,12 @@ class FiniteElement(FiniteElementBase):
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
+            # user algebraic variables
+            self.add_variable(
+                ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
+                np.zeros(dims.n_z), np.zeros(dims.n_z),
+                np.zeros(dims.n_z), ii
+            )
 
         # Add right boundary points if needed
         if create_right_boundary_point:
@@ -301,7 +308,8 @@ class FiniteElement(FiniteElementBase):
     def rk_stage_z(self, stage) -> ca.SX:
         idx = np.concatenate((flatten(self.ind_theta[stage]), flatten(self.ind_lam[stage]),
                               flatten(self.ind_mu[stage]), flatten(self.ind_alpha[stage]),
-                              flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage])))
+                              flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage]),
+                              self.ind_z[stage]))
         return self.w[idx]
 
     def Theta(self, stage=slice(None), sys=slice(None)) -> ca.SX:
