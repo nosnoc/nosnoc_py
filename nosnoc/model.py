@@ -32,6 +32,10 @@ class NosnocModel:
         different state equations with each boundary zone
     :param g_Stewart: List of stewart functions to define the regions (instead of S & c)
     :param u: controls
+    :param z: user defined algebraic state variables
+    :param z0: initial algebraic values
+    :param lbz: lower bounds on user algebraic variables
+    :param ubz: upper bounds on user algebraic variables
     :param alpha: optionally provided alpha variables for general inclusions
     :param f_x: optionally provided rhs used for general inclusions
     :param p_time_var: time varying parameters
