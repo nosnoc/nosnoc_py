@@ -255,8 +255,7 @@ class FiniteElement(FiniteElementBase):
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
-                np.zeros(dims.n_z), np.zeros(dims.n_z),
-                np.zeros(dims.n_z), ii
+                model.lbz, model.ubz, model.z0, ii
             )
 
         # Add right boundary points if needed

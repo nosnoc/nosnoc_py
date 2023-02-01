@@ -20,7 +20,9 @@ kappa = np.array([40, 40])
 # Degradation
 gamma = np.array([4.5, 1.5])
 
+
 X0 = [3, 3]
+LIFTING = True
 
 
 def get_default_options():
@@ -33,7 +35,7 @@ def get_default_options():
     return opts
 
 
-def get_two_gene_model(x0):
+def get_two_gene_model(x0, lifting):
     # Variable defintion
     x = SX.sym("x", 2)
 
@@ -43,10 +45,15 @@ def get_two_gene_model(x0):
     c = [vertcat(x[0]-thresholds_1, x[1]-thresholds_2)]
     # Switching multipliers
     s = vertcat((1-alpha[1])*alpha[2], alpha[0]*(1-alpha[3]))
+    if lifting:
+        beta = SX.sym('beta', 2)
+        g_z = beta - s
+        f_x = [-gamma*x + kappa*beta]
 
-    f_x = [-gamma*x + kappa*s]
-
-    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=x0, name='two_gene')
+        model = nosnoc.NosnocModel(x=x, f_x=f_x, z=beta, g_z=g_z, alpha=[alpha], c=c, x0=x0, name='two_gene')
+    else:
+        f_x = [-gamma*x + kappa*s]
+        model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=x0, name='two_gene')
 
     return model
 
@@ -55,7 +62,7 @@ def solve_two_gene(opts=None, model=None):
     if opts is None:
         opts = get_default_options()
     if model is None:
-        model = get_two_gene_model(X0)
+        model = get_two_gene_model(X0, False)
 
     Nsim = 20
     Tstep = TSIM / Nsim
@@ -98,7 +105,7 @@ def example():
     results = []
     for x1 in [3, 6, 9, 12]:
         for x2 in [3, 6, 9, 12]:
-            model = get_two_gene_model([x1, x2])
+            model = get_two_gene_model([x1, x2], LIFTING)
             results.append(solve_two_gene(opts=opts, model=model))
 
     plot_results(results)

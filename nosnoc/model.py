@@ -94,10 +94,10 @@ class NosnocModel:
         self.z: ca.SX = z
         self.t_var: ca.SX = t_var
         self.name: str = name
-        if z0 is not None:
-            z0 = np.zeros(casadi_length(self.z))
-        else:
-            self.z0 = z0
+
+        self.z0 = z0
+        self.lbz = lbz
+        self.ubz = ubz
 
         self.dims: NosnocDims = None
 
@@ -113,6 +113,20 @@ class NosnocModel:
         n_u = casadi_length(self.u)
         n_z = casadi_length(self.z)
         n_sys = len(self.F) if self.F is not None else len(self.f_x)
+
+        if self.z0 is None:
+            self.z0 = np.zeros((n_z,))
+        elif len(self.z0) != n_z:
+            raise ValueError("z0 should be empty or of lenght n_z.")
+        if self.lbz is None:
+            self.lbz = -np.inf * np.ones((n_z,))
+        elif len(self.lbz) != n_z:
+            raise ValueError("lbz should be empty or of length n_z.")
+        if self.ubz is None:
+            self.ubz = np.inf * np.ones((n_z,))
+        elif len(self.ubz) != n_z:
+            raise ValueError("ubz should be empty or of length n_z.")
+
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
         else:

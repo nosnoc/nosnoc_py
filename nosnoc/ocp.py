@@ -27,8 +27,6 @@ class NosnocOcp:
             ubu: np.ndarray = np.ones((0,)),
             lbx: np.ndarray = np.ones((0,)),
             ubx: np.ndarray = np.ones((0,)),
-            lbz: np.ndarray = np.ones((0,)),
-            ubz: np.ndarray = np.ones((0,)),
             f_q: ca.SX = ca.SX.zeros(1),
             g_path: ca.SX = ca.SX.zeros(0),
             lbg: np.ndarray = np.ones((0,)),
@@ -44,8 +42,6 @@ class NosnocOcp:
         self.ubu: np.ndarray = ubu
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
-        self.lbz: np.ndarray = lbz
-        self.ubz: np.ndarray = ubz
         self.f_q: ca.SX = f_q
         self.g_path: ca.SX = g_path
         self.lbg: np.ndarray = lbg
@@ -74,15 +70,6 @@ class NosnocOcp:
             self.ubx = np.inf * np.ones((dims.n_x,))
         elif len(self.ubx) != dims.n_x:
             raise ValueError("ubx should be empty or of lenght n_x.")
-
-        if len(self.lbz) == 0:
-            self.lbz = -np.inf * np.ones((dims.n_z,))
-        elif len(self.lbz) != dims.n_z:
-            raise ValueError("lbz should be empty or of lenght n_z.")
-        if len(self.ubz) == 0:
-            self.ubz = np.inf * np.ones((dims.n_z,))
-        elif len(self.ubz) != dims.n_z:
-            raise ValueError("ubz should be empty or of lenght n_z.")
 
         # global variables
         n_v_global = casadi_length(model.v_global)

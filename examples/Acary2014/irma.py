@@ -1,5 +1,5 @@
 import numpy as np
-from casadi import SX, horzcat, sum2
+from casadi import SX, horzcat, sum2, vertcat
 import matplotlib.pyplot as plt
 
 import nosnoc
@@ -25,6 +25,7 @@ kappa = np.array([[1.1e-4, 9e-4],
 gamma = np.array([0.05, 0.04, 0.05, 0.02, 0.6])
 
 X0 = [0.011, 0.09, 0.04, 0.05, 0.015]
+LIFTING = True
 
 
 def get_default_options():
@@ -37,7 +38,7 @@ def get_default_options():
     return opts
 
 
-def get_irma_model(switch_on):
+def get_irma_model(switch_on, lifting):
     # Variable defintion
     x = SX.sym("x", 5)
 
@@ -45,13 +46,27 @@ def get_irma_model(switch_on):
     alpha = SX.sym('alpha', 7)
     # Switching function
     c = [nosnoc.casadi_vertcat_list([x[i]-thresholds[i] for i in range(len(X0))])]
-    # Switching multipliers
-    s = horzcat(nosnoc.casadi_vertcat_list([1, 1, 1, alpha[1], 1]),
-                nosnoc.casadi_vertcat_list([alpha[5], alpha[0]*(1-(1-switch_on)*(alpha[6])), alpha[2], alpha[1]*(1-alpha[4]), alpha[3]]))
+    if lifting:
+        if switch_on:
+            beta = SX.sym('beta', 1)
+            g_z = beta - alpha[1]*(1-alpha[4])
 
-    f_x = [-gamma*x + sum2(kappa*s)]
+            s = horzcat(nosnoc.casadi_vertcat_list([1, 1, 1, alpha[1], 1]),
+                        nosnoc.casadi_vertcat_list([alpha[5], alpha[0], alpha[2], beta, alpha[3]]))
+        else:
+            beta = SX.sym('beta', 2)
+            g_z = beta - vertcat(alpha[0]*(1-alpha[6]), alpha[1]*(1-alpha[4]))
 
-    model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=X0, name='irma')
+            s = horzcat(nosnoc.casadi_vertcat_list([1, 1, 1, alpha[1], 1]),
+                        nosnoc.casadi_vertcat_list([alpha[5], beta[0], alpha[2], beta[1], alpha[3]]))
+        f_x = [-gamma*x + sum2(kappa*s)]
+        model = nosnoc.NosnocModel(x=x, f_x=f_x, g_z=g_z, z=beta, alpha=[alpha], c=c, x0=X0, name='irma')
+    else:
+        # Switching multipliers
+        s = horzcat(nosnoc.casadi_vertcat_list([1, 1, 1, alpha[1], 1]),
+                    nosnoc.casadi_vertcat_list([alpha[5], alpha[0]*(1-(1-switch_on)*(alpha[6])), alpha[2], alpha[1]*(1-alpha[4]), alpha[3]]))
+        f_x = [-gamma*x + sum2(kappa*s)]
+        model = nosnoc.NosnocModel(x=x, f_x=f_x, alpha=[alpha], c=c, x0=X0, name='irma')
 
     return model
 
@@ -60,7 +75,7 @@ def solve_irma(opts=None, model=None):
     if opts is None:
         opts = get_default_options()
     if model is None:
-        model = get_irma_model(SWITCH_ON)
+        model = get_irma_model(SWITCH_ON, LIFTING)
 
     Nsim = 500
     Tstep = TSIM / Nsim
@@ -95,7 +110,7 @@ def example():
     opts = get_default_options()
     opts.print_level = 1
     results = []
-    model = get_irma_model(SWITCH_ON)
+    model = get_irma_model(SWITCH_ON, LIFTING)
     results = solve_irma(opts=opts, model=model)
 
     plot_results(results)
