@@ -1,4 +1,4 @@
-from examples.oscilator_example import (
+from examples.oscilator.oscilator_example import (
     TSIM,
     get_oscilator_model,
 )
@@ -48,6 +48,7 @@ def solve_oscilator_fast(opts=None, use_g_Stewart=False, do_plot=True):
     opts = nosnoc.NosnocOpts()
     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
     opts.terminal_time = TSTEP
+    opts.sigma_N = 1e-5
 
     opts.print_level = 2
 

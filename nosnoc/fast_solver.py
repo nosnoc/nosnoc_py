@@ -88,9 +88,9 @@ class NosnocFastSolver(NosnocSolverBase):
         for i in range(n_comp):
             # treat IP complementarities:
             #  (G1, mu_1), (G2, mu_2), (s, mu_s) via FISCHER_BURMEISTER
-            kkt_eq = ca.vertcat(kkt_eq, G1[i] + mu_G1[i] - ca.sqrt(G1[i]**2 + mu_G1[i]**2 + tau**2))
-            kkt_eq = ca.vertcat(kkt_eq, G2[i] + mu_G2[i] - ca.sqrt(G2[i]**2 + mu_G2[i]**2 + tau**2))
-            kkt_eq = ca.vertcat(kkt_eq, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + tau**2))
+            kkt_eq = ca.vertcat(kkt_eq, G1[i] + mu_G1[i] - ca.sqrt(G1[i]**2 + mu_G1[i]**2 + 2*tau))
+            kkt_eq = ca.vertcat(kkt_eq, G2[i] + mu_G2[i] - ca.sqrt(G2[i]**2 + mu_G2[i]**2 + 2*tau))
+            kkt_eq = ca.vertcat(kkt_eq, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + 2*tau))
 
         # (\partial_w H)^\top \lambda_H
         # - \partial_w( G_1 * G_2 - \sigma - s) * lambda_comp
@@ -144,9 +144,9 @@ class NosnocFastSolver(NosnocSolverBase):
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
 
-        if opts.print_level:
-            print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+        # if opts.print_level:
+        #     print('-------------------------------------------')
+        #     print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
 
@@ -165,17 +165,19 @@ class NosnocFastSolver(NosnocSolverBase):
                 (prob.model.p_val_ctrl_stages.flatten(),
                  np.array([sigma_k, tau_val]), lambda00, x0))
 
+            print(f"sigma = {sigma_k:.2e}")
+            print("alpha \t step norm \t kkt res \t cond(A)")
             t = time.time()
             for gn_iter in range(max_gn_iter):
 
-                # get GN step
+                # compute step step
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
-                newton_matrix = jac_kkt_val + 1e-3 * ca.DM.eye(self.nw_pd)
+                newton_matrix = jac_kkt_val # + 1e-3 * ca.DM.eye(self.nw_pd)
                 step = -ca.solve(jac_kkt_val, kkt_val)
                 step_norm = casadi_inf_norm_nan(step)
-                if step_norm < sigma_k:
-                    break
                 nlp_res = casadi_inf_norm_nan(kkt_val)
+                if step_norm < sigma_k or nlp_res < sigma_k / 100:
+                    break
 
                 # breakpoint()
                 # print(f"{lambda00=}")
@@ -185,19 +187,19 @@ class NosnocFastSolver(NosnocSolverBase):
 
                 # line search:
                 alpha = 1.0
-                rho = 0.5
-                gamma = .3
-                line_search_max_iter = 3
-                for ls_iter in range(line_search_max_iter):
+                rho = 0.8
+                gamma = .2
+                line_search_max_iter = 7
+                for line_search_iter in range(line_search_max_iter):
                     w_candidate = w_current + alpha * step.full().flatten()
-                    step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_current, p_val))
+                    step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
                     else:
                         alpha *= rho
 
                 cond = np.linalg.cond(newton_matrix.full())
-                print(f"alpha = {alpha:.3f} \t step_norm {step_norm:.2f}\t cond(A) = {cond:.2e}")
+                print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} ")
                 w_current = w_candidate
 
             cpu_time_nlp[ii] = time.time() - t
@@ -213,9 +215,9 @@ class NosnocFastSolver(NosnocSolverBase):
 
             complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
-            if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp[ii], nlp_iter[ii], status)
+            # if opts.print_level:
+            #     self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
+            #                            cpu_time_nlp[ii], nlp_iter[ii], status)
 
             if complementarity_residual < opts.comp_tol:
                 break
@@ -251,5 +253,4 @@ class NosnocFastSolver(NosnocSolverBase):
 
         # for i in range(len(w_current)):
         #     print(f"w{i}: {prob.w[i]} = {w_current[i]}")
-        breakpoint()
         return results
