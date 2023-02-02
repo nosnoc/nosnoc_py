@@ -8,6 +8,7 @@ class NosnocDims:
     """
     n_x: int
     n_u: int
+    n_z: int
     n_sys: int
     n_p_time_var: int
     n_p_glob: int
