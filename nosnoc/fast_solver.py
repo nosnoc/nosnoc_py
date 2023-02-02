@@ -27,26 +27,6 @@ class NosnocFastSolver(NosnocSolverBase):
         prob = self.problem
 
         # assume SCHOLTES_INEQ, or any mpcc_mode that transforms complementarities into inequalites.
-        # loop over constraints and add duals
-        #
-        # problem of form
-        # H(w) = 0
-        # G_1(w) * G_2(w) = 0
-        #                 \leq sigma (via Scholtes)
-        # G_1(w), G_2(w) \geq 0
-
-        # idea: apply FB on inequalities introduced in IP method on problem above.
-        # optimality conditions:
-        # - (\partial_w H)^\top \lambda_H
-        # - \partial( G_1 * G_2 - \sigma - s) * lambda_comp
-        # - \partial G_1 \top \mu_1 - \partial G_2 \top \mu_2
-        # - \partial(s)^T * \mu_s = 0
-        # \phi_{FB}(G_1, \mu_1, \tau) = 0
-        # \phi_{FB}(G_2, \mu_2, \tau) = 0
-        # \phi_{FB}(s, \mu_s, \tau) = 0
-
-        # measure criteria: FB residuals, stationarity
-
         # complements
         G1 = casadi_vertcat_list([casadi_sum_list(x[0]) for x in prob.comp_list])
         G2 = casadi_vertcat_list([x[1] for x in prob.comp_list])
@@ -75,7 +55,6 @@ class NosnocFastSolver(NosnocSolverBase):
         self.slack0_expr = -ca.diag(G1) @ G2 + prob.sigma
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr])
 
-
         # barrier parameter
         tau = prob.tau
         sigma = prob.sigma
@@ -92,10 +71,6 @@ class NosnocFastSolver(NosnocSolverBase):
             kkt_eq = ca.vertcat(kkt_eq, G2[i] + mu_G2[i] - ca.sqrt(G2[i]**2 + mu_G2[i]**2 + 2*tau))
             kkt_eq = ca.vertcat(kkt_eq, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + 2*tau))
 
-        # (\partial_w H)^\top \lambda_H
-        # - \partial_w( G_1 * G_2 - \sigma - s) * lambda_comp
-        # - \partial_w G_1 \top \mu_1 - \partial_w G_2 \top \mu_2
-        # - \partial(s)^T * \mu_s = 0
         ws = ca.vertcat(prob.w, slack)
 
         stationarity = ca.jacobian(H, ws).T @ lam_H + \
@@ -111,6 +86,7 @@ class NosnocFastSolver(NosnocSolverBase):
 
         self.nw = casadi_length(prob.w)
         self.nw_pd = casadi_length(w_pd)
+        self.n_comp = n_comp
         print(f"created primal dual problem with {casadi_length(w_pd)} variables and {casadi_length(kkt_eq)} equations, {n_comp=}")
 
 
@@ -133,7 +109,8 @@ class NosnocFastSolver(NosnocSolverBase):
         p_val = np.concatenate(
                 (prob.model.p_val_ctrl_stages.flatten(),
                  np.array([opts.sigma_0, tau_val]), lambda00, x0))
-        slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
+        # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
+        slack0 = np.zeros((self.n_comp,))
         w_pd_0 = np.concatenate((prob.w0, slack0, self.mu_pd_0, self.lam_pd_0))
 
         w_current = w_pd_0
@@ -176,14 +153,19 @@ class NosnocFastSolver(NosnocSolverBase):
                 step = -ca.solve(jac_kkt_val, kkt_val)
                 step_norm = casadi_inf_norm_nan(step)
                 nlp_res = casadi_inf_norm_nan(kkt_val)
-                if step_norm < sigma_k or nlp_res < sigma_k / 100:
+                if step_norm < sigma_k or nlp_res < sigma_k / 10:
                     break
 
-                # breakpoint()
-                # print(f"{lambda00=}")
-                # print("kkt_residual")
-                # for ii in range(casadi_length(kkt_val)):
-                #     print(f"{ii}\t {kkt_val[ii]} \t{self.kkt_eq[ii]}")
+                # import matplotlib.pyplot as plt
+                # fig, axs = plt.subplots(3,1)
+                # axs[0].spy(newton_matrix.full())
+                # axs[0].set_title('Newton matrix')
+                # Q, R = np.linalg.qr(newton_matrix.full())
+                # axs[1].spy(Q)
+                # axs[1].set_title('Q')
+                # axs[2].spy(R)
+                # axs[2].set_title('R')
+                # plt.show()
 
                 # line search:
                 alpha = 1.0
@@ -200,6 +182,7 @@ class NosnocFastSolver(NosnocSolverBase):
 
                 cond = np.linalg.cond(newton_matrix.full())
                 print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} ")
+                # print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
                 w_current = w_candidate
 
             cpu_time_nlp[ii] = time.time() - t
@@ -218,10 +201,8 @@ class NosnocFastSolver(NosnocSolverBase):
             # if opts.print_level:
             #     self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
             #                            cpu_time_nlp[ii], nlp_iter[ii], status)
-
             if complementarity_residual < opts.comp_tol:
                 break
-
             if sigma_k <= opts.sigma_N:
                 break
 
