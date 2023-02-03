@@ -208,17 +208,18 @@ class NosnocFastSolver(NosnocSolverBase):
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
 
-                # step = -ca.solve(jac_kkt_val, kkt_val)
-                # step = step.full().flatten()
+                # regularize
+                newton_matrix[-3*self.n_comp:, -3*self.n_comp:] += 1e-6 * np.diag(np.ones(3*self.n_comp,))
 
-                # w_pd_offsets = [self.nw + i * self.n_comp for i in range(6)]
-                w_pd_offsets = self.kkt_eq_offsets
-                # for row, col in [(4, 2)]: #, (2, 4), (2, 3)]:
-                #     newton_matrix[self.kkt_eq_offsets[row]: self.kkt_eq_offsets[row+1], w_pd_offsets[col]:w_pd_offsets[col+1]] += 1e-6 * np.eye(self.n_comp, self.n_comp)
-                #     sub_mat = newton_matrix[self.kkt_eq_offsets[row]: self.kkt_eq_offsets[row+1], w_pd_offsets[col]:w_pd_offsets[col+1]]
-                #     # print(f"submatrix {row, col} = {sub_mat}")
-
-                step = -np.linalg.solve(jac_kkt_val.full(), kkt_val.full().flatten())
+                try:
+                    step = -np.linalg.solve(newton_matrix, kkt_val.full().flatten())
+                except:
+                    cond = np.linalg.cond(newton_matrix)
+                    print(f"failed to solve system with conditioning {cond:.2e}")
+                    self.plot_newton_matrix(newton_matrix, title=f'Newton matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
+                            # fig_filename=f'newton_spy_{prob.model.name}_{ii}_{gn_iter}.pdf'
+                    )
+                    breakpoint()
                 step_norm = np.linalg.norm(step)
                 nlp_res = casadi_inf_norm_nan(kkt_val)
                 if step_norm < sigma_k or nlp_res < sigma_k / 10:
@@ -243,8 +244,8 @@ class NosnocFastSolver(NosnocSolverBase):
                 tmp[tmp==0] = 1
                 minA = np.min(np.abs(tmp))
                 print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} \t {maxA:.2e} \t {minA:.2e}")
-                # self.plot_newton_matrix(newton_matrix, title=f'Newton matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
-                #         # fig_filename=f'newton_spy_{prob.model.name}_{ii}_{gn_iter}.pdf'
+                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
+                #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
                 #  )
 
                 print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
