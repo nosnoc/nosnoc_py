@@ -79,8 +79,9 @@ class NosnocFastSolver(NosnocSolverBase):
 
         # collect KKT system
         slacked_complementarity = slack - self.slack0_expr
-        stationarity_w = ca.jacobian(H, prob.w).T @ lam_H + \
-             ca.jacobian(slacked_complementarity, prob.w).T @ lam_comp \
+        stationarity_w = ca.jacobian(prob.cost, prob.w).T \
+            + ca.jacobian(H, prob.w).T @ lam_H \
+            + ca.jacobian(slacked_complementarity, prob.w).T @ lam_comp \
              - ca.jacobian(G1, prob.w).T @ mu_G1 \
              - ca.jacobian(G2, prob.w).T @ mu_G2 \
              - ca.jacobian(slack, prob.w).T @ mu_s
