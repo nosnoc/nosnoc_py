@@ -73,24 +73,33 @@ class NosnocFastSolver(NosnocSolverBase):
              - ca.jacobian(G2, slack).T @ mu_G2 \
              - ca.jacobian(slack, slack).T @ mu_s
 
-        kkt_eq = stationarity_w
-        kkt_eq = ca.vertcat(kkt_eq, stationarity_s)
-
-        kkt_eq = ca.vertcat(kkt_eq, H)
-
-        kkt_eq = ca.vertcat(kkt_eq, slacked_complementarity)
+        kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
         # treat IP complementarities:
         #  (G1, mu_1), (G2, mu_2), (s, mu_s) via FISCHER_BURMEISTER
+        kkt_comp = []
         for i in range(n_comp):
-            kkt_eq = ca.vertcat(kkt_eq, G1[i] + mu_G1[i] - ca.sqrt(G1[i]**2 + mu_G1[i]**2 + 2*tau))
+            kkt_comp = ca.vertcat(kkt_comp, G1[i] + mu_G1[i] - ca.sqrt(G1[i]**2 + mu_G1[i]**2 + 2*tau))
         for i in range(n_comp):
-            kkt_eq = ca.vertcat(kkt_eq, G2[i] + mu_G2[i] - ca.sqrt(G2[i]**2 + mu_G2[i]**2 + 2*tau))
+            kkt_comp = ca.vertcat(kkt_comp, G2[i] + mu_G2[i] - ca.sqrt(G2[i]**2 + mu_G2[i]**2 + 2*tau))
         for i in range(n_comp):
-            kkt_eq = ca.vertcat(kkt_eq, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + 2*tau))
+            kkt_comp = ca.vertcat(kkt_comp, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + 2*tau))
+
+        kkt_eq = ca.vertcat(kkt_eq_without_comp, kkt_comp)
 
 
         self.kkt_eq = kkt_eq
         kkt_eq_jac = ca.jacobian(kkt_eq, w_pd)
+
+        # regularize kkt_compl jacobian
+        compl_mat = kkt_eq_jac[-3*n_comp:, -3*n_comp:]
+        indicator_mat = np.zeros(compl_mat.shape)
+        for i in range(3*n_comp):
+            for j in range(3*n_comp):
+                indicator_mat[i, j] = float(not compl_mat[i, j].is_zero())
+                # if not compl_mat[i, j].is_zero():
+                #     kkt_eq_jac[-3*n_comp+i, -3*n_comp+j] = ca.mmax(ca.vertcat(kkt_eq_jac[-3*n_comp+i, -3*n_comp+j], 1e-6))
+        kkt_eq_jac[-3*n_comp:, -3*n_comp:] += 1e-6 * indicator_mat
+
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac])
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
 
@@ -207,9 +216,6 @@ class NosnocFastSolver(NosnocSolverBase):
                 # compute step step
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
-
-                # regularize
-                newton_matrix[-3*self.n_comp:, -3*self.n_comp:] += 1e-6 * np.diag(np.ones(3*self.n_comp,))
 
                 try:
                     step = -np.linalg.solve(newton_matrix, kkt_val.full().flatten())
