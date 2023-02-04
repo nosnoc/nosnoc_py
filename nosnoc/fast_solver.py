@@ -85,10 +85,7 @@ class NosnocFastSolver(NosnocSolverBase):
              - ca.jacobian(G2, prob.w).T @ mu_G2 \
              - ca.jacobian(slack, prob.w).T @ mu_s
 
-        stationarity_s = ca.jacobian(H, slack).T @ lam_H + \
-             ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
-             - ca.jacobian(G1, slack).T @ mu_G1 \
-             - ca.jacobian(G2, slack).T @ mu_G2 \
+        stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
              - ca.jacobian(slack, slack).T @ mu_s
 
         kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
@@ -193,7 +190,7 @@ class NosnocFastSolver(NosnocSolverBase):
                  np.array([opts.sigma_0, tau_val]), lambda00, x0))
         # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
         slack0 = np.zeros((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, slack0, self.mu_pd_0, self.lam_pd_0))
+        w_pd_0 = np.concatenate((prob.w0, self.lam_pd_0, slack0, self.mu_pd_0))
 
         w_current = w_pd_0
 
