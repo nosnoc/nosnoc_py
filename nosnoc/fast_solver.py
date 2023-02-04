@@ -13,6 +13,8 @@ from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length
 
+DEBUG = True
+
 def casadi_inf_norm_nan(x: ca.DM):
     norm = 0
     x = x.full().flatten()
@@ -112,9 +114,8 @@ class NosnocFastSolver(NosnocSolverBase):
         for i in range(3*n_comp):
             for j in range(self.nw_pd):
                 indicator_mat[i, j] = float(not compl_mat[i, j].is_zero())
-                # if not compl_mat[i, j].is_zero():
-                #     kkt_eq_jac[-3*n_comp+i, -3*n_comp+j] = ca.mmax(ca.vertcat(kkt_eq_jac[-3*n_comp+i, -3*n_comp+j], 1e-6))
-        kkt_eq_jac[-3*n_comp:, :] += 1e-6 * indicator_mat
+                if not compl_mat[i, j].is_zero():
+                    kkt_eq_jac[-3*n_comp+i, j] += 1e-6
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac])
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
@@ -212,9 +213,11 @@ class NosnocFastSolver(NosnocSolverBase):
         p0 = prob.model.p_val_ctrl_stages[0]
         lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
+        # TODO: initialize duals ala Waechter2006, Sec. 3.6
+
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
 
-        max_gn_iter = 12
+        max_gn_iter = 20
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
@@ -231,15 +234,13 @@ class NosnocFastSolver(NosnocSolverBase):
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
 
-                try:
-                    step = -np.linalg.solve(newton_matrix, kkt_val.full().flatten())
-                except:
-                    cond = np.linalg.cond(newton_matrix)
-                    print(f"failed to solve system with conditioning {cond:.2e}")
-                    self.plot_newton_matrix(newton_matrix, title=f'Newton matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
-                            # fig_filename=f'newton_spy_{prob.model.name}_{ii}_{gn_iter}.pdf'
-                    )
-                    breakpoint()
+                # schur_mat = newton_matrix[-5*self.n_comp:, -5*self.n_comp:]
+                # cond_schur = np.linalg.cond(schur_mat)
+                # plot_matrix_and_qr(schur_mat)
+                # print(f"cond_schur: {cond_schur:.2e}")
+
+                step = -np.linalg.solve(newton_matrix, kkt_val.full().flatten())
+
                 step_norm = np.linalg.norm(step)
                 nlp_res = casadi_inf_norm_nan(kkt_val)
                 if step_norm < sigma_k or nlp_res < sigma_k / 10:
@@ -247,9 +248,9 @@ class NosnocFastSolver(NosnocSolverBase):
 
                 # line search:
                 alpha = 1.0
-                rho = 0.8
+                rho = 0.9
                 gamma = .2
-                line_search_max_iter = 7
+                line_search_max_iter = 20
                 for line_search_iter in range(line_search_max_iter):
                     w_candidate = w_current + alpha * step
                     step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
@@ -258,22 +259,23 @@ class NosnocFastSolver(NosnocSolverBase):
                     else:
                         alpha *= rho
 
-                maxA = np.max(np.abs(newton_matrix))
-                cond = np.linalg.cond(newton_matrix)
-                tmp = newton_matrix.copy()
-                tmp[tmp==0] = 1
-                minA = np.min(np.abs(tmp))
-                print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} \t {maxA:.2e} \t {minA:.2e}")
-                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
-                #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
-                #  )
-
-                print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
                 w_current = w_candidate
+
+                if DEBUG:
+                    maxA = np.max(np.abs(newton_matrix))
+                    cond = np.linalg.cond(newton_matrix)
+                    tmp = newton_matrix.copy()
+                    tmp[tmp==0] = 1
+                    minA = np.min(np.abs(tmp))
+                    print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} \t {maxA:.2e} \t {minA:.2e}")
+                    # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
+                    #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
+                    #  )
+                else:
+                    print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
 
             cpu_time_nlp[ii] = time.time() - t
 
-            # do line search
             # print and process solution
             status = 1
             nlp_iter[ii] = gn_iter # TODO
