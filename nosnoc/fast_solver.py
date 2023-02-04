@@ -66,6 +66,9 @@ class NosnocFastSolver(NosnocSolverBase):
         slack = ca.SX.sym('slack', n_comp)
         w_pd = ca.vertcat(prob.w, lam_pd, slack, mu_pd)
 
+        self.nw = casadi_length(prob.w)
+        self.nw_pd = casadi_length(w_pd)
+
         # slack = - G1 * G2 + sigma
         self.slack0_expr = -ca.diag(G1) @ G2 + prob.sigma
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr])
@@ -106,20 +109,18 @@ class NosnocFastSolver(NosnocSolverBase):
         kkt_eq_jac = ca.jacobian(kkt_eq, w_pd)
 
         # regularize kkt_compl jacobian
-        compl_mat = kkt_eq_jac[-3*n_comp:, -3*n_comp:]
+        compl_mat = kkt_eq_jac[-3*n_comp:, :]
         indicator_mat = np.zeros(compl_mat.shape)
         for i in range(3*n_comp):
-            for j in range(3*n_comp):
+            for j in range(self.nw_pd):
                 indicator_mat[i, j] = float(not compl_mat[i, j].is_zero())
                 # if not compl_mat[i, j].is_zero():
                 #     kkt_eq_jac[-3*n_comp+i, -3*n_comp+j] = ca.mmax(ca.vertcat(kkt_eq_jac[-3*n_comp+i, -3*n_comp+j], 1e-6))
-        kkt_eq_jac[-3*n_comp:, -3*n_comp:] += 1e-6 * indicator_mat
+        kkt_eq_jac[-3*n_comp:, :] += 1e-6 * indicator_mat
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac])
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
 
-        self.nw = casadi_length(prob.w)
-        self.nw_pd = casadi_length(w_pd)
         self.n_comp = n_comp
         self.kkt_eq_offsets = [0, self.nw]  + [n_H+self.nw + i * n_comp for i in range(5)]
 
