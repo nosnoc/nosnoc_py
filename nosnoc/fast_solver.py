@@ -20,6 +20,21 @@ def casadi_inf_norm_nan(x: ca.DM):
         norm = max(norm, x[i])
     return norm
 
+def plot_matrix_and_qr(matrix):
+    import matplotlib.pyplot as plt
+    from nosnoc.plot_utils import latexify_plot
+    latexify_plot()
+    fig, axs = plt.subplots(1, 3)
+
+    axs[0].spy(matrix)
+    axs[1].set_title('A')
+
+    Q, R = np.linalg.qr(matrix)
+    axs[1].spy(Q)
+    axs[1].set_title('Q')
+    axs[2].spy(R)
+    axs[2].set_title('R')
+    plt.show()
 
 class NosnocFastSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
