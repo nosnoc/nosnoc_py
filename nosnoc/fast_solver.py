@@ -1,6 +1,7 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
 import time
+import scipy
 from copy import copy
 from dataclasses import dataclass, field
 
@@ -141,6 +142,42 @@ class NosnocFastSolver(NosnocSolverBase):
         for ii in range(self.nw_pd):
             print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
 
+    def compute_step(self, matrix, rhs):
+        # naive
+        step = np.linalg.solve(matrix, rhs)
+        return step
+
+    def compute_step_schur(self, matrix, rhs):
+        # Schur complement:
+        # [ A, B,
+        # C, D]
+        # * [x_1, x_2] = [y_1, y_2]
+        # ->
+        # with S = (A - BD^{-1}C):
+        # x1 = S^{-1}(y_1 - B D^{-1}y_2)
+        # x2 = D^-1 (y2 - C x_1)
+        nwh = self.nw + self.n_H
+        A = matrix[:nwh, :nwh]
+        B = matrix[:nwh, nwh:]
+        C = matrix[nwh:, :nwh]
+        D = scipy.sparse.csc_matrix(matrix[nwh:, nwh:])
+        y1 = rhs[:nwh]
+        y2 = rhs[nwh:]
+
+        solve_D = scipy.sparse.linalg.factorized(D)
+        # D_inv_C = solve_D(C)
+        D_inv_C = np.zeros(C.shape)
+        for i in range(C.shape[1]):
+            D_inv_C[:, i] = solve_D(C[:, i])
+
+        S = A - B @ D_inv_C
+        x1_rhs = y1 - B @ solve_D(y2)
+        x1 = np.linalg.solve(S, x1_rhs)
+
+        x2 = solve_D(y2 - C@x1)
+        step = np.concatenate((x1, x2))
+
+        return step
 
     def solve(self) -> dict:
         """
@@ -205,18 +242,17 @@ class NosnocFastSolver(NosnocSolverBase):
             t = time.time()
             for gn_iter in range(max_gn_iter):
 
-                # compute step step
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
 
+                # regularize Lagrange Hessian
                 newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
+                rhs = - kkt_val.full().flatten()
 
-                # schur_mat = newton_matrix[-5*self.n_comp:, -5*self.n_comp:]
-                # cond_schur = np.linalg.cond(schur_mat)
-                # plot_matrix_and_qr(schur_mat)
-                # print(f"cond_schur: {cond_schur:.2e}")
-
-                step = -np.linalg.solve(newton_matrix, kkt_val.full().flatten())
+                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
+                # compute step
+                # step = self.compute_step_schur(newton_matrix, rhs)
+                step = self.compute_step(newton_matrix, rhs)
 
                 step_norm = np.linalg.norm(step)
                 nlp_res = casadi_inf_norm_nan(kkt_val)
