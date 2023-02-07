@@ -270,7 +270,7 @@ class NosnocFastSolver(NosnocSolverBase):
                 newton_matrix = jac_kkt_val.full()
 
                 # regularize Lagrange Hessian
-                newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
+                newton_matrix[:self.nw, :self.nw] += 1e-7 * np.eye(self.nw)
                 rhs = - kkt_val.full().flatten()
 
                 # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
@@ -410,3 +410,19 @@ class NosnocFastSolver(NosnocSolverBase):
         ax.set_yticklabels(['stat w', '$H$', 'stat s', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
         return
 
+# # initialize a la Waechter2006, Sec. 3.6
+# # for initialization
+# jac_cost = ca.jacobian(prob.cost, prob.w)
+# self.jac_cost_fun = ca.Function('jac_cost_fun', [prob.w], [jac_cost])
+# eq_pd = ca.vertcat(H)
+# self.grad_H_fun = ca.Function('grad_H_fun', [prob.w], [ca.jacobian(self.H, prob.w)])
+# rhs = - np.concatenate((
+#     self.jac_cost_fun(prob.w0).full().flatten() - (prob.lbw == 0) * 1,
+#     np.zeros(self.n_H)
+# ))
+# grad_H = self.grad_H_fun(prob.w0).full()
+# mat = np.zeros((self.nw + self.n_H, self.nw + self.n_H))
+# mat[:self.nw, :self.nw] = np.eye(self.nw)
+# mat[:self.nw, self.nw:] = grad_H.T
+# mat[self.nw:, :self.nw] = grad_H
+# lamH0 = np.linalg.solve(mat, rhs)[self.nw:]
