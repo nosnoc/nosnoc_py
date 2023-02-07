@@ -147,15 +147,40 @@ class NosnocFastSolver(NosnocSolverBase):
         step = np.linalg.solve(matrix, rhs)
         return step
 
-    def compute_step_schur(self, matrix, rhs):
-        # Schur complement:
-        # [ A, B,
-        # C, D]
-        # * [x_1, x_2] = [y_1, y_2]
-        # ->
-        # with S = (A - BD^{-1}C):
-        # x1 = S^{-1}(y_1 - B D^{-1}y_2)
-        # x2 = D^-1 (y2 - C x_1)
+# Schur complement:
+# [ A, B,
+# C, D]
+# * [x_1, x_2] = [y_1, y_2]
+# ->
+# with S = (A - BD^{-1}C):
+# x1 = S^{-1}(y_1 - B D^{-1}y_2)
+# x2 = D^-1 (y2 - C x_1)
+    def compute_step_schur_np(self, matrix, rhs):
+        nwh = self.nw + self.n_H
+        A = matrix[:nwh, :nwh]
+        B = matrix[:nwh, nwh:]
+        C = matrix[nwh:, :nwh]
+        D = matrix[nwh:, nwh:]
+        y1 = rhs[:nwh]
+        y2 = rhs[nwh:]
+
+        # solve_D = scipy.sparse.linalg.factorized(D)
+        # # D_inv_C = solve_D(C)
+        # D_inv_C = np.zeros(C.shape)
+        # for i in range(C.shape[1]):
+        #     D_inv_C[:, i] = solve_D(C[:, i])
+        D_inv_C = np.linalg.solve(D, C)
+
+        S = A - B @ D_inv_C
+        x1_rhs = y1 - B @ np.linalg.solve(D, y2)
+        x1 = np.linalg.solve(S, x1_rhs)
+
+        x2 = np.linalg.solve(D, y2 - C@x1)
+        step = np.concatenate((x1, x2))
+
+        return step
+
+    def compute_step_schur_scipy(self, matrix, rhs):
         nwh = self.nw + self.n_H
         A = matrix[:nwh, :nwh]
         B = matrix[:nwh, nwh:]
@@ -165,7 +190,6 @@ class NosnocFastSolver(NosnocSolverBase):
         y2 = rhs[nwh:]
 
         solve_D = scipy.sparse.linalg.factorized(D)
-        # D_inv_C = solve_D(C)
         D_inv_C = np.zeros(C.shape)
         for i in range(C.shape[1]):
             D_inv_C[:, i] = solve_D(C[:, i])
@@ -251,7 +275,8 @@ class NosnocFastSolver(NosnocSolverBase):
 
                 # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
                 # compute step
-                # step = self.compute_step_schur(newton_matrix, rhs)
+                # step = self.compute_step_schur_np(newton_matrix, rhs)
+                # step = self.compute_step_schur_scipy(newton_matrix, rhs)
                 step = self.compute_step(newton_matrix, rhs)
 
                 step_norm = np.linalg.norm(step)
