@@ -125,52 +125,11 @@ class NosnocFastSolver(NosnocSolverBase):
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
 
         self.n_comp = n_comp
+        self.n_H = n_H
         self.kkt_eq_offsets = [0, self.nw]  + [n_H+self.nw + i * n_comp for i in range(5)]
 
         print(f"created primal dual problem with {casadi_length(w_pd)} variables and {casadi_length(kkt_eq)} equations, {n_comp=}, {self.nw=}, {n_H=}")
 
-        return
-
-    def plot_newton_matrix(self, matrix, title='', fig_filename=None):
-        import matplotlib.pyplot as plt
-        from nosnoc.plot_utils import latexify_plot
-        latexify_plot()
-        fig, axs = plt.subplots(1, 1)
-        self.add_scatter_spy_magnitude_plot(axs, fig, matrix)
-        axs.set_title(title)
-
-        # Q, R = np.linalg.qr(matrix)
-        # axs[1].spy(Q)
-        # axs[1].set_title('Q')
-        # axs[2].spy(R)
-        # axs[2].set_title('R')
-
-        if fig_filename is not None:
-            plt.savefig(fname=fig_filename)
-            print(f"saved figure as {fig_filename}")
-        plt.show()
-        # breakpoint()
-
-    def add_scatter_spy_magnitude_plot(self, ax, fig, matrix):
-        import matplotlib
-        rows, cols = matrix.nonzero()
-        values = np.abs(matrix[rows, cols])
-
-        cmap = matplotlib.colormaps['inferno']
-        # scatter spy
-        sc = ax.scatter(cols, rows, c=values, cmap=cmap,
-                           norm=matplotlib.colors.LogNorm(vmin=np.min(values), vmax=np.max(values)),
-                           marker='s', s=20)
-        ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
-        ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
-        ax.set_aspect('equal')
-        fig.colorbar(sc, ax = ax, ticks=matplotlib.ticker.LogLocator())
-
-        ax.set_xticks(self.kkt_eq_offsets)
-        ax.set_xticklabels([r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'])
-        # ax.set_xticklabels(['w', 'lam_H', 'lam_comp', 'slack', 'mu_G1', r'$\mu_G2', r'$\mu_s$'])
-        ax.set_yticks(self.kkt_eq_offsets)
-        ax.set_yticklabels(['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
         return
 
     def print_iterate_threshold(self, iterate, threshold=1.0):
@@ -202,9 +161,13 @@ class NosnocFastSolver(NosnocSolverBase):
         p_val = np.concatenate(
                 (prob.model.p_val_ctrl_stages.flatten(),
                  np.array([opts.sigma_0, tau_val]), lambda00, x0))
-        # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
-        slack0 = np.zeros((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, self.lam_pd_0, slack0, self.mu_pd_0))
+
+        lamH0 = 0 * np.ones((self.n_H,))
+        lampd0 = np.concatenate((lamH0, np.ones(self.n_comp,)))
+
+        slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
+        # slack0 = np.zeros((self.n_comp,))
+        w_pd_0 = np.concatenate((prob.w0, lampd0, slack0, self.mu_pd_0))
 
         w_current = w_pd_0
 
@@ -340,6 +303,47 @@ class NosnocFastSolver(NosnocSolverBase):
         #         sum_iter += i
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}")
 
-        # for i in range(len(w_current)):
-        #     print(f"w{i}: {prob.w[i]} = {w_current[i]}")
+        # self.print_iterate(w_current)
         return results
+
+    def plot_newton_matrix(self, matrix, title='', fig_filename=None):
+        import matplotlib.pyplot as plt
+        from nosnoc.plot_utils import latexify_plot
+        latexify_plot()
+        fig, axs = plt.subplots(1, 1)
+        self.add_scatter_spy_magnitude_plot(axs, fig, matrix)
+        axs.set_title(title)
+
+        # Q, R = np.linalg.qr(matrix)
+        # axs[1].spy(Q)
+        # axs[1].set_title('Q')
+        # axs[2].spy(R)
+        # axs[2].set_title('R')
+
+        if fig_filename is not None:
+            plt.savefig(fname=fig_filename)
+            print(f"saved figure as {fig_filename}")
+        plt.show()
+
+    def add_scatter_spy_magnitude_plot(self, ax, fig, matrix):
+        import matplotlib
+        rows, cols = matrix.nonzero()
+        values = np.abs(matrix[rows, cols])
+
+        cmap = matplotlib.colormaps['inferno']
+        # scatter spy
+        sc = ax.scatter(cols, rows, c=values, cmap=cmap,
+                           norm=matplotlib.colors.LogNorm(vmin=np.min(values), vmax=np.max(values)),
+                           marker='s', s=20)
+        ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
+        ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
+        ax.set_aspect('equal')
+        fig.colorbar(sc, ax = ax, ticks=matplotlib.ticker.LogLocator())
+
+        ax.set_xticks(self.kkt_eq_offsets)
+        ax.set_xticklabels([r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'])
+        # ax.set_xticklabels(['w', 'lam_H', 'lam_comp', 'slack', 'mu_G1', r'$\mu_G2', r'$\mu_s$'])
+        ax.set_yticks(self.kkt_eq_offsets)
+        ax.set_yticklabels(['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
+        return
+
