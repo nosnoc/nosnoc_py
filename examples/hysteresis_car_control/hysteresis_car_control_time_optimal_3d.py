@@ -8,6 +8,7 @@ are thus given in a 3D space. The hysteresis curves can overlap in this
 """
 
 import nosnoc
+from nosnoc.plot_utils import plot_colored_line_3d
 import casadi as ca
 import numpy as np
 from math import ceil, log
@@ -264,6 +265,10 @@ def plot(x_list, t_grid, u_list, t_grid_u):
     plt.colorbar(im)
     plt.xlabel("$\\psi(x)$")
     plt.ylabel("$w$")
+
+    plot_colored_line_3d(
+        psi, [x[-3] for x in x_list], [x[-2] for x in x_list], t
+    )
     plt.show()
 
 
