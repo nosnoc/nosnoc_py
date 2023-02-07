@@ -209,6 +209,8 @@ class NosnocFastSolver(NosnocSolverBase):
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
 
+                newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
+
                 # schur_mat = newton_matrix[-5*self.n_comp:, -5*self.n_comp:]
                 # cond_schur = np.linalg.cond(schur_mat)
                 # plot_matrix_and_qr(schur_mat)
