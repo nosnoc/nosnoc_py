@@ -95,7 +95,7 @@ class NosnocFastSolver(NosnocSolverBase):
         stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
              - ca.jacobian(slack, slack).T @ mu_s
 
-        kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
+        kkt_eq_without_comp = ca.vertcat(stationarity_w, H, stationarity_s, slacked_complementarity)
         # treat IP complementarities:
         #  (G1, mu_1), (G2, mu_2), (s, mu_s) via FISCHER_BURMEISTER
         kkt_comp = []
@@ -346,6 +346,6 @@ class NosnocFastSolver(NosnocSolverBase):
         ax.set_xticklabels([r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'])
         # ax.set_xticklabels(['w', 'lam_H', 'lam_comp', 'slack', 'mu_G1', r'$\mu_G2', r'$\mu_s$'])
         ax.set_yticks(self.kkt_eq_offsets)
-        ax.set_yticklabels(['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
+        ax.set_yticklabels(['stat w', '$H$', 'stat s', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
         return
 
