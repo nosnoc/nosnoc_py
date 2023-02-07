@@ -50,6 +50,9 @@ class NosnocFastSolver(NosnocSolverBase):
         # equalities
         H = casadi_vertcat_list( [prob.g[i] for i in range(len(prob.lbg)) if prob.lbg[i] == prob.ubg[i]] )
 
+        self.H = H
+        self.G1 = G1
+        self.G2 = G2
         n_comp = casadi_length(G1)
         n_H = casadi_length(H)
 
@@ -68,6 +71,7 @@ class NosnocFastSolver(NosnocSolverBase):
         slack = ca.SX.sym('slack', n_comp)
         w_pd = ca.vertcat(prob.w, lam_pd, slack, mu_pd)
 
+        self.w_pd = w_pd
         self.nw = casadi_length(prob.w)
         self.nw_pd = casadi_length(w_pd)
 
@@ -225,7 +229,7 @@ class NosnocFastSolver(NosnocSolverBase):
 
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
 
-        max_gn_iter = 20
+        max_gn_iter = 30
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
