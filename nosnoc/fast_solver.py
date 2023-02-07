@@ -226,9 +226,9 @@ class NosnocFastSolver(NosnocSolverBase):
                 # line search:
                 alpha = 1.0
                 rho = 0.9
-                gamma = .2
-                line_search_max_iter = 20
-                for line_search_iter in range(line_search_max_iter):
+                gamma = .3
+                alpha_min = 0.05
+                while alpha > alpha_min:
                     w_candidate = w_current + alpha * step
                     step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
