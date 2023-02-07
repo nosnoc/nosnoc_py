@@ -13,7 +13,7 @@ from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length
 
-DEBUG = True
+DEBUG = False
 
 def casadi_inf_norm_nan(x: ca.DM):
     norm = 0
@@ -169,6 +169,14 @@ class NosnocFastSolver(NosnocSolverBase):
         ax.set_yticklabels(['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
         return
 
+    def print_iterate_threshold(self, iterate, threshold=1.0):
+        for ii in range(self.nw_pd):
+            if np.abs(iterate[ii]) > threshold:
+                print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
+
+    def print_iterate(self, iterate):
+        for ii in range(self.nw_pd):
+            print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
 
 
     def solve(self) -> dict:
