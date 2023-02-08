@@ -58,7 +58,7 @@ def solve_oscilator_fast(opts=None, use_g_Stewart=False, do_plot=True):
     model = get_oscilator_model(use_g_Stewart)
     model.x0 = X0
 
-    solver = nosnoc.NosnocFastSolver(opts, model)
+    solver = nosnoc.NosnocScholtesFBSolver(opts, model)
     results = solver.solve()
 
     x_out = results["x_all_list"][-1]

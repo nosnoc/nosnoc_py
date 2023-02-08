@@ -9,7 +9,7 @@ from .utils import casadi_length, casadi_vertcat_list, print_casadi_vector, flat
 from .plot_utils import plot_timings, plot_iterates, latexify_plot
 from .rk_utils import rk4
 
-from .fast_solver import NosnocFastSolver
+from .scholtes_fb_custom_solver import NosnocScholtesFBSolver
 
 import warnings
 warnings.simplefilter("always")
