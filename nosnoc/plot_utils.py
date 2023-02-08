@@ -214,3 +214,42 @@ def plot_colored_line_3d(x, y, z, t, ax=None, label="Trajectory", label_4d="Time
         plt.colorbar(im, ax=ax)
 
     return ax
+def plot_matrix_and_qr(matrix):
+    import matplotlib.pyplot as plt
+    from nosnoc.plot_utils import latexify_plot
+    latexify_plot()
+    fig, axs = plt.subplots(1, 3)
+
+    axs[0].spy(matrix)
+    axs[1].set_title('A')
+
+    Q, R = np.linalg.qr(matrix)
+    axs[1].spy(Q)
+    axs[1].set_title('Q')
+    axs[2].spy(R)
+    axs[2].set_title('R')
+    plt.show()
+
+
+def spy_magnitude_plot(matrix, ax=None, fig=None, xticks=None, xticklabels=None, yticks=None, yticklabels=None):
+    rows, cols = matrix.nonzero()
+    values = np.abs(matrix[rows, cols])
+
+    cmap = matplotlib.colormaps['inferno']
+    # scatter spy
+    sc = ax.scatter(cols, rows, c=values, cmap=cmap,
+                        norm=matplotlib.colors.LogNorm(vmin=np.min(values), vmax=np.max(values)),
+                        marker='s', s=20)
+    ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
+    ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
+    ax.set_aspect('equal')
+    fig.colorbar(sc, ax = ax, ticks=matplotlib.ticker.LogLocator())
+
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    if xticklabels is not None:
+        ax.set_xticklabels(xticklabels)
+    if yticks is not None:
+        ax.set_yticks(yticks)
+    if yticklabels is not None:
+        ax.set_yticklabels(yticklabels)
