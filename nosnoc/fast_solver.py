@@ -13,6 +13,7 @@ from nosnoc.solver import NosnocSolverBase, get_results_from_primal_vector
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length
+from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot
 
 DEBUG = False
 
@@ -22,22 +23,6 @@ def casadi_inf_norm_nan(x: ca.DM):
     for i in range(len(x)):
         norm = max(norm, x[i])
     return norm
-
-def plot_matrix_and_qr(matrix):
-    import matplotlib.pyplot as plt
-    from nosnoc.plot_utils import latexify_plot
-    latexify_plot()
-    fig, axs = plt.subplots(1, 3)
-
-    axs[0].spy(matrix)
-    axs[1].set_title('A')
-
-    Q, R = np.linalg.qr(matrix)
-    axs[1].spy(Q)
-    axs[1].set_title('Q')
-    axs[2].spy(R)
-    axs[2].set_title('R')
-    plt.show()
 
 class NosnocFastSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
@@ -82,7 +67,6 @@ class NosnocFastSolver(NosnocSolverBase):
 
         # barrier parameter
         tau = prob.tau
-        sigma = prob.sigma
 
         # collect KKT system
         slacked_complementarity = slack - self.slack0_expr
@@ -120,7 +104,7 @@ class NosnocFastSolver(NosnocSolverBase):
             for j in range(self.nw_pd):
                 indicator_mat[i, j] = float(not compl_mat[i, j].is_zero())
                 if not compl_mat[i, j].is_zero():
-                    kkt_eq_jac[-3*n_comp+i, j] += 1e-6
+                    kkt_eq_jac[-3*n_comp+i, j] += 1e-7
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac])
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
@@ -261,9 +245,11 @@ class NosnocFastSolver(NosnocSolverBase):
                 (prob.model.p_val_ctrl_stages.flatten(),
                  np.array([sigma_k, tau_val]), lambda00, x0))
 
-            print(f"sigma = {sigma_k:.2e}")
-            print("alpha \t step norm \t kkt res \t cond(A)")
+            if opts.print_level > 1:
+                print("alpha \t step norm \t kkt res \t cond(A)")
             t = time.time()
+            alpha_min_counter = 0
+
             for gn_iter in range(max_gn_iter):
 
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
@@ -271,9 +257,9 @@ class NosnocFastSolver(NosnocSolverBase):
 
                 # regularize Lagrange Hessian
                 newton_matrix[:self.nw, :self.nw] += 1e-7 * np.eye(self.nw)
+                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
                 rhs = - kkt_val.full().flatten()
 
-                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
                 # compute step
                 # step = self.compute_step_schur_np(newton_matrix, rhs)
                 # step = self.compute_step_schur_scipy(newton_matrix, rhs)
@@ -289,10 +275,13 @@ class NosnocFastSolver(NosnocSolverBase):
                 rho = 0.9
                 gamma = .3
                 alpha_min = 0.05
-                while alpha > alpha_min:
+                while True:
                     w_candidate = w_current + alpha * step
                     step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
+                        break
+                    elif alpha < alpha_min:
+                        alpha_min_counter += 1
                         break
                     else:
                         alpha *= rho
@@ -309,7 +298,7 @@ class NosnocFastSolver(NosnocSolverBase):
                     # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
                     #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
                     #  )
-                else:
+                elif opts.print_level > 1:
                     print(f"{alpha:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
 
             cpu_time_nlp[ii] = time.time() - t
@@ -324,9 +313,12 @@ class NosnocFastSolver(NosnocSolverBase):
 
             complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
-            # if opts.print_level:
+            if opts.print_level:
             #     self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
             #                            cpu_time_nlp[ii], nlp_iter[ii], status)
+                print(f"sigma = {sigma_k:.2f}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
+
+
             if complementarity_residual < opts.comp_tol:
                 break
             if sigma_k <= opts.sigma_N:
@@ -389,25 +381,12 @@ class NosnocFastSolver(NosnocSolverBase):
         plt.show()
 
     def add_scatter_spy_magnitude_plot(self, ax, fig, matrix):
-        import matplotlib
-        rows, cols = matrix.nonzero()
-        values = np.abs(matrix[rows, cols])
-
-        cmap = matplotlib.colormaps['inferno']
-        # scatter spy
-        sc = ax.scatter(cols, rows, c=values, cmap=cmap,
-                           norm=matplotlib.colors.LogNorm(vmin=np.min(values), vmax=np.max(values)),
-                           marker='s', s=20)
-        ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
-        ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
-        ax.set_aspect('equal')
-        fig.colorbar(sc, ax = ax, ticks=matplotlib.ticker.LogLocator())
-
-        ax.set_xticks(self.kkt_eq_offsets)
-        ax.set_xticklabels([r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'])
-        # ax.set_xticklabels(['w', 'lam_H', 'lam_comp', 'slack', 'mu_G1', r'$\mu_G2', r'$\mu_s$'])
-        ax.set_yticks(self.kkt_eq_offsets)
-        ax.set_yticklabels(['stat w', '$H$', 'stat s', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'])
+        spy_magnitude_plot(matrix, ax=ax, fig=fig,
+            xticklabels=[r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'],
+            xticks = self.kkt_eq_offsets,
+            yticklabels= ['stat w', '$H$', 'stat s', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'],
+            yticks = self.kkt_eq_offsets
+        )
         return
 
 # # initialize a la Waechter2006, Sec. 3.6
