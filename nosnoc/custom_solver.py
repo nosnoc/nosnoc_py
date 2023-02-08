@@ -24,7 +24,7 @@ def casadi_inf_norm_nan(x: ca.DM):
         norm = max(norm, x[i])
     return norm
 
-class NosnocFastSolver(NosnocSolverBase):
+class NosnocCustomSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)
         prob = self.problem
