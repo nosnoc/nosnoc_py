@@ -456,12 +456,19 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
+    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX) -> None:
         opts = self.opts
+        # handle path complementarities TODO maintain sparsity?
+        X_fe = [self.w[ind] for ind in self.ind_x]
+        for j in range(opts.n_s):
+            stage_comps = self.ocp.g_path_comp_fun(X_fe[j], Uk, self.p, self.v_global)  # TODO maybe should include stage z
+            a, b = ca.horzsplit(stage_comps)
+            self.create_complementarity([a], b, sigma_p, tau)
+
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau)
+                                            tau, Uk)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
