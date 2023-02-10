@@ -64,7 +64,7 @@ class NosnocOcp:
         self.f_q_fun = ca.Function('f_q_fun', [model.x, model.u, model.p, model.v_global],
                                    [self.f_q])
         self.g_path_fun = ca.Function('g_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path])
-        self.g_comp_path_fun = ca.Function('g_comp_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path_comp])
+        self.g_path_comp_fun = ca.Function('g_comp_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path_comp])
 
         # path complementarities
         if self.g_path_comp.shape[1] != 2:

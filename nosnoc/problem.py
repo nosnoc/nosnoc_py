@@ -153,6 +153,7 @@ class FiniteElement(FiniteElementBase):
         self.fe_idx = fe_idx
         self.opts = opts
         self.model = model
+        self.ocp = ocp
         self.prev_fe: FiniteElementBase = prev_fe
         self.p = model.p_ctrl_stages[ctrl_idx]
 
@@ -461,7 +462,7 @@ class FiniteElement(FiniteElementBase):
         # handle path complementarities TODO maintain sparsity?
         X_fe = [self.w[ind] for ind in self.ind_x]
         for j in range(opts.n_s):
-            stage_comps = self.ocp.g_path_comp_fun(X_fe[j], Uk, self.p, self.v_global)  # TODO maybe should include stage z
+            stage_comps = self.ocp.g_path_comp_fun(X_fe[j], Uk, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau)
 
@@ -662,7 +663,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                fe.create_complementarity_constraints(sigma_p, tau)
+                fe.create_complementarity_constraints(sigma_p, tau, Uk)
 
                 # 3) Step Equilibration
                 fe.step_equilibration(sigma_p, tau)
