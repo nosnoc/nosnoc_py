@@ -96,7 +96,12 @@ def create_empty_list_matrix(list_dims: tuple):
     return np.empty(list_dims + (0,), dtype=int).tolist()
 
 
-
 def get_cont_algebraic_indices(ind_alg: list):
     return [ind_rk[-1] for ind_fe in ind_alg for ind_rk in ind_fe]
 
+
+def is_var_in_list(var: ca.SX, varlist: List[ca.SX]):
+    for v in varlist:
+        if var.element_hash() == v.element_hash():
+            return True
+    return False

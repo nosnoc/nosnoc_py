@@ -1,6 +1,6 @@
 import numpy as np
 import casadi as ca
-from nosnoc.utils import casadi_length
+from nosnoc.utils import casadi_length, is_var_in_list
 from nosnoc.model import NosnocModel
 from nosnoc.dims import NosnocDims
 
@@ -64,11 +64,42 @@ class NosnocOcp:
         self.f_q_fun = ca.Function('f_q_fun', [model.x, model.u, model.p, model.v_global],
                                    [self.f_q])
         self.g_path_fun = ca.Function('g_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path])
-        self.g_path_comp_fun = ca.Function('g_comp_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path_comp])
 
         # path complementarities
         if self.g_path_comp.shape[1] != 2:
             raise ValueError("path complementarities should be width 2")
+
+        # Process complementarities into 3 categories
+        self.g_global_comp = ca.SX.zeros(0, 2)
+        self.g_ctrl_comp = ca.SX.zeros(0, 2)
+        self.g_stage_comp = ca.SX.zeros(0, 2)
+        for ii in range(self.g_path_comp.shape[0]):
+            expr = self.g_path_comp[ii, :]
+            expr_vars = ca.symvar(expr)
+            rk_stage_vars = ca.symvar(model.x) + ca.symvar(model.z)
+            control_stage_vars = ca.symvar(model.u) + ca.symvar(model.p_time_var)
+
+            # TODO a better approach
+            tightest = 2
+            for var in expr_vars:
+                if is_var_in_list(var, rk_stage_vars):
+                    tightest = 0
+                    break
+                elif is_var_in_list(var, control_stage_vars):
+                    tightest = 1
+
+            if tightest == 2:
+                self.g_global_comp = ca.vertcat(self.g_global_comp, expr)
+            elif tightest == 1:
+                self.g_ctrl_comp = ca.vertcat(self.g_ctrl_comp, expr)
+            else:
+                self.g_stage_comp = ca.vertcat(self.g_stage_comp, expr)
+
+        self.g_global_comp_fun = ca.Function('g_global_comp_fun', [model.p_global, model.v_global], [self.g_global_comp])
+        self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', [model.u, model.p, model.v_global], [self.g_ctrl_comp])
+        self.g_stage_comp_fun = ca.Function('g_stage_comp_fun',
+                                            [model.x, model.u, model.z, model.p, model.v_global],
+                                            [self.g_stage_comp])
 
         # path constraints
         n_g_path = casadi_length(self.g_path)
