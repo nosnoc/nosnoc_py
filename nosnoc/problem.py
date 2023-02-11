@@ -335,20 +335,15 @@ class FiniteElement(FiniteElementBase):
         Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
 
-    def h(self) -> ca.SX:
+    def h(self) -> List[ca.SX]:
         return self.w[self.ind_h]
 
-    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
+    def X_fe(self) -> ca.SX:
         opts = self.opts
-        model = self.model
-
-        # setup X_fe: list of x values on fe, initialize X_end
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             X_fe = [self.w[ind] for ind in self.ind_x]
-            Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
             X_fe = []
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
@@ -357,6 +352,21 @@ class FiniteElement(FiniteElementBase):
             X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
             X_fe = [self.w[ind] for ind in self.ind_x]
+
+        return X_fe
+
+    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
+        opts = self.opts
+        model = self.model
+
+        # setup X_fe: list of x values on fe, initialize X_end
+        # TODO: clean up
+        X_fe = self.X_fe()
+        if opts.irk_representation == IrkRepresentation.INTEGRAL:
+            Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
             Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -462,6 +472,7 @@ class FiniteElement(FiniteElementBase):
         # handle path complementarities TODO maintain sparsity?
         X_fe = [self.w[ind] for ind in self.ind_x]
         for j in range(opts.n_s):
+            print(ca.symvar(self.ocp.g_path_comp))
             stage_comps = self.ocp.g_path_comp_fun(X_fe[j], Uk, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau)
