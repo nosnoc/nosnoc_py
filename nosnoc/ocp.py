@@ -74,7 +74,7 @@ class NosnocOcp:
         self.g_ctrl_comp = ca.SX.zeros(0, 2)
         self.g_stage_comp = ca.SX.zeros(0, 2)
         if self.g_path_comp.shape[0] != 0:
-            warn("OCP: using path complementarities, note that all expression g need to be bound as 0 <= g. This is not yet done automatically.")
+            warn("OCP: using path complementarities, note that all expression a, b need to be bound as 0 <= a, 0 <= b. This is not yet done automatically.")
         for ii in range(self.g_path_comp.shape[0]):
             expr = self.g_path_comp[ii, :]
             expr_vars = ca.symvar(expr)
