@@ -1,5 +1,5 @@
 # This is an example use of path complementarities to enforce not braking and accelerating
-# at the same time. 
+# at the same time.
 
 import nosnoc
 import casadi as ca
@@ -24,7 +24,7 @@ def car_model():
 
     j_a = 1
     j_b = 1
-    
+
     A = np.array([
         [0, 1],
         [0, 0]
@@ -99,26 +99,26 @@ def plot_car_model(results, latexify=True):
     plt.figure()
     plt.subplot(2, 1, 1)
     plt.plot(t_grid, x_traj[:, 0])
-    plt.ylabel("x")
+    plt.ylabel("$x$")
     plt.xlabel("time [s]")
     plt.grid()
 
     plt.subplot(2, 1, 2)
     plt.plot(t_grid, x_traj[:, 1])
-    plt.ylabel("v")
+    plt.ylabel("$v$")
     plt.xlabel("time [s]")
     plt.grid()
 
     plt.figure()
     plt.subplot(2, 1, 1)
     plt.step(t_grid_u, np.concatenate([[u_traj[0,0]], u_traj[:, 0]]))
-    plt.ylabel("u_a")
+    plt.ylabel("$u_a$")
     plt.xlabel("time [s]")
     plt.grid()
 
     plt.subplot(2, 1, 2)
     plt.step(t_grid_u, np.concatenate([[u_traj[0,1]], u_traj[:, 1]]))
-    plt.ylabel("u_b")
+    plt.ylabel("$u_b$")
     plt.xlabel("time [s]")
     plt.grid()
 
