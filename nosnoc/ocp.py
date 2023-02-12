@@ -1,6 +1,6 @@
 import numpy as np
 import casadi as ca
-from nosnoc.utils import casadi_length, is_var_in_list
+from nosnoc.utils import casadi_length
 from nosnoc.model import NosnocModel
 from nosnoc.dims import NosnocDims
 from warnings import warn
@@ -68,34 +68,26 @@ class NosnocOcp:
         # path complementarities
         if self.g_path_comp.shape[1] != 2:
             raise ValueError("path complementarities should be width 2")
+        if self.g_path_comp.shape[0] != 0:
+            warn("OCP: using path complementarities. Note that all expressions a, b need to be bound as 0 <= a, 0 <= b. This is not yet done automatically.")
 
-        # Process complementarities into 3 categories
+        # Process complementarities into 3 categories:
+        # rk_stage, ctrl_stage, global
         self.g_global_comp = ca.SX.zeros(0, 2)
         self.g_ctrl_comp = ca.SX.zeros(0, 2)
         self.g_stage_comp = ca.SX.zeros(0, 2)
-        if self.g_path_comp.shape[0] != 0:
-            warn("OCP: using path complementarities, note that all expression a, b need to be bound as 0 <= a, 0 <= b. This is not yet done automatically.")
+
+        rk_stage_vars = ca.vertcat(model.x, model.z)
+        control_stage_vars = ca.vertcat(model.u, model.p_time_var)
+
         for ii in range(self.g_path_comp.shape[0]):
             expr = self.g_path_comp[ii, :]
-            expr_vars = ca.symvar(expr)
-            rk_stage_vars = ca.symvar(model.x) + ca.symvar(model.z)
-            control_stage_vars = ca.symvar(model.u) + ca.symvar(model.p_time_var)
-
-            # TODO a better approach
-            tightest = 2
-            for var in expr_vars:
-                if is_var_in_list(var, rk_stage_vars):
-                    tightest = 0
-                    break
-                elif is_var_in_list(var, control_stage_vars):
-                    tightest = 1
-
-            if tightest == 2:
-                self.g_global_comp = ca.vertcat(self.g_global_comp, expr)
-            elif tightest == 1:
+            if any(ca.which_depends(expr, rk_stage_vars)):
+                self.g_stage_comp = ca.vertcat(self.g_stage_comp, expr)
+            elif any(ca.which_depends(expr, control_stage_vars)):
                 self.g_ctrl_comp = ca.vertcat(self.g_ctrl_comp, expr)
             else:
-                self.g_stage_comp = ca.vertcat(self.g_stage_comp, expr)
+                self.g_global_comp = ca.vertcat(self.g_global_comp, expr)
 
         self.g_global_comp_fun = ca.Function('g_global_comp_fun', [model.p_global, model.v_global], [self.g_global_comp])
         self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', [model.u, model.p, model.v_global], [self.g_ctrl_comp])
