@@ -3,7 +3,7 @@ import casadi as ca
 from nosnoc.utils import casadi_length, is_var_in_list
 from nosnoc.model import NosnocModel
 from nosnoc.dims import NosnocDims
-
+from warnings import warn
 
 class NosnocOcp:
     """
@@ -73,6 +73,8 @@ class NosnocOcp:
         self.g_global_comp = ca.SX.zeros(0, 2)
         self.g_ctrl_comp = ca.SX.zeros(0, 2)
         self.g_stage_comp = ca.SX.zeros(0, 2)
+        if self.g_path_comp.shape[0] != 0:
+            warn("OCP: using path complementarities, note that all expression g need to be bound as 0 <= g. This is not yet done automatically.")
         for ii in range(self.g_path_comp.shape[0]):
             expr = self.g_path_comp[ii, :]
             expr_vars = ca.symvar(expr)

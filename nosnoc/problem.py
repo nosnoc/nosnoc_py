@@ -470,6 +470,8 @@ class FiniteElement(FiniteElementBase):
     def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX) -> None:
         opts = self.opts
         # handle path complementarities TODO maintain sparsity?
+        # TODO: This needs also to provide a lower bound on a,b in a smart way
+        #       however this needs to be done carefully to maintain LICQ
         X_fe = self.X_fe()
         for j in range(opts.n_s):
             z = self.w[self.ind_z[j]]
