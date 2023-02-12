@@ -475,7 +475,7 @@ class FiniteElement(FiniteElementBase):
         X_fe = self.X_fe()
         for j in range(opts.n_s):
             z = self.w[self.ind_z[j]]
-            stage_comps = self.ocp.g_stage_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
+            stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau)
         if self.fe_idx == opts.N_finite_elements-1:
