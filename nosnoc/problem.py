@@ -463,7 +463,6 @@ class FiniteElement(FiniteElementBase):
             lb_comp = 0 * np.ones((n_comp,))
             ub_comp = 0 * np.ones((n_comp,))
 
-        print(g_comp)
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
         return
