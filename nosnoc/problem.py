@@ -338,7 +338,8 @@ class FiniteElement(FiniteElementBase):
     def h(self) -> List[ca.SX]:
         return self.w[self.ind_h]
 
-    def X_fe(self) -> ca.SX:
+    def X_fe(self) -> List[ca.SX]:
+        """returns list of all x values in finite element"""
         opts = self.opts
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             X_fe = [self.w[ind] for ind in self.ind_x]
@@ -680,7 +681,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
+    def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
         # TODO add other complementarity modes here.
         p_global = self.p[self.model.dims.n_p_time_var:self.model.dims.n_p_time_var + self.model.dims.n_p_glob]
         stage_comps = self.ocp.g_global_comp_fun(p_global, self.model.v_global)  # TODO maybe should include stage z
@@ -765,7 +766,7 @@ class NosnocProblem(NosnocFormulationObject):
                     [opts.time_freezing_tolerance])
 
         # Create global complementarities
-        self.create_complementarity_constraints(sigma_p, tau)
+        self.create_global_compl_constraints(sigma_p, tau)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
