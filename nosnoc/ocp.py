@@ -14,7 +14,7 @@ class NosnocOcp:
     lbx <= x <= ubx
     lbv_global <= v_global <= ubv_global
     g_terminal(x_terminal) = 0
-    g_path(x)
+    g_path_comp(x)
 
     2) cost of the form:
     f_q(x, u)  -- integrated over the time horizon
