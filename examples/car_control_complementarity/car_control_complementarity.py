@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 X0 = np.array([0, 0])
 X_TARGET = np.array([500, 0])
 
+
 def car_model():
     q = ca.SX.sym('q')
     v = ca.SX.sym('v')
     x = ca.vertcat(q, v)
 
-    u = ca.SX.sym('u',2)
+    u = ca.SX.sym('u', 2)
     lbu = np.zeros((2,))
     ubu = np.ones((2,))
 
@@ -31,12 +32,12 @@ def car_model():
     ])
 
     B1 = np.array([
-        [0,0],
-        [k1,-kb]
+        [0, 0],
+        [k1, -kb]
         ])
     B2 = np.array([
-        [0,0],
-        [k2,-kb]
+        [0, 0],
+        [k2, -kb]
         ])
 
     f_1 = A@x + B1@u
@@ -45,7 +46,7 @@ def car_model():
     F = [ca.horzcat(f_1, f_2)]
 
     c = [v-15]
-    S = [np.array([[-1],[1]])]
+    S = [np.array([[-1], [1]])]
 
     g_terminal = x - X_TARGET
 
@@ -74,6 +75,7 @@ def get_default_options():
     opts.N_finite_elements = 2
     return opts
 
+
 def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
@@ -86,6 +88,7 @@ def solve_ocp(opts=None):
     results = solver.solve()
 
     return results
+
 
 def plot_car_model(results, latexify=True):
     x_traj = np.array(results['x_traj'])
@@ -111,22 +114,24 @@ def plot_car_model(results, latexify=True):
 
     plt.figure()
     plt.subplot(2, 1, 1)
-    plt.step(t_grid_u, np.concatenate([[u_traj[0,0]], u_traj[:, 0]]))
+    plt.step(t_grid_u, np.concatenate([[u_traj[0, 0]], u_traj[:, 0]]))
     plt.ylabel("$u_a$")
     plt.xlabel("time [s]")
     plt.grid()
 
     plt.subplot(2, 1, 2)
-    plt.step(t_grid_u, np.concatenate([[u_traj[0,1]], u_traj[:, 1]]))
+    plt.step(t_grid_u, np.concatenate([[u_traj[0, 1]], u_traj[:, 1]]))
     plt.ylabel("$u_b$")
     plt.xlabel("time [s]")
     plt.grid()
 
     plt.show()
 
+
 def example():
     results = solve_ocp()
     plot_car_model(results)
+
 
 if __name__ == "__main__":
     example()

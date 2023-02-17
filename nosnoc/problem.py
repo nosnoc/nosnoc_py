@@ -91,6 +91,62 @@ class NosnocFormulationObject(ABC):
 
         return
 
+    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
+        """
+        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
+
+        :param x: list of ca.SX
+        :param y: ca.SX
+        :param sigma: smoothing parameter
+        :param tau: another smoothing parameter
+        """
+        opts = self.opts
+
+        n = casadi_length(y)
+
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
+            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
+            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
+            # NOTE: this line should be equivalent but yield different results
+            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            g_comp = ca.SX.zeros(n, 1)
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
+            if len(x) != 1:
+                raise Exception("not supported")
+            g_comp = ca.SX.zeros(4 * n, 1)
+            # classic FB
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+            # augment 1
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
+                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
+            # augment 2
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
+
+        n_comp = casadi_length(g_comp)
+        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            lb_comp = -np.inf * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+        elif opts.mpcc_mode in [
+                MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
+                MpccMode.FISCHER_BURMEISTER_IP_AUG
+        ]:
+            lb_comp = 0 * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
+
+        return
+
 
 class FiniteElementBase(NosnocFormulationObject):
 
@@ -361,7 +417,6 @@ class FiniteElement(FiniteElementBase):
         model = self.model
 
         # setup X_fe: list of x values on fe, initialize X_end
-        # TODO: clean up
         X_fe = self.X_fe()
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -412,67 +467,8 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
-        """
-        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
-
-        :param x: list of ca.SX
-        :param y: ca.SX
-        :param sigma: smoothing parameter
-        :param tau: another smoothing parameter
-        """
-        opts = self.opts
-
-        n = casadi_length(y)
-
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
-            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
-            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
-            # NOTE: this line should be equivalent but yield different results
-            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            g_comp = ca.SX.zeros(n, 1)
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
-            if len(x) != 1:
-                raise Exception("not supported")
-            g_comp = ca.SX.zeros(4 * n, 1)
-            # classic FB
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-            # augment 1
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
-                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
-            # augment 2
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
-
-        n_comp = casadi_length(g_comp)
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-            lb_comp = -np.inf * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode in [
-                MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
-                MpccMode.FISCHER_BURMEISTER_IP_AUG
-        ]:
-            lb_comp = 0 * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-
-        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
-
-        return
-
     def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX) -> None:
         opts = self.opts
-        # handle path complementarities TODO maintain sparsity?
-        # TODO: This needs also to provide a lower bound on a,b in a smart way
-        #       however this needs to be done carefully to maintain LICQ
         X_fe = self.X_fe()
         for j in range(opts.n_s):
             z = self.w[self.ind_z[j]]
@@ -623,62 +619,6 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(fe.g, fe.lbg, fe.ubg)
         # constraint indices
         self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
-        return
-
-    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
-        """
-        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the problem.
-
-        :param x: list of ca.SX
-        :param y: ca.SX
-        :param sigma: smoothing parameter
-        :param tau: another smoothing parameter
-        """
-        opts = self.opts
-
-        n = casadi_length(y)
-
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
-            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
-            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
-            # NOTE: this line should be equivalent but yield different results
-            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            g_comp = ca.SX.zeros(n, 1)
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
-            if len(x) != 1:
-                raise Exception("not supported")
-            g_comp = ca.SX.zeros(4 * n, 1)
-            # classic FB
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-            # augment 1
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
-                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
-            # augment 2
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
-
-        n_comp = casadi_length(g_comp)
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-            lb_comp = -np.inf * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode in [
-                MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
-                MpccMode.FISCHER_BURMEISTER_IP_AUG
-        ]:
-            lb_comp = 0 * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-
-        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
-
         return
 
     def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
