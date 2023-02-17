@@ -252,7 +252,6 @@ class NosnocModel:
                        casadi_vertcat_list(lambda_n),
                        casadi_vertcat_list(lambda_p),
                        self.z)
-
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
             f_x = casadi_vertcat_list(self.f_x)
@@ -303,7 +302,7 @@ class NosnocModel:
         elif opts.time_freezing:
             raise ValueError("Please provide t_var for time freezing!")
 
-        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
+        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
         if opts.pss_mode == PssMode.STEWART:
