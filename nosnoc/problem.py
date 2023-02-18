@@ -91,6 +91,62 @@ class NosnocFormulationObject(ABC):
 
         return
 
+    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
+        """
+        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
+
+        :param x: list of ca.SX
+        :param y: ca.SX
+        :param sigma: smoothing parameter
+        :param tau: another smoothing parameter
+        """
+        opts = self.opts
+
+        n = casadi_length(y)
+
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
+            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
+            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
+            # NOTE: this line should be equivalent but yield different results
+            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
+            g_comp = ca.SX.zeros(n, 1)
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
+            if len(x) != 1:
+                raise Exception("not supported")
+            g_comp = ca.SX.zeros(4 * n, 1)
+            # classic FB
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
+            # augment 1
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
+                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
+            # augment 2
+            for j in range(n):
+                for x_i in x:
+                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
+
+        n_comp = casadi_length(g_comp)
+        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+            lb_comp = -np.inf * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+        elif opts.mpcc_mode in [
+                MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
+                MpccMode.FISCHER_BURMEISTER_IP_AUG
+        ]:
+            lb_comp = 0 * np.ones((n_comp,))
+            ub_comp = 0 * np.ones((n_comp,))
+
+        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
+
+        return
+
 
 class FiniteElementBase(NosnocFormulationObject):
 
@@ -153,6 +209,7 @@ class FiniteElement(FiniteElementBase):
         self.fe_idx = fe_idx
         self.opts = opts
         self.model = model
+        self.ocp = ocp
         self.prev_fe: FiniteElementBase = prev_fe
         self.p = model.p_ctrl_stages[ctrl_idx]
 
@@ -334,20 +391,16 @@ class FiniteElement(FiniteElementBase):
         Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
 
-    def h(self) -> ca.SX:
+    def h(self) -> List[ca.SX]:
         return self.w[self.ind_h]
 
-    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
+    def X_fe(self) -> List[ca.SX]:
+        """returns list of all x values in finite element"""
         opts = self.opts
-        model = self.model
-
-        # setup X_fe: list of x values on fe, initialize X_end
         if opts.irk_representation == IrkRepresentation.INTEGRAL:
             X_fe = [self.w[ind] for ind in self.ind_x]
-            Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
             X_fe = []
-            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
@@ -356,6 +409,20 @@ class FiniteElement(FiniteElementBase):
             X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
             X_fe = [self.w[ind] for ind in self.ind_x]
+
+        return X_fe
+
+    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
+        opts = self.opts
+        model = self.model
+
+        # setup X_fe: list of x values on fe, initialize X_end
+        X_fe = self.X_fe()
+        if opts.irk_representation == IrkRepresentation.INTEGRAL:
+            Xk_end = opts.D_irk[0] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
             Xk_end = self.prev_fe.w[self.prev_fe.ind_x[-1]]
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -400,68 +467,23 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
-        """
-        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
-
-        :param x: list of ca.SX
-        :param y: ca.SX
-        :param sigma: smoothing parameter
-        :param tau: another smoothing parameter
-        """
+    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX) -> None:
         opts = self.opts
+        X_fe = self.X_fe()
+        for j in range(opts.n_s):
+            z = self.w[self.ind_z[j]]
+            stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
+            a, b = ca.horzsplit(stage_comps)
+            self.create_complementarity([a], b, sigma_p, tau)
+        if self.fe_idx == opts.N_finite_elements-1:
+            ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
+            a, b = ca.horzsplit(ctrl_comps)
+            self.create_complementarity([a], b, sigma_p, tau)
 
-        n = casadi_length(y)
-
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
-            # g_comp = ca.diag(y) @ casadi_sum_list([x_i for x_i in x]) - sigma # this works too but is a bit slower.
-            g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
-            # NOTE: this line should be equivalent but yield different results
-            # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
-            g_comp = ca.SX.zeros(n, 1)
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-        elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER_IP_AUG:
-            if len(x) != 1:
-                raise Exception("not supported")
-            g_comp = ca.SX.zeros(4 * n, 1)
-            # classic FB
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j] += x_i[j] + y[j] - ca.sqrt(x_i[j]**2 + y[j]**2 + sigma**2)
-            # augment 1
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + n] = opts.fb_ip_aug1_weight * (x_i[j] - sigma) * ca.sqrt(tau)
-                g_comp[j + 2 * n] = opts.fb_ip_aug1_weight * (y[j] - sigma) * ca.sqrt(tau)
-            # augment 2
-            for j in range(n):
-                for x_i in x:
-                    g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
-
-        n_comp = casadi_length(g_comp)
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
-            lb_comp = -np.inf * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-        elif opts.mpcc_mode in [
-                MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
-                MpccMode.FISCHER_BURMEISTER_IP_AUG
-        ]:
-            lb_comp = 0 * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
-
-        self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
-
-        return
-
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
-        opts = self.opts
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau)
+                                            tau, Uk)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -599,6 +621,14 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
         return
 
+    def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
+        # TODO add other complementarity modes here.
+        p_global = self.p[self.model.dims.n_p_time_var:self.model.dims.n_p_time_var + self.model.dims.n_p_glob]
+        stage_comps = self.ocp.g_global_comp_fun(p_global, self.model.v_global)  # TODO maybe should include stage z
+        a, b = ca.horzsplit(stage_comps)
+        self.create_complementarity([a], b, sigma_p, tau)
+        return
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
 
         super().__init__()
@@ -655,7 +685,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                fe.create_complementarity_constraints(sigma_p, tau)
+                fe.create_complementarity_constraints(sigma_p, tau, Uk)
 
                 # 3) Step Equilibration
                 fe.step_equilibration(sigma_p, tau)
@@ -674,6 +704,9 @@ class NosnocProblem(NosnocFormulationObject):
                 self.add_constraint(
                     model.t_fun(Xk_end) - t_now, [-opts.time_freezing_tolerance],
                     [opts.time_freezing_tolerance])
+
+        # Create global complementarities
+        self.create_global_compl_constraints(sigma_p, tau)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
