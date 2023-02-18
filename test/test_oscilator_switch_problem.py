@@ -13,18 +13,17 @@ TSTEP = TSIM / 29
 
 def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
     opts = nosnoc.NosnocOpts()
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
-    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.terminal_time = TSTEP
 
-    opts.print_level = 2
-    opts.opts_casadi_nlp['ipopt']['print_level'] = 5
-    opts.opts_casadi_nlp['print_time'] = 1
+    opts.print_level = 1
+    # opts.opts_casadi_nlp['ipopt']['print_level'] = 5
+    # opts.opts_casadi_nlp['print_time'] = 1
 
-    opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-    opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
-    opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    # opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_EQ
+    # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
     opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
     # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
     opts.sigma_0 = 1e0
@@ -46,7 +45,7 @@ def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
 
 def solve_oscilator_fast(opts=None, use_g_Stewart=False, do_plot=True):
     opts = nosnoc.NosnocOpts()
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
     opts.terminal_time = TSTEP
     opts.sigma_N = 1e-5
 
