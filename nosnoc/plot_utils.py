@@ -231,15 +231,55 @@ def plot_matrix_and_qr(matrix):
     plt.show()
 
 
-def spy_magnitude_plot(matrix, ax=None, fig=None, xticks=None, xticklabels=None, yticks=None, yticklabels=None):
+
+def spy_magnitude_plot_with_sign(matrix: np.ndarray, ax=None, fig=None, xticks=None, xticklabels=None, yticks=None, yticklabels=None):
+    neg_matrix = np.where(matrix<0, -matrix, 0)
+    pos_matrix = np.where(matrix>0, matrix, 0)
+
+    pos_rows, pos_cols = pos_matrix.nonzero()
+    pos_values = pos_matrix[pos_rows, pos_cols]
+
+    neg_rows, neg_cols = neg_matrix.nonzero()
+    neg_values = neg_matrix[neg_rows, neg_cols]
+
+    cmap = matplotlib.colormaps['inferno']
+    cmap_neg = matplotlib.colormaps['Blues_r']
+    marker_size = int(1000 / max(matrix.shape))
+    # scatter spy
+    sc = ax.scatter(pos_cols, pos_rows, c=pos_values, cmap=cmap,
+                        norm=matplotlib.colors.LogNorm(vmin=np.min(pos_values), vmax=np.max(pos_values)),
+                        marker='s', s=marker_size)
+    sc_neg = ax.scatter(neg_cols, neg_rows, c=neg_values, cmap=cmap_neg,
+                        norm=matplotlib.colors.LogNorm(vmin=np.min(neg_values), vmax=np.max(neg_values)),
+                        marker='s', s=marker_size)
+    ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
+    ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
+    ax.set_aspect('equal')
+    cba = fig.colorbar(sc, ax = ax, ticks=matplotlib.ticker.LogLocator())
+    cbb = fig.colorbar(sc_neg, ax = ax, ticks=matplotlib.ticker.LogLocator())
+    cba.set_label('positive')
+    cbb.set_label('negative')
+
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    if xticklabels is not None:
+        ax.set_xticklabels(xticklabels)
+    if yticks is not None:
+        ax.set_yticks(yticks)
+    if yticklabels is not None:
+        ax.set_yticklabels(yticklabels)
+
+
+def spy_magnitude_plot(matrix: np.ndarray, ax=None, fig=None, xticks=None, xticklabels=None, yticks=None, yticklabels=None):
     rows, cols = matrix.nonzero()
     values = np.abs(matrix[rows, cols])
 
     cmap = matplotlib.colormaps['inferno']
+    marker_size = int(1000 / max(matrix.shape))
     # scatter spy
     sc = ax.scatter(cols, rows, c=values, cmap=cmap,
                         norm=matplotlib.colors.LogNorm(vmin=np.min(values), vmax=np.max(values)),
-                        marker='s', s=20)
+                        marker='s', s=marker_size)
     ax.set_xlim((-0.5, matrix.shape[1] - 0.5))
     ax.set_ylim((matrix.shape[0] - 0.5, -0.5))
     ax.set_aspect('equal')

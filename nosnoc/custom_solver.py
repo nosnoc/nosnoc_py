@@ -13,7 +13,7 @@ from nosnoc.solver import NosnocSolverBase, get_results_from_primal_vector
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length
-from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot
+from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnitude_plot_with_sign
 
 DEBUG = False
 
@@ -55,7 +55,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.mu_pd_0 = np.ones((casadi_length(mu_pd),))
 
         slack = ca.SX.sym('slack', n_comp)
-        w_pd = ca.vertcat(prob.w, lam_pd, slack, mu_pd)
+        w_pd = ca.vertcat(prob.w, slack, lam_pd, mu_pd)
 
         self.w_pd = w_pd
         self.nw = casadi_length(prob.w)
@@ -80,7 +80,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
              - ca.jacobian(slack, slack).T @ mu_s
 
-        kkt_eq_without_comp = ca.vertcat(stationarity_w, H, stationarity_s, slacked_complementarity)
+        kkt_eq_without_comp = ca.vertcat(stationarity_w,stationarity_s, H, slacked_complementarity)
         # treat IP complementarities:
         #  (G1, mu_1), (G2, mu_2), (s, mu_s) via FISCHER_BURMEISTER
         kkt_comp = []
@@ -92,7 +92,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             kkt_comp = ca.vertcat(kkt_comp, slack[i] + mu_s[i] - ca.sqrt(slack[i]**2 + mu_s[i]**2 + 2*tau))
 
         kkt_eq = ca.vertcat(kkt_eq_without_comp, kkt_comp)
-
 
         self.kkt_eq = kkt_eq
         kkt_eq_jac = ca.jacobian(kkt_eq, w_pd)
@@ -111,7 +110,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         self.n_comp = n_comp
         self.n_H = n_H
-        self.kkt_eq_offsets = [0, self.nw]  + [n_H+self.nw + i * n_comp for i in range(5)]
+        self.kkt_eq_offsets = [0, self.nw, self.nw+n_comp]  + [n_H+self.nw + i * n_comp for i in range(1, 5)]
 
         print(f"created primal dual problem with {casadi_length(w_pd)} variables and {casadi_length(kkt_eq)} equations, {n_comp=}, {self.nw=}, {n_H=}")
 
@@ -255,7 +254,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.full()
 
+                # cond = np.linalg.cond(newton_matrix)
+                # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', )
                 # regularize Lagrange Hessian
+
                 newton_matrix[:self.nw, :self.nw] += 1e-7 * np.eye(self.nw)
                 # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
                 rhs = - kkt_val.full().flatten()
@@ -381,10 +383,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         plt.show()
 
     def add_scatter_spy_magnitude_plot(self, ax, fig, matrix):
-        spy_magnitude_plot(matrix, ax=ax, fig=fig,
+        # spy_magnitude_plot(matrix, ax=ax, fig=fig,
+        spy_magnitude_plot_with_sign(matrix, ax=ax, fig=fig,
             xticklabels=[r'$w$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$s$', r'$\mu_1$', r'$\mu_2$', r'$\mu_s$'],
             xticks = self.kkt_eq_offsets,
-            yticklabels= ['stat w', '$H$', 'stat s', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'],
+            yticklabels= ['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G_1$', 'comp $G_2$', 'comp $s$'],
             yticks = self.kkt_eq_offsets
         )
         return
