@@ -310,7 +310,6 @@ class FiniteElement(FiniteElementBase):
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
             # user algebraic variables
-            print(dims.n_z)
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
                 model.lbz, model.ubz, model.z0, ii

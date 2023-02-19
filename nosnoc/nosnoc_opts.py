@@ -103,6 +103,8 @@ class NosnocOpts:
     time_freezing: bool = False
     time_freezing_tolerance: float = 1e-3
 
+    rootfinder_for_initial_z: bool = False
+
     # Usabillity:
     nlp_max_iter = property(
         fget=lambda s: s.opts_casadi_nlp["ipopt"]["max_iter"],

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 X0 = np.array([0, 0])
 X_TARGET = np.array([500, 0])
 
+
 def car_model():
     q = ca.SX.sym('q')
     v = ca.SX.sym('v')
@@ -44,7 +45,7 @@ def car_model():
     F = [ca.horzcat(f_1, f_2)]
 
     c = [z]
-    S = [np.array([[-1],[1]])]
+    S = [np.array([[-1], [1]])]
 
     g_terminal = x - X_TARGET
 
@@ -52,7 +53,7 @@ def car_model():
 
     g_z = z-(v-15)
     z0 = [-15]
-    
+
     model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u, z=z, g_z=g_z, z0=z0)
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal)
 
@@ -72,7 +73,9 @@ def get_default_options():
 
     opts.N_stages = 30
     opts.N_finite_elements = 2
+    opts.rootfinder_for_initial_z = True
     return opts
+
 
 def solve_ocp(opts=None):
     if opts is None:
@@ -83,10 +86,10 @@ def solve_ocp(opts=None):
 
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
-    solver.print_problem()
     results = solver.solve()
 
     return results
+
 
 def plot_car_model(results, latexify=True):
     x_traj = np.array(results['x_traj'])
@@ -111,16 +114,18 @@ def plot_car_model(results, latexify=True):
     plt.grid()
 
     plt.figure()
-    plt.step(t_grid_u, np.concatenate([[u_traj[0,0]], u_traj[:, 0]]))
+    plt.step(t_grid_u, np.concatenate([[u_traj[0, 0]], u_traj[:, 0]]))
     plt.ylabel("$u_a$")
     plt.xlabel("time [s]")
     plt.grid()
-    
+
     plt.show()
+
 
 def example():
     results = solve_ocp()
     plot_car_model(results)
+
 
 if __name__ == "__main__":
     example()

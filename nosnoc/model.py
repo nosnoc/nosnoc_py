@@ -197,6 +197,11 @@ class NosnocModel:
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
 
+        if opts.rootfinder_for_initial_z:
+            g_z0_fun = ca.Function('g_z0_fun', [self.z, ca.vertcat(self.x, self.p)], [self.g_z])
+            G_z0 = ca.rootfinder('G_z0', 'newton', g_z0_fun)
+            self.z0 = np.array(G_z0(self.z0, np.concatenate((self.x0, self.p_val_ctrl_stages[0, :])))).squeeze(1)
+
         self.dims = NosnocDims(n_x=n_x,
                                n_u=n_u,
                                n_sys=n_sys,
