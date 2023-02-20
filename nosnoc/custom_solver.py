@@ -312,7 +312,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             if opts.print_level:
             #     self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
             #                            cpu_time_nlp[ii], nlp_iter[ii], status)
-                print(f"sigma = {sigma_k:.2f}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
+                print(f"sigma = {sigma_k:.2e}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
 
 
             if complementarity_residual < opts.comp_tol:
