@@ -57,23 +57,23 @@ class NosnocModel:
                  c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
-                 u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
-                 z: ca.SX = ca.SX.sym('z_dummy', 0, 1),
+                 u: Optional[ca.SX] = ca.SX.sym('u_dummy', 0, 1),
+                 z: Optional[ca.SX] = ca.SX.sym('z_dummy', 0, 1),
                  z0: Optional[np.ndarray] = None,
                  lbz: Optional[np.ndarray] = None,
                  ubz: Optional[np.ndarray] = None,
                  alpha: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
-                 g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
-                 p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
-                 p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
+                 g_z: Optional[ca.SX] = ca.SX.sym('g_z_dummy', 0, 1),
+                 p_time_var: Optional[ca.SX] = ca.SX.sym('p_time_var_dummy', 0, 1),
+                 p_global: Optional[ca.SX] = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
-                 p_global_val: np.ndarray = np.array([]),
-                 v_global: ca.SX = ca.SX.sym('v_global_dummy', 0, 1),
+                 p_global_val: Optional[np.ndarray] = np.array([]),
+                 v_global: Optional[ca.SX] = ca.SX.sym('v_global_dummy', 0, 1),
                  t_var: Optional[ca.SX] = None,
-                 name: str = 'nosnoc'):
+                 name: Optional[str] = 'nosnoc'):
         self.x: ca.SX = x
-        self.alpha: ca.SX = alpha
+        self.alpha: List[ca.SX] = alpha
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
         self.g_z: ca.SX = g_z
@@ -121,7 +121,7 @@ class NosnocModel:
         if self.z0 is None:
             self.z0 = np.zeros((n_z,))
         elif len(self.z0) != n_z:
-            raise ValueError("z0 should be empty or of lenght n_z.")
+            raise ValueError("z0 should be empty or of length n_z.")
         if self.lbz is None:
             self.lbz = -np.inf * np.ones((n_z,))
         elif len(self.lbz) != n_z:
@@ -164,7 +164,7 @@ class NosnocModel:
                     if fi.shape[1] != Si.shape[0]:
                         raise ValueError(
                             f"model.F item {i} and S {i} should have the same number of columns")
-        else:  # Only check Step because stewart is not allowed for general inclusions
+        else:  # Only check Step because Stewart is not allowed for general inclusions
             n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
