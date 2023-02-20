@@ -36,6 +36,7 @@ class NosnocModel:
     :param z0: initial guess for user defined algebraic variables
     :param lbz: lower bounds on user algebraic variables
     :param ubz: upper bounds on user algebraic variables
+    :param g_z: user defined algebraic constraints
     :param alpha: optionally provided alpha variables for general inclusions
     :param f_x: optionally provided rhs used for general inclusions
     :param p_time_var: time varying parameters
@@ -65,7 +66,7 @@ class NosnocModel:
                  alpha: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
                  g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
-                 p_time_var: ca.SX = ca.SX.sym('p_tim_var_dummy', 0, 1),
+                 p_time_var: ca.SX = ca.SX.sym('p_time_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
@@ -73,7 +74,7 @@ class NosnocModel:
                  t_var: Optional[ca.SX] = None,
                  name: str = 'nosnoc'):
         self.x: ca.SX = x
-        self.alpha: ca.SX = alpha
+        self.alpha: List[ca.SX] = alpha
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
         self.g_z: ca.SX = g_z
@@ -121,7 +122,7 @@ class NosnocModel:
         if self.z0 is None:
             self.z0 = np.zeros((n_z,))
         elif len(self.z0) != n_z:
-            raise ValueError("z0 should be empty or of lenght n_z.")
+            raise ValueError("z0 should be empty or of length n_z.")
         if self.lbz is None:
             self.lbz = -np.inf * np.ones((n_z,))
         elif len(self.lbz) != n_z:
@@ -164,7 +165,7 @@ class NosnocModel:
                     if fi.shape[1] != Si.shape[0]:
                         raise ValueError(
                             f"model.F item {i} and S {i} should have the same number of columns")
-        else:  # Only check Step because stewart is not allowed for general inclusions
+        else:  # Only check Step because Stewart is not allowed for general inclusions
             n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
@@ -187,6 +188,7 @@ class NosnocModel:
                 f"Expected shape: ({opts.N_stages}, {n_p_time_var}), "
                 f"got p_time_var_val.shape {self.p_time_var_val.shape}"
                 f"p_time_var {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = ca.vertcat(self.p_time_var, self.p_global)
@@ -197,6 +199,12 @@ class NosnocModel:
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
 
+        # initial guess z0
+        if opts.rootfinder_for_initial_z:
+            g_z0_fun = ca.Function('g_z0_fun', [self.z, ca.vertcat(self.x, self.p)], [self.g_z])
+            self.z0_rootfinder = ca.rootfinder('z0_rootfinder', 'newton', g_z0_fun)
+
+        # dimensions
         self.dims = NosnocDims(n_x=n_x,
                                n_u=n_u,
                                n_sys=n_sys,
@@ -214,12 +222,10 @@ class NosnocModel:
 
             g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
-        # create dummy finite element - only use first stage
+        # create FESD variables
+        theta, lam, mu, alpha, lambda_n, lambda_p = self.create_stage_vars(opts)
         if self.alpha is not None:
-            theta, lam, mu, _, lambda_n, lambda_p = self.create_stage_vars(opts)
             alpha = self.alpha
-        else:
-            theta, lam, mu, alpha, lambda_n, lambda_p = self.create_stage_vars(opts)
 
         # setup upsilon
         upsilon = []
@@ -252,7 +258,6 @@ class NosnocModel:
                        casadi_vertcat_list(lambda_n),
                        casadi_vertcat_list(lambda_p),
                        self.z)
-
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
             f_x = casadi_vertcat_list(self.f_x)
@@ -303,7 +308,7 @@ class NosnocModel:
         elif opts.time_freezing:
             raise ValueError("Please provide t_var for time freezing!")
 
-        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.p], [lambda00_expr])
+        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
         if opts.pss_mode == PssMode.STEWART:
@@ -311,18 +316,19 @@ class NosnocModel:
             self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
             self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
 
-    def create_stage_vars(self, opts):
+    def create_stage_vars(self, opts: NosnocOpts):
         """
         Create the algebraic vars for a single stage.
         """
+        dims = self.dims
         # algebraic variables
         if opts.pss_mode == PssMode.STEWART:
             # add thetas
-            theta = [ca.SX.sym('theta', self.dims.n_f_sys[ij]) for ij in range(self.dims.n_sys)]
+            theta = [ca.SX.sym('theta', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add lambdas
-            lam = [ca.SX.sym('lambda', self.dims.n_f_sys[ij]) for ij in range(self.dims.n_sys)]
+            lam = [ca.SX.sym('lambda', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add mu
-            mu = [ca.SX.sym('mu', 1) for ij in range(self.dims.n_sys)]
+            mu = [ca.SX.sym('mu', 1) for ij in range(dims.n_sys)]
 
             # unused
             alpha = []
@@ -330,11 +336,11 @@ class NosnocModel:
             lambda_p = []
         elif opts.pss_mode == PssMode.STEP:
             # add alpha
-            alpha = [ca.SX.sym('alpha', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            alpha = [ca.SX.sym('alpha', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_n
-            lambda_n = [ca.SX.sym('lambda_n', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            lambda_n = [ca.SX.sym('lambda_n', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_p
-            lambda_p = [ca.SX.sym('lambda_p', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            lambda_p = [ca.SX.sym('lambda_p', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
 
             # unused
             theta = []
@@ -391,3 +397,12 @@ class NosnocModel:
         self.theta_smooth_fun = ca.Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
         self.mu_smooth_fun = ca.Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
         self.lambda_smooth_fun = ca.Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
+
+    def get_lambda00(self, opts: NosnocOpts):
+        x0 = self.x0
+        p0 = self.p_val_ctrl_stages[0]
+        if opts.rootfinder_for_initial_z:
+            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
+        else:
+            z0 = self.z0
+        return self.lambda00_fun(x0, z0, p0).full().flatten()
