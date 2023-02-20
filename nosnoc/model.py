@@ -36,6 +36,7 @@ class NosnocModel:
     :param z0: initial guess for user defined algebraic variables
     :param lbz: lower bounds on user algebraic variables
     :param ubz: upper bounds on user algebraic variables
+    :param g_z: user defined algebraic constraints
     :param alpha: optionally provided alpha variables for general inclusions
     :param f_x: optionally provided rhs used for general inclusions
     :param p_time_var: time varying parameters
@@ -187,6 +188,7 @@ class NosnocModel:
                 f"Expected shape: ({opts.N_stages}, {n_p_time_var}), "
                 f"got p_time_var_val.shape {self.p_time_var_val.shape}"
                 f"p_time_var {self.p_time_var}, p_time_var_val {self.p_time_var_val}")
+
         # extend parameters for each stage
         n_p = n_p_time_var + n_p_glob
         self.p = ca.vertcat(self.p_time_var, self.p_global)
@@ -197,11 +199,13 @@ class NosnocModel:
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
 
+        # initial guess z0
         if opts.rootfinder_for_initial_z:
             g_z0_fun = ca.Function('g_z0_fun', [self.z, ca.vertcat(self.x, self.p)], [self.g_z])
             G_z0 = ca.rootfinder('G_z0', 'newton', g_z0_fun)
             self.z0 = np.array(G_z0(self.z0, np.concatenate((self.x0, self.p_val_ctrl_stages[0, :])))).squeeze(1)
 
+        # dimensions
         self.dims = NosnocDims(n_x=n_x,
                                n_u=n_u,
                                n_sys=n_sys,
