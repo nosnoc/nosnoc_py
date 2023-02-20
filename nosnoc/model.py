@@ -219,12 +219,10 @@ class NosnocModel:
 
             g_Stewart = casadi_vertcat_list(g_Stewart_list)
 
-        # create dummy finite element - only use first stage
+        # create FESD variables
+        theta, lam, mu, alpha, lambda_n, lambda_p = self.create_stage_vars(opts)
         if self.alpha is not None:
-            theta, lam, mu, _, lambda_n, lambda_p = self.create_stage_vars(opts)
             alpha = self.alpha
-        else:
-            theta, lam, mu, alpha, lambda_n, lambda_p = self.create_stage_vars(opts)
 
         # setup upsilon
         upsilon = []
@@ -315,18 +313,19 @@ class NosnocModel:
             self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
             self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
 
-    def create_stage_vars(self, opts):
+    def create_stage_vars(self, opts: NosnocOpts):
         """
         Create the algebraic vars for a single stage.
         """
+        dims = self.dims
         # algebraic variables
         if opts.pss_mode == PssMode.STEWART:
             # add thetas
-            theta = [ca.SX.sym('theta', self.dims.n_f_sys[ij]) for ij in range(self.dims.n_sys)]
+            theta = [ca.SX.sym('theta', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add lambdas
-            lam = [ca.SX.sym('lambda', self.dims.n_f_sys[ij]) for ij in range(self.dims.n_sys)]
+            lam = [ca.SX.sym('lambda', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add mu
-            mu = [ca.SX.sym('mu', 1) for ij in range(self.dims.n_sys)]
+            mu = [ca.SX.sym('mu', 1) for ij in range(dims.n_sys)]
 
             # unused
             alpha = []
@@ -334,11 +333,11 @@ class NosnocModel:
             lambda_p = []
         elif opts.pss_mode == PssMode.STEP:
             # add alpha
-            alpha = [ca.SX.sym('alpha', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            alpha = [ca.SX.sym('alpha', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_n
-            lambda_n = [ca.SX.sym('lambda_n', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            lambda_n = [ca.SX.sym('lambda_n', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_p
-            lambda_p = [ca.SX.sym('lambda_p', self.dims.n_c_sys[ij]) for ij in range(self.dims.n_sys)]
+            lambda_p = [ca.SX.sym('lambda_p', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
 
             # unused
             theta = []
