@@ -220,9 +220,7 @@ class NosnocSolver(NosnocSolverBase):
 
         # lambda00 initialization
         x0 = prob.model.x0
-        p0 = prob.model.p_val_ctrl_stages[0]
-        z0 = prob.model.z0
-        lambda00 = self.model.lambda00_fun(x0, z0, p0).full().flatten()
+        lambda00 = prob.model.get_lambda00(opts)
 
         if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
             lbw = prob.lbw.copy()

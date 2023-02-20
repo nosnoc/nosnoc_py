@@ -202,8 +202,7 @@ class NosnocModel:
         # initial guess z0
         if opts.rootfinder_for_initial_z:
             g_z0_fun = ca.Function('g_z0_fun', [self.z, ca.vertcat(self.x, self.p)], [self.g_z])
-            G_z0 = ca.rootfinder('G_z0', 'newton', g_z0_fun)
-            self.z0 = np.array(G_z0(self.z0, np.concatenate((self.x0, self.p_val_ctrl_stages[0, :])))).squeeze(1)
+            self.z0_rootfinder = ca.rootfinder('z0_rootfinder', 'newton', g_z0_fun)
 
         # dimensions
         self.dims = NosnocDims(n_x=n_x,
@@ -398,3 +397,12 @@ class NosnocModel:
         self.theta_smooth_fun = ca.Function('theta_smooth_fun', [self.x, self.p], [theta_smooth])
         self.mu_smooth_fun = ca.Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
         self.lambda_smooth_fun = ca.Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
+
+    def get_lambda00(self, opts: NosnocOpts):
+        x0 = self.x0
+        p0 = self.p_val_ctrl_stages[0]
+        if opts.rootfinder_for_initial_z:
+            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
+        else:
+            z0 = self.z0
+        return self.lambda00_fun(x0, z0, p0).full().flatten()
