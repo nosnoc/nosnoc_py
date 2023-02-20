@@ -199,8 +199,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.initialize()
         # slack0
         x0 = prob.model.x0
-        p0 = prob.model.p_val_ctrl_stages[0]
-        lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
+        lambda00 = prob.model.get_lambda00(opts)
         tau_val = opts.sigma_0
         p_val = np.concatenate(
                 (prob.model.p_val_ctrl_stages.flatten(),
@@ -211,7 +210,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
         # slack0 = np.zeros((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, lampd0, slack0, self.mu_pd_0))
+        w_pd_0 = np.concatenate((prob.w0, slack0, lampd0, self.mu_pd_0))
 
         w_current = w_pd_0
 
@@ -226,11 +225,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         #     print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
-
-        # lambda00 initialization
-        x0 = prob.model.x0
-        p0 = prob.model.p_val_ctrl_stages[0]
-        lambda00 = self.model.lambda00_fun(x0, p0).full().flatten()
 
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
 
