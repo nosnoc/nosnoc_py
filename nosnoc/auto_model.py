@@ -9,7 +9,11 @@ class NosnocAutoModel:
     - x: symbolic state vector
     - f_nonsmooth_ode: symbolic vector field of the nonsmooth ODE
     Outputs the switching functions c as well as either:
-    - F: functions coresponding to 
+    - F:
+    - S:
+    or:
+    - alpha:
+    - f:
     """
 
     def __init__(self,
