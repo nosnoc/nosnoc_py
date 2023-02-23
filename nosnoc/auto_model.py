@@ -6,7 +6,7 @@ from typing import List
 
 class NosnocAutoModel:
     r"""
-    An interface to automatically help generate a NosnocModel given:
+    An interface to automatically generate a NosnocModel given:
     - x: symbolic state vector
     - f_nonsmooth_ode: symbolic vector field of the nonsmooth ODE
     Outputs the switching functions c as well as either (Not yet implemented):
@@ -18,10 +18,10 @@ class NosnocAutoModel:
 
     Currently supported nonsmooth functions:
     - :math: `\mathrm{sign}(\cdot)`
-    - :math: `\mathrm{max}(\cdot,\cdot)`
-    - :math: `\mathrm{min}(\cdot,\cdot)`
+    - :math: `\mathrm{max}(\cdot, \cdot)`
+    - :math: `\mathrm{min}(\cdot, \cdot)`
     - TODO: more nonsmooth functions!
-            In particular figure out a way to handle if_else
+            In particular figure out a way to handle if_else (ca.OP_IF_ELSE_ZERO)
     """
 
     def __init__(self,
@@ -160,7 +160,7 @@ class NosnocAutoModel:
     def _find_nonlinearities(self, node: ca.SX):
         r'''
         Checks for nonsmooth nonlinearity, in order to auto select the reformulation used.
-        :param node: Node in casADi graph to be checked for nonsmooth nonlinearity
+        :param node: Node in CasADi graph to be checked for nonsmooth nonlinearity
         :returns:
         '''
         if node.n_dep() == 0:
