@@ -1,6 +1,7 @@
 import casadi as ca
 import numpy as np
 from itertools import product
+from typing import List
 
 
 class NosnocAutoModel:
@@ -12,14 +13,15 @@ class NosnocAutoModel:
     - F:
     - S:
     or:
-    - alpha:
-    - f:
+    - alpha: Step reformulation multipliers used in the general inclusions expert mode.
+    - f: x dot provided for general inclusions expert mode.
 
     Currently supported nonsmooth functions:
     - :math: `\mathrm{sign}(\cdot)`
     - :math: `\mathrm{max}(\cdot,\cdot)`
     - :math: `\mathrm{min}(\cdot,\cdot)`
     - TODO: more nonsmooth functions!
+            In particular figure out a way to handle if_else
     """
 
     def __init__(self,
@@ -33,24 +35,29 @@ class NosnocAutoModel:
         self.f = []
         self.alpha = []
 
-    def reformulate(self):
-        if self._detect_nonlinearities():
+    def reformulate(self, force_nonlinear=True):
+        if self._detect_nonlinearities() or force_nonlinear:
             self._reformulate_nonlin()
-            return self.c, self.alpha
+            return self.c, self.alpha, self.f
         else:
             self._reformulate_linear()
-            return self.c, self.S
+            return self.c, self.S, self.F
 
     def _reformulate_linear(self):
         # TODO actually implement linear reformulation
+        raise Exception('Linear reformulation is not yet supported.')
         pass
 
     def _reformulate_nonlin(self):
-        self._rebuild_nonlin(self.f_nonsmooth_ode)
+        self.f = self._rebuild_nonlin(self.f_nonsmooth_ode)
 
     def _detect_nonlinearities(self):
-        # TODO actually implement a check for nonlinearity
-        return True
+        nonlin_compontents = self._find_nonlinear_components(self.f_nonsmooth_ode)
+        for component in nonlin_compontents:
+            nonlin, _ = self._find_nonlinearities(component)
+            if nonlin:
+                return True
+        return False
 
     # TODO type output
     def _rebuild_linear(self, node: ca.SX):
@@ -88,7 +95,7 @@ class NosnocAutoModel:
     def _rebuild_nonlin(self, node: ca.SX):
         if node.n_dep() == 0:
             # elementary variable
-            return [node]
+            return node
         elif node.n_dep() == 1:
             # unary operator
             if node.is_op(ca.OP_SIGN):
@@ -99,6 +106,7 @@ class NosnocAutoModel:
                 alpha, fresh = self._find_matching_expr_nonlin(node.dep(0))
                 if fresh:
                     self.c.append(node.dep(0))
+                    self.alpha.append(alpha)
 
                 # calculate the equivalent expression for this node
                 eq_expr = 2*alpha - 1
@@ -114,6 +122,7 @@ class NosnocAutoModel:
                 alpha, fresh = self._find_matching_expr_nonlin(node.dep(0)-node.dep(1))
                 if fresh:
                     self.c.append(node.dep(0)-node.dep(1))
+                    self.alpha.append(alpha)
 
                 # calculate the equivalent expression for this node
                 eq_expr = alpha*node.dep(0) + (1-alpha)*node.dep(1)
@@ -123,9 +132,11 @@ class NosnocAutoModel:
                 alpha, fresh = self._find_matching_expr_nonlin(node.dep(0)-node.dep(1))
                 if fresh:
                     self.c.append(node.dep(0)-node.dep(1))
+                    self.alpha.append(alpha)
 
                 # calculate the equivalent expression for this node
                 eq_expr = (1-alpha)*node.dep(0) + alpha*node.dep(1)
+                return eq_expr
             else:
                 # binary operator
                 l_child = self._rebuild_nonlin(node.dep(0))
@@ -141,3 +152,54 @@ class NosnocAutoModel:
         else:
             # create a fresh alpha
             return ca.SX.sym(f'alpha_{len(self.alpha)}'), True
+
+    def _find_nonlinearities(self, node: ca.SX):
+        r'''
+        Checks for nonsmooth nonlinearity, in order to auto select the reformulation used.
+        :param node: Node in casADi graph to be checked for nonsmooth nonlinearity
+        :returns:
+        '''
+        if node.n_dep() == 0:
+            return False, False
+        elif node.n_dep() == 1:
+            if node.is_op(ca.OP_SIGN):
+                nonlin, nonsmooth = self._find_nonlinearities(node.dep(0))
+                if nonsmooth:
+                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
+                return nonlin or nonsmooth, True
+            else:
+                nonlin, nonsmooth = self._find_nonlinearities(node.dep(0))
+                return nonlin or nonsmooth, nonsmooth
+        else:
+            if node.is_op(ca.OP_FMAX):
+                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
+                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
+                if l_nonsmooth or r_nonsmooth:
+                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
+                return r_nonsmooth or l_nonsmooth, True
+            elif node.is_op(ca.OP_FMIN):
+                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
+                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
+                if l_nonsmooth or r_nonsmooth:
+                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
+                return r_nonsmooth or l_nonsmooth, True
+            else:
+                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
+                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
+                return (l_nonsmooth and r_nonsmooth) or r_nonlin or l_nonlin, l_nonsmooth or r_nonsmooth
+
+    def _find_nonlinear_components(self, node: ca.SX) -> List[ca.SX]:
+        if node.n_dep() == 0:
+            return [node]
+        elif node.n_dep() == 1:
+            if node.is_op(ca.OP_NEG):  # Note this is not used for rebuild so we dont care about polarity of components
+                return self._find_nonlinear_components(node.dep(0))
+            else:  # TODO: are there any other linear unary operators?
+                return [node]
+        else:
+            if node.is_op(ca.OP_ADD):
+                return self._find_nonlinear_components(node.dep(0)) + self._find_nonlinear_components(node.dep(1))
+            elif node.is_op(ca.OP_SUB):
+                return self._find_nonlinear_components(node.dep(0)) + self._find_nonlinear_components(node.dep(1))
+            else:
+                return [node]
