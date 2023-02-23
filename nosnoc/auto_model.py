@@ -6,7 +6,7 @@ from typing import List
 
 class NosnocAutoModel:
     r"""
-    An interface to automatically generate a NosnocModel given:
+    An interface to automatically help generate a NosnocModel given:
     - x: symbolic state vector
     - f_nonsmooth_ode: symbolic vector field of the nonsmooth ODE
     Outputs the switching functions c as well as either (Not yet implemented):
@@ -49,14 +49,18 @@ class NosnocAutoModel:
         pass
 
     def _reformulate_nonlin(self):
-        self.f = self._rebuild_nonlin(self.f_nonsmooth_ode)
+        fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
+        fs = [self._rebuild_nonlin(f_nonsmooth) for f_nonsmooth in fs_nonsmooth]
+        self.f = ca.vertcat(*fs)
 
     def _detect_nonlinearities(self):
-        nonlin_compontents = self._find_nonlinear_components(self.f_nonsmooth_ode)
-        for component in nonlin_compontents:
-            nonlin, _ = self._find_nonlinearities(component)
-            if nonlin:
-                return True
+        fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
+        for f_nonsmooth in fs_nonsmooth:
+            nonlin_compontents = self._find_nonlinear_components(f_nonsmooth)
+            for component in nonlin_compontents:
+                nonlin, _ = self._find_nonlinearities(component)
+                if nonlin:
+                    return True
         return False
 
     # TODO type output
