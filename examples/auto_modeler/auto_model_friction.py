@@ -11,7 +11,7 @@ X0 = np.array([0, 0, 0, 0, 0])
 X_TARGET = np.array([0.01, 0, 0.01, 0, 0])
 
 
-def get_motor_with_friction_ocp_description():
+def get_motor_with_friction_ocp_description_with_auto_model():
 
     # Parameters
     m1 = 1.03  # slide mass
@@ -97,7 +97,7 @@ def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
 
-    [model, ocp] = get_motor_with_friction_ocp_description()
+    [model, ocp] = get_motor_with_friction_ocp_description_with_auto_model()
 
     opts.terminal_time = 0.08
 
