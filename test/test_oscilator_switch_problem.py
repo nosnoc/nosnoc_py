@@ -63,7 +63,7 @@ class OscilatorSwitchTest(unittest.TestCase):
         model = get_oscilator_model(use_g_Stewart)
         model.x0 = X0
 
-        solver = nosnoc.NosnocCustomSolver(opts, model)
+        solver = nosnoc.NosnocCustomScholtesFBSolver(opts, model)
         results = solver.solve()
 
         x_out = results["x_all_list"][-1]

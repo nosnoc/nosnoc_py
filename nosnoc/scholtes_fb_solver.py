@@ -17,7 +17,7 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 
 DEBUG = False
 
-class NosnocCustomSolver(NosnocSolverBase):
+class NosnocCustomScholtesFBSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)
         prob = self.problem
