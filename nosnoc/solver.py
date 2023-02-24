@@ -132,7 +132,8 @@ class NosnocSolverBase(ABC):
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
                     p_0 = self.model.p_val_ctrl_stages[0]
-                    lam_ki = self.model.lambda00_fun(x_ki, p_0)
+                    # NOTE: z not supported!
+                    lam_ki = self.model.lambda00_fun(x_ki, [], p_0)
                     mu_ki = self.model.mu_smooth_fun(x_ki, p_0)
                     theta_ki = self.model.theta_smooth_fun(x_ki, p_0)
                     # print(f"{x_ki=}")
