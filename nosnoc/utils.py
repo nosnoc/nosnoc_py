@@ -111,3 +111,12 @@ def create_empty_list_matrix(list_dims: tuple):
 
 def get_cont_algebraic_indices(ind_alg: list):
     return [ind_rk[-1] for ind_fe in ind_alg for ind_rk in ind_fe]
+
+
+def casadi_inf_norm_nan(x: ca.DM):
+    """infinity norm of a casadi vector, treating nan values"""
+    norm = 0
+    x = x.full().flatten()
+    for i in range(len(x)):
+        norm = max(norm, x[i])
+    return norm
