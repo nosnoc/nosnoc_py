@@ -12,17 +12,10 @@ from nosnoc.problem import NosnocModel, NosnocOcp
 from nosnoc.solver import NosnocSolverBase, get_results_from_primal_vector
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
-from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length
+from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length, casadi_inf_norm_nan
 from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnitude_plot_with_sign
 
 DEBUG = False
-
-def casadi_inf_norm_nan(x: ca.DM):
-    norm = 0
-    x = x.full().flatten()
-    for i in range(len(x)):
-        norm = max(norm, x[i])
-    return norm
 
 class NosnocCustomSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
@@ -189,8 +182,6 @@ class NosnocCustomSolver(NosnocSolverBase):
     def solve(self) -> dict:
         """
         Solves the NLP with the currently stored parameters.
-
-        :return: Returns a dictionary containing ... TODO document all fields
         """
         opts = self.opts
         prob = self.problem
@@ -219,15 +210,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
-
-        # if opts.print_level:
-        #     print('-------------------------------------------')
-        #     print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
-
         sigma_k = opts.sigma_0
 
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
-
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
 
         max_gn_iter = 30
@@ -300,9 +285,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             cpu_time_nlp[ii] = time.time() - t
 
             # print and process solution
-            status = 1
-            nlp_iter[ii] = gn_iter # TODO
-            cost_val = 0
+            nlp_iter[ii] = gn_iter
             # nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             # cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_all.append(w_current)
@@ -310,10 +293,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
             if opts.print_level:
-            #     self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-            #                            cpu_time_nlp[ii], nlp_iter[ii], status)
                 print(f"sigma = {sigma_k:.2e}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
-
 
             if complementarity_residual < opts.comp_tol:
                 break
@@ -330,9 +310,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                         sigma_k**opts.homotopy_update_exponent))
 
         # if opts.do_polishing_step:
-        #     w_current, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish -
-        #                                                      1] = self.polish_solution(
-        #                                                          w_current, lambda00, x0)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_current)
@@ -348,10 +325,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         sum_iter = sum([i for i in nlp_iter if i is not None])
         total_time = sum([i for i in cpu_time_nlp if i is not None])
-        # total_time = 0.0
-        # for i in nlp_iter:
-        #     if i is not None:
-        #         sum_iter += i
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}")
 
         # self.print_iterate(w_current)
