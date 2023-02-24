@@ -58,6 +58,8 @@ class NosnocSimLooper:
     def run(self) -> None:
         """Run the simulation loop."""
         for i in range(self.Nsim):
+            if self.print_level > 0:
+                print(f"Sim step {i + 1}/{self.Nsim}")
             # set values
             self.solver.set("x0", self.xcurrent)
             if self.w_init is not None:
