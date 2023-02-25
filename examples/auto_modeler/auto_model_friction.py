@@ -54,14 +54,9 @@ def get_motor_with_friction_ocp_description_with_auto_model():
     # switching dynamics with different friction froces
     f_nonsmooth = A @ x + B @ u + C1*sign(v1)
 
-    am = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_nonsmooth)
-    c, alpha, f = am.reformulate()
-
-    alpha = nosnoc.casadi_vertcat_list(alpha)
-    print(c)
-    print(alpha)
-    print(f)
-
+    am = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_nonsmooth, x0=X0, u=u)
+    model = am.reformulate()
+    
     # constraints
     lbu = -u_max * np.ones((1,))
     ubu = u_max * np.ones((1,))
@@ -69,8 +64,6 @@ def get_motor_with_friction_ocp_description_with_auto_model():
 
     # Stage cost
     f_q = u**2
-
-    model = nosnoc.NosnocModel(x=x, f_x=[f], alpha=[alpha], c=c, x0=X0, u=u)
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal)
 
     return model, ocp
@@ -89,7 +82,7 @@ def get_default_options():
 
     opts.N_stages = 30
     opts.N_finite_elements = 2
-    opts.pss_mode = nosnoc.PssMode.STEP
+    opts.pss_mode = nosnoc.PssMode.STEWART
     return opts
 
 

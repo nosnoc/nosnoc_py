@@ -4,6 +4,7 @@ from itertools import product
 from collections import defaultdict
 from typing import List
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list
+from nosnoc.model import NosnocModel
 
 
 class NosnocAutoModel:
@@ -11,13 +12,14 @@ class NosnocAutoModel:
     An interface to automatically generate a NosnocModel given:
     - x: symbolic state vector
     - f_nonsmooth_ode: symbolic vector field of the nonsmooth ODE
-    Outputs the switching functions c as well as either (Not yet implemented):
-    - F:
-    - S:
+    Outputs the switching functions c as well as either:
+    - F: Filippov inclusion functions
+    - S: Switching matrix
     or:
     - alpha: Step reformulation multipliers used in the general inclusions expert mode.
     - f: x dot provided for general inclusions expert mode.
 
+    Calling reformulate will return a NosnocModel object
     Currently supported nonsmooth functions:
     - :math: `\mathrm{sign}(\cdot)`
     - :math: `\mathrm{max}(\cdot, \cdot)`
@@ -28,8 +30,12 @@ class NosnocAutoModel:
 
     def __init__(self,
                  x: ca.SX,
+                 x0: np.ndarray,
+                 u: ca.SX,
                  f_nonsmooth_ode: ca.SX):
         self.x = x
+        self.x0 = x0
+        self.u = u
         self.f_nonsmooth_ode = f_nonsmooth_ode
         self.c = []
         self.S = []
@@ -37,13 +43,17 @@ class NosnocAutoModel:
         self.f = []
         self.alpha = []
 
-    def reformulate(self, force_nonlinear=True):
-        if self._detect_nonlinearities() or force_nonlinear:
+    def reformulate(self) -> NosnocModel:
+        """
+        Reformulate the given nonsmooth ODE into a NosnocModel.
+        Note: It care must be taken if your model is complex, in which case the Pss Mode `STEP` should be used.
+        """
+        if self._detect_additive():
             self._reformulate_nonlin()
-            return self.c, self.alpha, self.f
+            return NosnocModel(x=self.x, f_x=[self.f], c=self.c, alpha=[casadi_vertcat_list(self.alpha)], x0=self.x0, u=self.u)
         else:
             self._reformulate_linear()
-            return self.c, self.S, self.F
+            return NosnocModel(x=self.x, F=self.F, c=self.c, S=self.S, x0=self.x0, u=self.u)
 
     def _reformulate_linear(self):
         # TODO actually implement linear reformulation
@@ -71,7 +81,6 @@ class NosnocAutoModel:
             collated = defaultdict(list)
             for component in components:
                 f, c, S = self._rebuild_additive_component(component)
-                breakpoint()
                 collated[c.str()].append((f, c, S))
             collated_components.append(collated)
 
@@ -104,7 +113,7 @@ class NosnocAutoModel:
         fs = [self._rebuild_nonlin(f_nonsmooth) for f_nonsmooth in fs_nonsmooth]
         self.f = ca.vertcat(*fs)
 
-    def _detect_nonlinearities(self):
+    def _detect_additive(self):
         fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
         for f_nonsmooth in fs_nonsmooth:
             nonlin_components = self._find_nonlinear_components(f_nonsmooth)
@@ -201,41 +210,6 @@ class NosnocAutoModel:
             # create a fresh alpha
             return ca.SX.sym(f'alpha_{len(self.alpha)}'), True
 
-    def _find_nonlinearities(self, node: ca.SX):
-        r'''
-        Checks for nonsmooth nonlinearity, in order to auto select the reformulation used.
-        :param node: Node in CasADi graph to be checked for nonsmooth nonlinearity
-        :returns:
-        '''
-        if node.n_dep() == 0:
-            return False, False
-        elif node.n_dep() == 1:
-            if node.is_op(ca.OP_SIGN):
-                nonlin, nonsmooth = self._find_nonlinearities(node.dep(0))
-                if nonsmooth:
-                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
-                return nonlin or nonsmooth, True
-            else:
-                nonlin, nonsmooth = self._find_nonlinearities(node.dep(0))
-                return nonlin or nonsmooth, nonsmooth
-        else:
-            if node.is_op(ca.OP_FMAX):
-                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
-                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
-                if l_nonsmooth or r_nonsmooth:
-                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
-                return r_nonsmooth or l_nonsmooth, True
-            elif node.is_op(ca.OP_FMIN):
-                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
-                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
-                if l_nonsmooth or r_nonsmooth:
-                    raise Exception('Nonsmooth functions of nonsmooth functions is not yet supported')
-                return r_nonsmooth or l_nonsmooth, True
-            else:
-                l_nonlin, l_nonsmooth = self._find_nonlinearities(node.dep(0))
-                r_nonlin, r_nonsmooth = self._find_nonlinearities(node.dep(1))
-                return (l_nonsmooth and r_nonsmooth) or r_nonlin or l_nonlin, l_nonsmooth or r_nonsmooth
-
     def _check_additive(self, node: ca.SX) -> bool:
         if node.n_dep() == 1:
             # If negated go down one level
@@ -254,7 +228,7 @@ class NosnocAutoModel:
                 if node.dep(0).is_op(ca.OP_SIGN) or node.dep(0).is_op(ca.OP_FMAX) or node.dep(0).is_op(ca.OP_FMIN):
                     return self._check_smooth(node.dep(1))
                 elif node.dep(1).is_op(ca.OP_SIGN) or node.dep(1).is_op(ca.OP_FMAX) or node.dep(1).is_op(ca.OP_FMIN):
-                    return self._check_smooth(node.dep(1))
+                    return self._check_smooth(node.dep(0))
                 else:
                     return False  # NOTE: This is not a sufficient condition to say this doesn't work but for now this is ok.
             else:
