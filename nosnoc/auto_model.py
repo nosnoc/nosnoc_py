@@ -48,23 +48,22 @@ class NosnocAutoModel:
     def _reformulate_linear(self):
         # TODO actually implement linear reformulation
         fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
-
         nsm = []
         sm = []
         for f_nonsmooth in fs_nonsmooth:
-            nonlin_compontents = self._find_nonlinear_components(f_nonsmooth)
+            nonlin_components = self._find_nonlinear_components(f_nonsmooth)
             smooth_components = []
             nonsmooth_components = []
-            for nonlin_compontent in nonlin_compontents:
-                smooth = self._check_smooth(nonlin_compontent)
+            for nonlin_component in nonlin_components:
+                smooth = self._check_smooth(nonlin_component)
                 if smooth:
-                    smooth_components.append(nonlin_compontent)
+                    smooth_components.append(nonlin_component)
                 else:
-                    nonsmooth_components.append(nonlin_compontent)
+                    nonsmooth_components.append(nonlin_component)
             nsm.append(nonsmooth_components)
             sm.append(smooth_components)
         # each smooth component is part of the common dynamics this is added to the first element
-        f_common = casadi_vertcat_list([ca.cumsum(f) for f in sm])
+        f_common = casadi_vertcat_list([casadi_sum_list(f) for f in sm])
 
         # Extract all the Additive components and categorize them by switching function
         collated_components = []
@@ -72,21 +71,33 @@ class NosnocAutoModel:
             collated = defaultdict(list)
             for component in components:
                 f, c, S = self._rebuild_additive_component(component)
+                breakpoint()
                 collated[c.str()].append((f, c, S))
             collated_components.append(collated)
 
-        all_c = set().union(*collated_components)
+        all_c = set().union(*[component.keys() for component in collated_components])
 
-        cS_set = set()
+        # Build the set of switching function and S pairs, along with the stacked vector of c -> f maps
+        cS_map = {}
+        fs = []
         for ii, collated in enumerate(collated_components):
+            f_i = defaultdict(lambda: ca.SX.zeros(1, 2))
             for c_str in all_c:
                 comps = collated[c_str]
                 f_ij = [ca.SX(0), ca.SX(0)]
                 for f, c, S in comps:
-                    cS_set.add((c, S))
-                    f_i[0] += f[0]
-                    f_i[1] += f[1]
-                
+                    cS_map[c] = S
+                    f_ij[0] += f[0]
+                    f_ij[1] += f[1]
+                f_i[c_str] = ca.horzcat(*f_ij)
+            fs.append(f_i)
+
+        for c, S in cS_map.items():
+            self.F.append(casadi_vertcat_list([f_i[c.str()] for f_i in fs]))
+            self.c.append(c)
+            self.S.append(S)
+        self.F[0][:, 0] += f_common
+        self.F[0][:, 1] += f_common
 
     def _reformulate_nonlin(self):
         fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
@@ -96,8 +107,8 @@ class NosnocAutoModel:
     def _detect_nonlinearities(self):
         fs_nonsmooth = ca.vertsplit(self.f_nonsmooth_ode)
         for f_nonsmooth in fs_nonsmooth:
-            nonlin_compontents = self._find_nonlinear_components(f_nonsmooth)
-            for component in nonlin_compontents:
+            nonlin_components = self._find_nonlinear_components(f_nonsmooth)
+            for component in nonlin_components:
                 additive = self._check_additive(component)
                 if additive:
                     return True
@@ -114,20 +125,20 @@ class NosnocAutoModel:
                 return [ca.SX(1), ca.SX(-1)], node.dep(0), np.array([[1], [-1]])
             else:
                 # In this case do nothing
-                children, c, S = self.rebuild(node.dep(0))
+                children, c, S = self._rebuild_additive_component(node.dep(0))
                 return [ca.SX.unary(node.op(), child) for child in children], c, S
         else:
             if node.is_op(ca.OP_FMAX):
                 return [node.dep(0), node.dep(1)], node.dep(0)-node.dep(1), np.array([[1], [-1]])
             elif node.is_op(ca.OP_FMIN):
-                self.c.append(node.dep(0)-node.dep(1))
-                self.S.append(np.array([[-1], [1]]))
-                return [node.dep(0), node.dep(1)], node.dep(0)-node.dep(1), np.array([[-1], [1]])
+                return [node.dep(0), node.dep(1)], node.dep(0)-node.dep(1), np.array([[-1], [1]]), node.dep(0)-node.dep(1), np.array([[-1], [1]])
             else:
                 # binary operator
-                l_children, l_c, l_S = self.rebuild(node.dep(0))
-                r_children, r_c, r_S = self.rebuild(node.dep(1))
-                return [ca.SX.binary(node.op(), lc, rc) for lc, rc in product(l_children, r_children)]
+                l_children, l_c, l_S = self._rebuild_additive_component(node.dep(0))
+                r_children, r_c, r_S = self._rebuild_additive_component(node.dep(1))
+                c = l_c if l_c is not None else r_c
+                S = l_S if l_S is not None else r_S
+                return [ca.SX.binary(node.op(), lc, rc) for lc, rc in product(l_children, r_children)], c, S
 
     def _rebuild_nonlin(self, node: ca.SX):
         if node.n_dep() == 0:
