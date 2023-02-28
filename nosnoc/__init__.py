@@ -11,6 +11,7 @@ from .plot_utils import plot_timings, plot_iterates, latexify_plot
 from .rk_utils import rk4
 
 from .scholtes_fb_solver import NosnocCustomScholtesFBSolver
+from .custom_solver import NosnocCustomSolver
 
 import warnings
 warnings.simplefilter("always")
