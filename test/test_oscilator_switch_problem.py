@@ -49,13 +49,40 @@ class OscilatorSwitchTest(unittest.TestCase):
 
 
 
+    # def test_scholtes_fb_solver(self, opts=None, use_g_Stewart=False, do_plot=False):
+    #     opts = nosnoc.NosnocOpts()
+    #     # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    #     opts.terminal_time = TSTEP
+    #     opts.sigma_N = 1e-5
+
+    #     opts.print_level = 2
+
+    #     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    #     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
+
+    #     model = get_oscilator_model(use_g_Stewart)
+    #     model.x0 = X0
+
+    #     solver = nosnoc.NosnocCustomScholtesFBSolver(opts, model)
+    #     results = solver.solve()
+
+    #     x_out = results["x_all_list"][-1]
+    #     error = np.max(np.abs(XEXACT - x_out))
+    #     print(f"error wrt exact solution {error:.2e}")
+    #     print(f"x_out {x_out[0]}, {x_out[1]}")
+
+    #     if do_plot:
+    #         plot_oscilator([X0] + results["x_list"], results["t_grid"])
+
+    #     assert(error < 1e-4)
+
     def test_custom_solver(self, opts=None, use_g_Stewart=False, do_plot=False):
         opts = nosnoc.NosnocOpts()
         # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
         opts.terminal_time = TSTEP
         opts.sigma_N = 1e-5
 
-        opts.print_level = 2
+        opts.print_level = 1
 
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
         opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
@@ -63,7 +90,7 @@ class OscilatorSwitchTest(unittest.TestCase):
         model = get_oscilator_model(use_g_Stewart)
         model.x0 = X0
 
-        solver = nosnoc.NosnocCustomScholtesFBSolver(opts, model)
+        solver = nosnoc.NosnocCustomSolver(opts, model)
         results = solver.solve()
 
         x_out = results["x_all_list"][-1]
@@ -80,4 +107,4 @@ class OscilatorSwitchTest(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
     # oscilator_test = OscilatorSwitchTest()
-    # oscilator_test.solve_oscilator_fast(do_plot=True)
+    # oscilator_test.test_custom_solver(do_plot=True)
