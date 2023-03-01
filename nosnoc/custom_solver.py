@@ -54,7 +54,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.G = self._setup_G()
         nG = casadi_length(self.G)
 
-        self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G])
 
         # setup primal dual variables:
         lam_H = ca.SX.sym('lam_H', n_H)
@@ -78,7 +77,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         ## KKT system
         # slack = - G1 * G2 + sigma
         self.slack0_expr = -ca.diag(G1) @ G2 + prob.sigma
-        self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr])
 
         # barrier parameter
         tau = prob.tau
@@ -109,8 +107,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         kkt_eq_jac = ca.jacobian(kkt_eq, w_pd)
 
         # regularize kkt_compl jacobian?
-        self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac])
-        self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq])
+        JIT = True
+        casadi_function_opts = {}
+        if JIT:
+            casadi_function_opts = {"compiler": "shell", "jit": True, "jit_options": {"compiler": "gcc", "flags": ["-O3"]}}
+
+        self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
+        self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
+        self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G], casadi_function_opts)
+        self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
         self.n_comp = n_comp
         self.n_H = n_H
@@ -232,6 +237,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
         sigma_k = opts.sigma_0
+        # timers
+        t_la = 0.0
+        t_ls = 0.0
+        t_ca = 0.0
 
         n_mu = self.n_mu
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
@@ -255,7 +264,10 @@ class NosnocCustomSolver(NosnocSolverBase):
 
             for gn_iter in range(max_gn_iter):
 
+                t0_ca = time.time()
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
+                newton_matrix = jac_kkt_val.sparse()
+                t_ca += time.time() - t0_ca
                 newton_matrix = jac_kkt_val.full()
 
                 # cond = np.linalg.cond(newton_matrix)
@@ -270,16 +282,21 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
                 rhs = - kkt_val.full().flatten()
 
+
                 # compute step
                 # step = self.compute_step_schur_np(newton_matrix, rhs)
                 # step = self.compute_step_schur_scipy(newton_matrix, rhs)
+                t0_la = time.time()
                 step = self.compute_step(newton_matrix, rhs)
+                t_la += time.time() - t0_la
 
                 step_norm = np.linalg.norm(step)
                 nlp_res = casadi_inf_norm_nan(kkt_val)
                 if step_norm < sigma_k or nlp_res < sigma_k / 10:
                     break
 
+                ## LINE SEARCH
+                t0_ls = time.time()
                 # fraction to boundary
                 tau_min = .99 # .99 is IPOPT default
                 tau_j = max(tau_min, 1-tau_val)
@@ -290,12 +307,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                 mu_step = self.get_mu(step)
                 alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step)
                 w_candidate[-n_mu:] = mu_current + alpha_mu * mu_step
-
-                if any(w_candidate[-n_mu:]<0):
-                    print("got mu_new < 0")
-                    print(f"{alpha_mu=}")
-                    print(f"{w_candidate[-n_mu:]=}")
-                    breakpoint()
 
                 # fraction to boundary G1, G2 > 0
                 G_val = self.G_fun(w_current[:self.nw], p_val).full().flatten()
@@ -325,13 +336,15 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # do step!
                 w_current = w_candidate.copy()
+                t_ls += time.time() - t0_ls
 
-                G_val_new = self.G_fun(w_current[:self.nw], p_val).full().flatten()
-                if any(G_val_new < 0):
-                    print("got G_val_new < 0")
-                    print(f"{alpha=}, {alpha_k_max=}")
-                    print(f"{G_val_new=}")
-                    breakpoint()
+
+                # G_val_new = self.G_fun(w_current[:self.nw], p_val).full().flatten()
+                # if any(G_val_new < 0):
+                #     print("got G_val_new < 0")
+                #     print(f"{alpha=}, {alpha_k_max=}")
+                #     print(f"{G_val_new=}")
+                #     breakpoint()
 
                 if DEBUG:
                     maxA = np.max(np.abs(newton_matrix))
@@ -353,7 +366,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             # nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             # cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_all.append(w_current)
-
 
             complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
@@ -394,7 +406,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         sum_iter = sum([i for i in nlp_iter if i is not None])
         total_time = sum([i for i in cpu_time_nlp if i is not None])
-        print(f"total iterations {sum_iter}, CPU time {total_time:.3f}")
+        print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f}")
 
         # self.print_iterate(w_current)
         return results
