@@ -12,7 +12,7 @@ from nosnoc.problem import NosnocModel, NosnocOcp
 from nosnoc.solver import NosnocSolverBase, get_results_from_primal_vector
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
-from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length, casadi_inf_norm_nan
+from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length, casadi_inf_norm_nan, flatten
 from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnitude_plot_with_sign
 
 DEBUG = False
@@ -27,6 +27,13 @@ def get_fraction_to_boundary(tau, current, step):
     return alpha
 
 class NosnocCustomSolver(NosnocSolverBase):
+    def _setup_G(self) -> ca.SX:
+        prob = self.problem
+        # TODO: add mu, h?
+        ind_pos = sum([flatten(x) for x in [prob.ind_lam, prob.ind_theta, prob.ind_lambda_n, prob.ind_lambda_p, prob.ind_alpha]], [])
+        ind_pos.sort()
+        return prob.w[ind_pos]
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)
         prob = self.problem
@@ -45,7 +52,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         n_H = casadi_length(H)
 
         # G = (G1, G2) \geq 0
-        self.G = ca.vertcat(G1, G2)
+        self.G = self._setup_G()
         nG = casadi_length(self.G)
         self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G])
 
