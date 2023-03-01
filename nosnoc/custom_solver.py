@@ -242,6 +242,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         if opts.print_level == 1:
             print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G")
 
+        w_candidate = w_current.copy()
         max_gn_iter = 30
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
@@ -282,13 +283,35 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if step_norm < sigma_k or nlp_res < sigma_k / 10:
                     break
 
+                # fraction to boundary
+                tau_min = .99 # .99 is IPOPT default
+                tau_j = max(tau_min, 1-tau_val)
+                # tau_j = tau_min # dont use so large tau for now
+
+                # compute alpha_mu_k
+                mu_current = self.get_mu(w_current)
+                mu_step = self.get_mu(step)
+                alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step)
+                w_candidate[-n_mu:] = mu_current + alpha_mu * mu_step
+
+                if any(w_candidate[-n_mu:]<0):
+                    print("got mu_new < 0")
+                    print(f"{alpha_mu=}")
+                    print(f"{w_candidate[-n_mu:]=}")
+                    breakpoint()
+
+                # fraction to boundary G1, G2 > 0
+                G_val = self.G_fun(w_current[:self.nw], p_val).full().flatten()
+                G_delta_val = self.G_fun(step[:self.nw], p_val).full().flatten()
+                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val)
+
                 # line search:
-                alpha = 1.0
+                alpha = alpha_k_max
                 rho = 0.9
                 gamma = .3
-                alpha_min = 0.05
+                alpha_min = 0.01
                 while True:
-                    w_candidate = w_current + alpha * step
+                    w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
@@ -298,30 +321,19 @@ class NosnocCustomSolver(NosnocSolverBase):
                     else:
                         alpha *= rho
 
-                # fraction to boundary
-                tau_min = .99 # .99 is IPOPT default
-                tau_j = max(tau_min, 1-tau_val)
-                tau_j = tau_min # dont use so large tau for now
-
-                # compute alpha_mu_k
-                mu_current = self.get_mu(w_current)
-                mu_step = self.get_mu(step)
-                alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step)
-                w_candidate[-n_mu:] = mu_current + alpha_mu * mu_step
-
-                # fraction to boundary G1, G2 > 0
-                G_val = self.G_fun(w_current[:self.nw], p_val).full().flatten()
-                G_delta_val = self.G_fun(step[:self.nw], p_val).full().flatten()
-                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val)
+                if step_res_norm > nlp_res:
+                    print(f"residual increase from {nlp_res:.2e} to {step_res_norm:.2e}")
+                    # breakpoint()
 
                 # do step!
-                w_current = w_candidate
+                w_current = w_candidate.copy()
 
-                min_mu = np.min(mu_current)
-                argmin_mu = np.argmin(mu_current)
-                # print(f"{min_mu:.2e} at {argmin_mu}")
-                # if argmin_mu < 2*self.n_comp:
-                #     print(f"{ca.vertcat(self.G1, self.G2)[argmin_mu]=}")
+                G_val_new = self.G_fun(w_current[:self.nw], p_val).full().flatten()
+                if any(G_val_new < 0):
+                    print("got G_val_new < 0")
+                    print(f"{alpha=}, {alpha_k_max=}")
+                    print(f"{G_val_new=}")
+                    breakpoint()
 
                 if DEBUG:
                     maxA = np.max(np.abs(newton_matrix))
