@@ -18,12 +18,19 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 DEBUG = False
 
 
-def get_fraction_to_boundary(tau, current, step):
-    alpha = 1
-    n = len(step)
-    for i in range(n):
-        if step[i] < 0.0:
-            alpha = min(- tau * current[i] / step[i], alpha)
+def get_fraction_to_boundary(tau, current, delta):
+    # alpha_ref = 1
+    # n = len(delta)
+    # for i in range(n):
+    #     if delta[i] < 0.0:
+    #         alpha_ref = min(- tau * current[i] / delta[i], alpha_ref)
+
+    ix = np.where(delta<0)
+    if len(ix[0]) == 0:
+        return 1.0
+    else:
+        return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
+
     return alpha
 
 class NosnocCustomSolver(NosnocSolverBase):
