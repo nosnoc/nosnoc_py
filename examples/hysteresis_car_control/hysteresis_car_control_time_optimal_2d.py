@@ -9,6 +9,7 @@ hysteresis curves may not overlap.
 
 
 import nosnoc
+from nosnoc.plot_utils import plot_voronoi_2d
 import casadi as ca
 import numpy as np
 from math import ceil, log
@@ -196,10 +197,10 @@ def create_gearbox_voronoi(u=None, q_goal=None, mode=Stages.STAGE_2,
             x=X, F=F, g_Stewart=g_ind, x0=X0, t_var=t,
             name="gearbox"
         )
-    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal
+    return model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal, Z
 
 
-def plot(x_list, t_grid, u_list, t_grid_u):
+def plot(x_list, t_grid, u_list, t_grid_u, Z):
     """Plot."""
     q = [x[0] for x in x_list]
     v = [x[1] for x in x_list]
@@ -224,20 +225,22 @@ def plot(x_list, t_grid, u_list, t_grid_u):
     plt.plot(t, q, label="Position vs actual time")
     plt.xlabel("Actual Time [$s$]")
 
-    plt.figure()
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    plot_voronoi_2d(Z, ax=ax, show=False, annotate=True)
     psi = [(vi - v1) / (v2 - v1) for vi in v]
-    im = plt.scatter(psi, aux, c=t_grid, cmap=plt.hot())
+    im = ax.scatter(psi, aux, c=t_grid, cmap=plt.hot())
     im.set_label('Time')
-    plt.colorbar(im)
-    plt.xlabel("$\\psi(x)$")
-    plt.ylabel("$w$")
+    plt.colorbar(im, ax=ax)
+    ax.set_xlabel("$\\psi(x)$")
+    ax.set_ylabel("$w$")
     plt.show()
 
 
 def simulation(u=25, Tsim=6, Nsim=30, with_plot=True):
     """Simulate the temperature control system with a fixed input."""
     opts = create_options()
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(u=u, q_goal=q_goal)
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal, Z = create_gearbox_voronoi(u=u, q_goal=q_goal)
     Tstep = Tsim / Nsim
     opts.N_finite_elements = 2
     opts.N_stages = 1
@@ -252,13 +255,13 @@ def simulation(u=25, Tsim=6, Nsim=30, with_plot=True):
     results = looper.get_results()
     print(f"Ends in zone: {np.argmax(results['theta_sim'][-1][-1])}")
     print(results['theta_sim'][-1][-1])
-    plot(results["X_sim"], results["t_grid"], None, None)
+    plot(results["X_sim"], results["t_grid"], None, None, Z)
 
 
 def control():
     """Execute one Control step."""
     N = 15
-    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal = create_gearbox_voronoi(
+    model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal, Z = create_gearbox_voronoi(
         q_goal=q_goal,
     )
     opts = create_options()
@@ -279,9 +282,9 @@ def control():
     results = solver.solve()
     plot(
         results["x_traj"], results["t_grid"],
-        results["u_list"], results["t_grid_u"]
+        results["u_list"], results["t_grid_u"], Z
     )
 
 
 if __name__ == "__main__":
-    control()
+    simulation()
