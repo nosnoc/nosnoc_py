@@ -29,8 +29,7 @@ def get_fraction_to_boundary(tau, current, step):
 class NosnocCustomSolver(NosnocSolverBase):
     def _setup_G(self) -> ca.SX:
         prob = self.problem
-        # TODO: add mu, h?
-        ind_pos = sum([flatten(x) for x in [prob.ind_lam, prob.ind_theta, prob.ind_lambda_n, prob.ind_lambda_p, prob.ind_alpha]], [])
+        ind_pos = sum([flatten(x) for x in [prob.ind_lam, prob.ind_theta, prob.ind_lambda_n, prob.ind_lambda_p, prob.ind_alpha, prob.ind_h]], [])
         ind_pos.sort()
         return prob.w[ind_pos]
 
@@ -54,8 +53,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         # G = (G1, G2) \geq 0
         self.G = self._setup_G()
         nG = casadi_length(self.G)
-        print(f"inequalities for custom solver are:")
-        print_casadi_vector(self.G)
 
         self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G])
 
@@ -309,7 +306,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha = alpha_k_max
                 rho = 0.9
                 gamma = .3
-                alpha_min = 0.01
+                alpha_min = 0.05
                 while True:
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
@@ -321,8 +318,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                     else:
                         alpha *= rho
 
-                if step_res_norm > nlp_res:
-                    print(f"residual increase from {nlp_res:.2e} to {step_res_norm:.2e}")
+                # if step_res_norm > nlp_res:
+                #     print(f"alpha = {alpha:.2e}, alpha_k_max = {alpha_k_max:.2e}, alpha_mu = {alpha_mu:.2e}")
+                #     print(f"residual increase from {nlp_res:.2e} to {step_res_norm:.2e}")
                     # breakpoint()
 
                 # do step!
