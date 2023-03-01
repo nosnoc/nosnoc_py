@@ -114,10 +114,13 @@ class NosnocCustomSolver(NosnocSolverBase):
         kkt_eq_jac = ca.jacobian(kkt_eq, w_pd)
 
         # regularize kkt_compl jacobian?
-        JIT = True
+        JIT = False
         casadi_function_opts = {}
         if JIT:
             casadi_function_opts = {"compiler": "shell", "jit": True, "jit_options": {"compiler": "gcc", "flags": ["-O3"]}}
+
+        # newton_matrix[:self.nw, :self.nw] += 1e-5 * scipy.sparse.eye(self.nw)
+        # kkt_eq_jac[:self.nw, :self.nw] += 1e-5 * ca.diag((self.nw*[1]))
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
