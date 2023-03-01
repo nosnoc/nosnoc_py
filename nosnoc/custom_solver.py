@@ -54,6 +54,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         # G = (G1, G2) \geq 0
         self.G = self._setup_G()
         nG = casadi_length(self.G)
+        print(f"inequalities for custom solver are:")
+        print_casadi_vector(self.G)
+
         self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G])
 
         # setup primal dual variables:
@@ -248,7 +251,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                  np.array([sigma_k, tau_val]), lambda00, x0))
 
             if opts.print_level > 1:
-                print("alpha \t alpha_mu \t step norm \t kkt res \t cond(A)")
+                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G")
             t = time.time()
             alpha_min_counter = 0
 
@@ -331,7 +334,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
                     #  )
                 elif opts.print_level > 1:
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t")
+                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
 
             cpu_time_nlp[ii] = time.time() - t
 
