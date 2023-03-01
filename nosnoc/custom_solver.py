@@ -150,6 +150,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         step = np.linalg.solve(matrix, rhs)
         return step
 
+    def compute_step_sparse(self, matrix, rhs):
+        # naive
+        step = scipy.sparse.linalg.spsolve(matrix, rhs)
+        return step
 # Schur complement:
 # [ A, B,
 # C, D]
@@ -278,7 +282,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
                 newton_matrix = jac_kkt_val.sparse()
                 t_ca += time.time() - t0_ca
-                newton_matrix = jac_kkt_val.full()
 
                 # cond = np.linalg.cond(newton_matrix)
                 # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
@@ -287,17 +290,21 @@ class NosnocCustomSolver(NosnocSolverBase):
                 #     self.check_newton_matrix(newton_matrix)
 
                 # regularize Lagrange Hessian
-                newton_matrix[-n_mu:, -n_mu:] += 1e-5 * np.eye(n_mu)
-                newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
-                # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix', )
+                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * np.eye(n_mu)
+                # newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
+
+                t0_la = time.time()
+                newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
+                # newton_matrix[:self.nw, :self.nw] += 1e-5 * scipy.sparse.eye(self.nw)
+
                 rhs = - kkt_val.full().flatten()
 
 
-                # compute step
+                ## compute step
                 # step = self.compute_step_schur_np(newton_matrix, rhs)
                 # step = self.compute_step_schur_scipy(newton_matrix, rhs)
-                t0_la = time.time()
-                step = self.compute_step(newton_matrix, rhs)
+                # step = self.compute_step(newton_matrix, rhs)
+                step = self.compute_step_sparse(newton_matrix, rhs)
                 t_la += time.time() - t0_la
 
                 step_norm = np.linalg.norm(step)
