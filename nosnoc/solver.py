@@ -76,6 +76,8 @@ class NosnocSolverBase(ABC):
                 )
         elif field == 'u':
             prob.w0[prob.ind_u] = value
+        elif field == 'v_global':
+            prob.w0[prob.ind_v_global] = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
