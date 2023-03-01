@@ -302,6 +302,10 @@ class NosnocSolver(NosnocSolverBase):
             if sigma_k <= opts.sigma_N:
                 break
 
+            w_opt = self.callback(
+                prob=prob, w_opt=w_opt, lambda0=lambda00, x0=x0, iteration=ii
+            )
+
             # Update the homotopy parameter.
             if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
                 sigma_k = opts.homotopy_update_slope * sigma_k
@@ -340,6 +344,7 @@ class NosnocSolver(NosnocSolverBase):
         results["w_all"] = w_all
         results["w_sol"] = w_opt
         results["cost_val"] = cost_val
+        results["status"] = status
 
         if check_ipopt_success(status):
             results["status"] = Status.SUCCESS
@@ -349,6 +354,10 @@ class NosnocSolver(NosnocSolverBase):
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
+
+    def callback(self, prob=None, w_opt=None, lambda0=0, x0=0, iteration=0):
+        """Callback function."""
+        return w_opt
 
     def polish_solution(self, w_guess, lambda00, x0):
         opts = self.opts
@@ -416,6 +425,31 @@ class NosnocSolver(NosnocSolverBase):
                 print(f"Warning: IPOPT exited with status {status}")
 
         return w_opt, cpu_time_nlp, nlp_iter, status
+
+    def create_function_calculate_vector_field(self, sigma, p=[], v=[]):
+        """Create a function to calculate the vector field."""
+        if self.opts.pss_mode != PssMode.STEWART:
+            raise NotImplementedError()
+
+        shape = self.model.g_Stewart_fun.size_out(0)
+        g = ca.SX.sym('g', shape[0])
+        mu = ca.SX.sym('mu', 1)
+        theta = ca.SX.sym('theta', shape[0])
+        lam = g - mu * np.ones(shape)
+        theta_fun = ca.rootfinder("lambda_fun", "newton", dict(
+            x=ca.vertcat(theta, mu), p=g,
+            g=ca.vertcat(
+                ca.sqrt(lam * lam - theta*theta + sigma*sigma) - (lam + theta),
+                ca.sum1(theta)-1
+            )
+        ))
+        def fun(x, u):
+            g  = self.model.g_Stewart_fun(x, p)
+            theta = theta_fun(0, g)[:-1]
+            F = self.model.F_fun(x, u, p, v)
+            return np.dot(F, theta)
+
+        return fun
 
 
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
