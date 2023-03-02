@@ -167,7 +167,10 @@ def plot_results(results, opts):
     ax.add_patch(patch)
     # TODO: plot target trajectory
     ani = FuncAnimation(fig, animate_robot, frames=results['x_traj'], blit=True)
-
+    try:
+        ani.save('hopper.gif', writer='imagemagick', fps=10)
+    except:
+        print("install imagemagick to save as gif")
     plt.show()
     
     
