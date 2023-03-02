@@ -759,18 +759,29 @@ class NosnocProblem(NosnocFormulationObject):
             self.ubg = np.array([])
 
     def print(self):
+        errors = 0
         # constraints
         print("lbg\t\t ubg\t\t g_expr")
         for i in range(len(self.lbg)):
-            print(f"{self.lbg[i]:7} \t {self.ubg[i]:7} \t {self.g[i]}")
+            print(f"{i}: {self.lbg[i]:7} \t {self.ubg[i]:7} \t {self.g[i]}")
         # variables and bounds
         print("\nw \t\t\t w0 \t\t lbw \t\t ubw:")
         for i in range(len(self.lbw)):
+            extra_info = ""
+            if self.lbw[i] > self.ubw[i]:
+                extra_info = " BOUND ERROR!"
+                errors += 1
+            elif self.w0[i] < self.lbw[i] or self.ubw[i] > self.ubw[i]:
+                extra_info = " W0 ERROR!"
+                errors += 1
+
             print(
-                f"{self.w[i].name():<15} \t {self.w0[i]:.2e} \t {self.lbw[i]:7} \t {self.ubw[i]:.2e}"
+                f"{i}: {self.w[i].name():<15} \t {self.w0[i]:.2e} \t {self.lbw[i]:7} \t {self.ubw[i]:.2e}{extra_info}"
             )
+
         # cost
         print(f"\ncost:\n{self.cost}")
+        print(f"\nerrors: {errors}")
 
     def is_sim_problem(self):
         if self.model.dims.n_u != 0:
