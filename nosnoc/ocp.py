@@ -98,11 +98,11 @@ class NosnocOcp:
         # path constraints
         n_g_path = casadi_length(self.g_path)
         if len(self.lbg) == 0:
-            self.lbx = np.zeros((n_g_path,))
+            self.lbg = np.zeros((n_g_path,))
         elif len(self.lbg) != n_g_path:
             raise ValueError("lbg and g_path have inconsistent shapes.")
         if len(self.ubg) == 0:
-            self.ubx = np.zeros((n_g_path,))
+            self.ubg = np.zeros((n_g_path,))
         elif len(self.ubg) != n_g_path:
             raise ValueError("ubg and g_path have inconsistent shapes")
 
