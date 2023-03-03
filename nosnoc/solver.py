@@ -298,6 +298,8 @@ class NosnocSolver(NosnocSolverBase):
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
+                print(f"Lower bound: {np.where(g_sol - self.problem.lbg < -1e-3)}")
+                print(f"Upper bound: {np.where(self.problem.ubg - g_sol < -1e-3)}")
 
             if complementarity_residual < opts.comp_tol:
                 break
