@@ -1,4 +1,4 @@
-## Hopper OCP
+# Hopper OCP
 # example inspired by https://github.com/KY-Lin22/NIPOCPEC and https://github.com/thowell/motion_planning/blob/main/models/hopper.jl
 # The methods and time-freezing refomulation are detailed in https://arxiv.org/abs/2111.06759
 
@@ -10,13 +10,16 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
+from functools import partial
+
+LONG = True
+
 
 def get_hopper_ocp_description(opts):
-    ## Parameters
-    v_slip_bound = 0.001
+    # Parameters
     x_goal = 0.7
 
-    ## hopper model
+    # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
     v = ca.SX.sym('v', 4)
@@ -29,7 +32,7 @@ def get_hopper_ocp_description(opts):
     n_q = 4
     n_v = 4
     n_x = n_q + n_v
-    
+
     # state equations
     mb = 1      # body
     ml = 0.1    # link
@@ -41,7 +44,7 @@ def get_hopper_ocp_description(opts):
     # inertia matrix
     M = np.diag([mb + ml, mb + ml, Ib + Il, ml])
     # coriolis and gravity
-    C = np.array([0,(mb + ml)*g,0,0]).T
+    C = np.array([0, (mb + ml)*g, 0, 0]).T
     # Control input matrix
     B = ca.vertcat(ca.horzcat(0, -np.sin(q[2])),
                    ca.horzcat(0, np.cos(q[2])),
@@ -58,23 +61,35 @@ def get_hopper_ocp_description(opts):
     f_c = q[1] - q[3]*ca.cos(q[2])
 
     # The control u[2] is a slack for modelling of nonslipping constraints.
-    ubu= np.array([50, 50, 100, 20])
-    lbu= np.array([-50, -50, 0, 1])
+    ubu = np.array([50, 50, 100, 20])
+    lbu = np.array([-50, -50, 0, 1])
 
     ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5])
-    lbx =  np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5])
-    
-    x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-    x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
-    x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
+    lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5])
 
-    interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-    x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
-    
+    if LONG:
+        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_mid1 = np.array([0.4, 0.65, 0, 0.2, 0, 0, 0, 0])
+        x_mid2 = np.array([0.6, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_mid3 = np.array([0.9, 0.65, 0, 0.2, 0, 0, 0, 0])
+        x_end = np.array([1.3, 0.5, 0, 0.5, 0, 0, 0, 0])
+
+        interpolator1 = CubicSpline([0, 0.5, 1], [x0, x_mid1, x_mid2])
+        interpolator2 = CubicSpline([0, 0.5, 1], [x_mid2, x_mid3, x_end])
+
+        x_ref1 = interpolator1(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
+        x_ref2 = interpolator2(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
+        x_ref = np.concatenate([x_ref1, x_ref2])
+    else:
+        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
+        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
+
+        interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
+        x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+
     Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
-    
-    u_ref = np.array([0, 0, 0])
     R = np.diag([0.01, 0.01, 1e-5])
 
     # path comp to avoid slipping
@@ -86,27 +101,27 @@ def get_hopper_ocp_description(opts):
     f_q = sot*(ca.transpose(x - p_x_ref)@Q@(x-p_x_ref) + ca.transpose(u)@R@u)
     f_q_T = ca.transpose(x - x_end)@Q_terminal@(x - x_end)
 
-    ## hand crafted time freezing :)
+    # hand crafted time freezing :)
     a_n = 100
     J_normal = f_c_normal
     J_tangent = f_c_tangent
     inv_M = ca.inv(M)
     f_ode = sot * ca.vertcat(v, inv_M@f_v, 1)
-    
+
     inv_M_aux = inv_M
-    inv_M_ext = np.eye(n_x+1)
 
     f_aux_pos = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal-J_tangent*mu)*a_n, 0)
     f_aux_neg = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal+J_tangent*mu)*a_n, 0)
-    
+
     F = [ca.horzcat(f_ode, f_ode, f_aux_pos, f_aux_neg)]
-    S = [np.array([[1,0,0],[-1,1,0],[-1,-1,1],[-1,-1,-1]])]
+    S = [np.array([[1, 0, 0], [-1, 1, 0], [-1, -1, 1], [-1, -1, -1]])]
     c = [ca.vertcat(f_c, v_normal, v_tangent)]
 
-    model = ns.NosnocModel(x=ca.vertcat(x,t), F=F, S=S, c=c, x0=np.concatenate((x0,[0])), u=ca.vertcat(u, sot), p_time_var=p_x_ref,p_time_var_val=x_ref, t_var=t)
-    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path)
+    model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
+                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t)
+    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
 
-    return model, ocp
+    return model, ocp, x_ref
 
 
 def get_default_options():
@@ -116,6 +131,7 @@ def get_default_options():
     comp_tol = 1e-9
     opts.comp_tol = comp_tol
     opts.homotopy_update_slope = 0.1
+    opts.sigma_0 = 100.
     opts.n_s = 2
     opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_DELTA
     opts.print_level = 1
@@ -125,9 +141,12 @@ def get_default_options():
 
     opts.time_freezing = True
     opts.equidistant_control_grid = True
-    opts.N_stages = 20
+    if LONG:
+        opts.N_stages = 30
+    else:
+        opts.N_stages = 20
     opts.N_finite_elements = 3
-    opts.max_iter_homotopy = 5
+    opts.max_iter_homotopy = 6
     return opts
 
 
@@ -135,44 +154,64 @@ def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
 
-    [model, ocp] = get_hopper_ocp_description(opts)
+    [model, ocp, x_ref] = get_hopper_ocp_description(opts)
 
     opts.terminal_time = 1
 
     solver = ns.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()
-    # print(f"{results['u_traj']=}")
-    # print(f"{results['time_steps']=}")
-    breakpoint()
-    plot_results(results, opts)
+    plot_results(results, opts, x_ref)
 
     return results
 
-def animate_robot(state):
+
+def init_func(htrail, ftrail):
+    htrail.set_data([], [])
+    ftrail.set_data([], [])
+
+    return htrail, ftrail
+
+
+def animate_robot(state, head, foot, body, ftrail, htrail):
     x_head, y_head = state[0], state[1]
     x_foot, y_foot = state[0] - state[3]*np.sin(state[2]), state[1] - state[3]*np.cos(state[2])
-    head = plt.scatter(x_head, y_head, color='b', s=[100])
-    foot = plt.scatter(x_foot, y_foot, color='r', s=[50])
-    body, = plt.plot([x_foot,x_head], [y_foot, y_head], 'k')
+    head.set_offsets([x_head, y_head])
+    foot.set_offsets([x_foot, y_foot])
+    body.set_data([x_foot, x_head], [y_foot, y_head])
 
-    return head, foot, body
-    
+    ftrail.set_data(np.append(ftrail.get_xdata(orig=False), x_foot), np.append(ftrail.get_ydata(orig=False), y_foot))
+    htrail.set_data(np.append(htrail.get_xdata(orig=False), x_head), np.append(htrail.get_ydata(orig=False), y_head))
+    return head, foot, body, ftrail, htrail
 
-def plot_results(results, opts):
+
+def plot_results(results, opts, x_ref):
     fig, ax = plt.subplots()
-    ax.set_xlim(-0.1,.9)
-    ax.set_ylim(-0.1,1.5)
-    patch = patches.Rectangle((-0.1,-0.1),1,0.1, color='grey')
-    ax.add_patch(patch)
-    # TODO: plot target trajectory
-    ani = FuncAnimation(fig, animate_robot, frames=results['x_traj'], blit=True)
+    if LONG:
+        ax.set_xlim(0, 1.5)
+        ax.set_ylim(-0.1, 1.1)
+        patch = patches.Rectangle((-0.1, -0.1), 1.6, 0.1, color='grey')
+        ax.add_patch(patch)
+    else:
+        ax.set_xlim(0, .8)
+        ax.set_ylim(-0.1, 1.1)
+        patch = patches.Rectangle((-0.1, -0.1), 1, 0.1, color='grey')
+        ax.add_patch(patch)
+    ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
+    head = ax.scatter([0], [0], color='b', s=[100])
+    foot = ax.scatter([0], [0], color='r', s=[50])
+    body, = ax.plot([], [], 'k')
+    ftrail, = ax.plot([], [], color='r', alpha=0.5)
+    htrail, = ax.plot([], [], color='b', alpha=0.5)
+    ani = FuncAnimation(fig, partial(animate_robot, head=head, foot=foot, body=body, htrail=htrail, ftrail=ftrail),
+                        init_func=partial(init_func, htrail=htrail, ftrail=ftrail),
+                        frames=results['x_traj'], blit=True)
     try:
         ani.save('hopper.gif', writer='imagemagick', fps=10)
-    except:
+    except Exception:
         print("install imagemagick to save as gif")
     plt.show()
-    
-    
 
-solve_ocp()
+
+if __name__ == '__main__':
+    solve_ocp()
