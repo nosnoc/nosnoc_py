@@ -134,7 +134,7 @@ def plot_voronoi_2d(Z, show=True, annotate=False, ax=None):
     if not isinstance(Z, np.ndarray):
         Z = np.array(Z)
     vor = Voronoi(Z)
-    fig = voronoi_plot_2d(vor, ax=ax)
+    fig = voronoi_plot_2d(vor, ax=ax, show_vertices=False)
     if ax is None:
         ax = fig.axes[0]
 
