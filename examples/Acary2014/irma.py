@@ -35,6 +35,9 @@ def get_default_options():
     opts.n_s = 2
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.pss_mode = nosnoc.PssMode.STEP
+    opts.print_level = 0
+    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.LINEAR
+
     return opts
 
 
