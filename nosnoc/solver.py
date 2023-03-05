@@ -361,7 +361,7 @@ class NosnocSolver(NosnocSolverBase):
         ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
                           prob.ind_theta + prob.ind_mu)
         ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v)
+                               prob.ind_v + prob.ind_z)
         # sanity check
         ind_all = ind_set + ind_dont_set
         for iw in range(len(w_guess)):
