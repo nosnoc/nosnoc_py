@@ -62,7 +62,7 @@ def casadi_sum_list(input: list):
 
 
 def check_ipopt_success(status: str):
-    if status in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found']:
+    if status in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found', 'Search_Direction_Becomes_Too_Small']:
         return True
     else:
         return False
