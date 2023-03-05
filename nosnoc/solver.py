@@ -352,8 +352,6 @@ class NosnocSolver(NosnocSolverBase):
 
     def polish_solution(self, w_guess, lambda00, x0):
         opts = self.opts
-        if opts.pss_mode != PssMode.STEWART:
-            raise NotImplementedError()
         prob = self.problem
 
         eps_sigma = 1e1 * opts.comp_tol
