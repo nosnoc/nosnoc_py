@@ -106,7 +106,7 @@ def plot_trajectory(results, figure_filename=''):
         axs[i].set_ylabel(f'$x_{i+1}$')
         axs[i].grid()
         if i == n_subplot - 1:
-            plt.xlabel('$t$')
+            plt.xlabel('$t$ [min]')
         else:
             axs[i].xaxis.set_ticklabels([])
 
@@ -128,10 +128,10 @@ def plot_algebraic_traj(results, figure_filename=''):
         axs[i].set_xlim(0, TSIM)
         axs[i].set_ylim(0, 1.1*max(alpha_sim[:, i]))
         axs[i].set_ylabel(r'$\alpha_' + f'{i+1}$')
-        axs[i].set_xlabel('$t$')
+        # axs[i].set_xlabel('$t$ [min]')
         axs[i].grid()
         if i == n_subplot - 1:
-            axs[i].set_xlabel('$t$')
+            axs[i].set_xlabel('$t$ [min]')
         else:
             axs[i].xaxis.set_ticklabels([])
 
