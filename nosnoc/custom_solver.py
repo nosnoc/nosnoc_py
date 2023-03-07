@@ -18,12 +18,13 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 DEBUG = False
 
 
-def get_fraction_to_boundary(tau, current, delta, offset=None):
-    # alpha_ref = 1
-    # n = len(delta)
-    # for i in range(n):
-    #     if delta[i] < 0.0:
-    #         alpha_ref = min(- tau * current[i] / delta[i], alpha_ref)
+def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray, offset=Optional[np.ndarray]):
+    """Get fraction to boundary.
+    :param tau: fraction that should be kept from boundary
+    :param current: current value
+    :param delta: derivative value
+    :param offset: offset for affine function
+    """
     if offset is not None:
         delta = delta - offset
     ix = np.where(delta<0)
@@ -118,9 +119,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         if JIT:
             casadi_function_opts = {"compiler": "shell", "jit": True, "jit_options": {"compiler": "gcc", "flags": ["-O3"]}}
 
-        # newton_matrix[:self.nw, :self.nw] += 1e-5 * scipy.sparse.eye(self.nw)
-        # kkt_eq_jac[:self.nw, :self.nw] += 1e-5 * ca.diag((self.nw*[1]))
-
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
         self.G_fun = ca.Function('G_fun', [prob.w, prob.p], [self.G], casadi_function_opts)
@@ -144,17 +142,20 @@ class NosnocCustomSolver(NosnocSolverBase):
         for ii in range(self.nw_pd):
             print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
 
-    def compute_step(self, matrix, rhs):
-        # naive
-        step = np.linalg.solve(matrix, rhs)
-        return step
-
     def compute_step_sparse(self, matrix, rhs):
         # naive
         step = scipy.sparse.linalg.spsolve(matrix, rhs)
         return step
 
     def compute_step_sparse_schur(self, matrix, rhs):
+        # Schur complement:
+        # [ A, B,
+        # C, D]
+        # * [x_1, x_2] = [y_1, y_2]
+        # ->
+        # with S = (A - BD^{-1}C):
+        # x1 = S^{-1}(y_1 - B D^{-1}y_2)
+        # x2 = D^-1 (y2 - C x_1)
         C = matrix[-self.n_mu:, :-self.n_mu]
         # A = matrix[:-self.n_mu, :-self.n_mu]
         B = matrix[:-self.n_mu, -self.n_mu:]
@@ -169,63 +170,8 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         x2 = (y2 - C@x1) * d_diag_inv
         step = np.concatenate((x1, x2))
-
-        return step
-# Schur complement:
-# [ A, B,
-# C, D]
-# * [x_1, x_2] = [y_1, y_2]
-# ->
-# with S = (A - BD^{-1}C):
-# x1 = S^{-1}(y_1 - B D^{-1}y_2)
-# x2 = D^-1 (y2 - C x_1)
-    def compute_step_schur_np(self, matrix, rhs):
-        nwh = self.nw + self.n_H
-        A = matrix[:nwh, :nwh]
-        B = matrix[:nwh, nwh:]
-        C = matrix[nwh:, :nwh]
-        D = matrix[nwh:, nwh:]
-        y1 = rhs[:nwh]
-        y2 = rhs[nwh:]
-
-        # solve_D = scipy.sparse.linalg.factorized(D)
-        # # D_inv_C = solve_D(C)
-        # D_inv_C = np.zeros(C.shape)
-        # for i in range(C.shape[1]):
-        #     D_inv_C[:, i] = solve_D(C[:, i])
-        D_inv_C = np.linalg.solve(D, C)
-
-        S = A - B @ D_inv_C
-        x1_rhs = y1 - B @ np.linalg.solve(D, y2)
-        x1 = np.linalg.solve(S, x1_rhs)
-
-        x2 = np.linalg.solve(D, y2 - C@x1)
-        step = np.concatenate((x1, x2))
-
         return step
 
-    def compute_step_schur_scipy(self, matrix, rhs):
-        nwh = self.nw + self.n_H
-        A = matrix[:nwh, :nwh]
-        B = matrix[:nwh, nwh:]
-        C = matrix[nwh:, :nwh]
-        D = scipy.sparse.csc_matrix(matrix[nwh:, nwh:])
-        y1 = rhs[:nwh]
-        y2 = rhs[nwh:]
-
-        solve_D = scipy.sparse.linalg.factorized(D)
-        D_inv_C = np.zeros(C.shape)
-        for i in range(C.shape[1]):
-            D_inv_C[:, i] = solve_D(C[:, i])
-
-        S = A - B @ D_inv_C
-        x1_rhs = y1 - B @ solve_D(y2)
-        x1 = np.linalg.solve(S, x1_rhs)
-
-        x2 = solve_D(y2 - C@x1)
-        step = np.concatenate((x1, x2))
-
-        return step
 
     def check_newton_matrix(self, matrix):
         upper_left = matrix[:self.nw, :self.nw]
@@ -303,23 +249,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # cond = np.linalg.cond(newton_matrix)
                 # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
 
-                # if DEBUG:
-                #     self.check_newton_matrix(newton_matrix)
-
-                # regularize Lagrange Hessian
-                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * np.eye(n_mu)
-                # newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
-
                 t0_la = time.time()
                 # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
-                # newton_matrix[:self.nw, :self.nw] += 1e-5 * scipy.sparse.eye(self.nw)
 
                 rhs = - kkt_val.full().flatten()
-
-                ## compute step
-                # step = self.compute_step_schur_np(newton_matrix, rhs)
-                # step = self.compute_step_schur_scipy(newton_matrix, rhs)
-                # step = self.compute_step(newton_matrix, rhs)
 
                 step = self.compute_step_sparse(newton_matrix, rhs)
                 # step = self.compute_step_sparse_schur(newton_matrix, rhs)
