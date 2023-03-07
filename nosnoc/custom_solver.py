@@ -156,20 +156,18 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def compute_step_sparse_schur(self, matrix, rhs):
         C = matrix[-self.n_mu:, :-self.n_mu]
-        A = matrix[:-self.n_mu, :-self.n_mu]
+        # A = matrix[:-self.n_mu, :-self.n_mu]
         B = matrix[:-self.n_mu, -self.n_mu:]
         y1 = rhs[:-self.n_mu]
         y2 = rhs[-self.n_mu:]
-        # d_diag = matrix[-self.n_mu:, -self.n_mu:].diagonal()
+        d_diag_inv = 1/matrix[-self.n_mu:, -self.n_mu:].diagonal()
 
         D_inv = scipy.sparse.diags(1.0 / matrix[-self.n_mu:, -self.n_mu:].diagonal())
-        D_inv_C = D_inv @ C
-
-        S = A - B @ D_inv_C
-        x1_rhs = y1 - B @ D_inv @ y2
+        S = matrix[:-self.n_mu, :-self.n_mu] - B @ D_inv @ C
+        x1_rhs = y1 - B @ (y2 * d_diag_inv)
         x1 = scipy.sparse.linalg.spsolve(S, x1_rhs)
 
-        x2 = D_inv @ (y2 - C@x1)
+        x2 = (y2 - C@x1) * d_diag_inv
         step = np.concatenate((x1, x2))
 
         return step
@@ -452,6 +450,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
+            condA = np.linalg.cond((newton_matrix.toarray()))
+            print(f"did not converge with last condition number {condA:.2e}")
             breakpoint()
 
         # self.print_iterate(w_current)
