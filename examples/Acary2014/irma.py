@@ -93,7 +93,7 @@ def solve_irma(opts=None, model=None):
     return results
 
 
-def plot_trajectory(results, figure_filename=''):
+def plot_trajectory(results, figure_filename=None):
     nosnoc.latexify_plot()
 
     n_subplot = len(X0)
@@ -110,13 +110,13 @@ def plot_trajectory(results, figure_filename=''):
         else:
             axs[i].xaxis.set_ticklabels([])
 
-    if figure_filename != '':
+    if figure_filename is not None:
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 
     plt.show()
 
-def plot_algebraic_traj(results, figure_filename=''):
+def plot_algebraic_traj(results, figure_filename=None):
     nosnoc.latexify_plot()
     alpha_sim = np.array([results['alpha_sim'][0][0]] + nosnoc.flatten_layer(results['alpha_sim']))
     n_subplot = len(alpha_sim[0])
@@ -135,7 +135,7 @@ def plot_algebraic_traj(results, figure_filename=''):
         else:
             axs[i].xaxis.set_ticklabels([])
 
-    if figure_filename != '':
+    if figure_filename is not None:
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 
