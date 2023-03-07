@@ -311,7 +311,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # newton_matrix[:self.nw, :self.nw] += 1e-5 * np.eye(self.nw)
 
                 t0_la = time.time()
-                newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
+                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
                 # newton_matrix[:self.nw, :self.nw] += 1e-5 * scipy.sparse.eye(self.nw)
 
                 rhs = - kkt_val.full().flatten()
