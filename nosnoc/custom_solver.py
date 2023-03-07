@@ -330,6 +330,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                     max_mu = np.max(self.get_mu(w_current))
                     print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
 
+            # NOTE: tried resetting mu to 1e-4 if it is too small, but this does not help
+            # min_mu = np.min(self.get_mu(w_current))
+            # if ii < opts.max_iter_homotopy - 1:
+            #     w_current[-n_mu:] = np.maximum(w_current[-n_mu:], 1e-4)
+            # min_mu_new = np.min(self.get_mu(w_current))
+            # print(f"min_mu = {min_mu:.2e}, min_mu_new = {min_mu_new:.2e}")
+
             cpu_time_nlp[ii] = time.time() - t
 
             # print and process solution
