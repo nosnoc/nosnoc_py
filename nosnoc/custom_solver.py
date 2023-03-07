@@ -18,20 +18,19 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 DEBUG = False
 
 
-def get_fraction_to_boundary(tau, current, delta):
+def get_fraction_to_boundary(tau, current, delta, offset=None):
     # alpha_ref = 1
     # n = len(delta)
     # for i in range(n):
     #     if delta[i] < 0.0:
     #         alpha_ref = min(- tau * current[i] / delta[i], alpha_ref)
-
+    if offset is not None:
+        delta = delta - offset
     ix = np.where(delta<0)
     if len(ix[0]) == 0:
         return 1.0
     else:
         return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
-
-    return alpha
 
 class NosnocCustomSolver(NosnocSolverBase):
     def _setup_G(self) -> ca.SX:
@@ -263,7 +262,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G")
 
         w_candidate = w_current.copy()
-        max_gn_iter = 30
+        max_gn_iter = 40
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
@@ -374,7 +373,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                     #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
                     #  )
                 elif opts.print_level > 1:
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
+                    min_mu = np.min(self.get_mu(w_current))
+                    max_mu = np.max(self.get_mu(w_current))
+                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
 
             cpu_time_nlp[ii] = time.time() - t
 
@@ -425,10 +426,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f}")
 
-        if nlp_res < opts.sigma_N:
+        if nlp_res < sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
+            breakpoint()
 
         # self.print_iterate(w_current)
         return results
