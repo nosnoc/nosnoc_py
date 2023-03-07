@@ -124,6 +124,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.G_fun = ca.Function('G_fun', [prob.w], [self.G], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
+        # precompute
+        self.G_offset = self.G_fun(np.zeros((self.nw,))).full().flatten()
+
         self.n_comp = n_comp
         self.n_H = n_H
         kkt_block_sizes = [self.nw, n_comp, n_H, n_comp, nG, n_comp]
@@ -214,6 +217,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
         sigma_k = opts.sigma_0
+
+        # TODO: make this options
+        max_gn_iter = 40
+        # line search
+        tau_min = .99 # .99 is IPOPT default
+        rho = 0.9
+        gamma = .3
+        alpha_min = 0.05
+
         # timers
         t_la = 0.0
         t_ls = 0.0
@@ -226,7 +238,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G")
 
         w_candidate = w_current.copy()
-        max_gn_iter = 40
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
@@ -243,53 +254,44 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 t0_ca = time.time()
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
-                newton_matrix = jac_kkt_val.sparse()
                 t_ca += time.time() - t0_ca
 
+                nlp_res = ca.norm_inf(kkt_val).full()[0][0]
+                if nlp_res < sigma_k / 10:
+                    break
+
+                newton_matrix = jac_kkt_val.sparse()
+                rhs = - kkt_val.full().flatten()
                 # cond = np.linalg.cond(newton_matrix)
                 # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
 
                 t0_la = time.time()
-                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
-
-                rhs = - kkt_val.full().flatten()
-
                 step = self.compute_step_sparse(newton_matrix, rhs)
                 # step = self.compute_step_sparse_schur(newton_matrix, rhs)
                 t_la += time.time() - t0_la
 
-                step_norm = np.linalg.norm(step)
-                nlp_res = casadi_inf_norm_nan(kkt_val)
-                if step_norm < sigma_k or nlp_res < sigma_k / 10:
+                step_norm = np.max(np.abs(step))
+                if step_norm < sigma_k:
                     break
 
-                ## LINE SEARCH
                 t0_ls = time.time()
-                # fraction to boundary
-                tau_min = .99 # .99 is IPOPT default
-                tau_j = max(tau_min, 1-tau_val)
-                # tau_j = tau_min # dont use so large tau for now
 
+                ## LINE SEARCH + fraction to boundary
+                tau_j = max(tau_min, 1-tau_val)
                 # compute alpha_mu_k
-                mu_current = self.get_mu(w_current)
-                mu_step = self.get_mu(step)
-                alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step, offset=None)
-                w_candidate[-n_mu:] = mu_current + alpha_mu * mu_step
+                alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
+                w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
                 # fraction to boundary G1, G2 > 0
                 G_val = self.G_fun(w_current[:self.nw]).full().flatten()
                 G_delta_val = self.G_fun(step[:self.nw]).full().flatten()
-                G_offset = self.G_fun(np.zeros((self.nw,))).full().flatten()
-                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=G_offset)
+                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
                 # line search:
                 alpha = alpha_k_max
-                rho = 0.9
-                gamma = .3
-                alpha_min = 0.05
                 while True:
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
-                    step_res_norm = casadi_inf_norm_nan(self.kkt_eq_fun(w_candidate, p_val))
+                    step_res_norm = ca.norm_inf(self.kkt_eq_fun(w_candidate, p_val)).full()[0][0]
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
                     elif alpha < alpha_min:
@@ -298,22 +300,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                     else:
                         alpha *= rho
 
-                # if step_res_norm > nlp_res:
-                #     print(f"alpha = {alpha:.2e}, alpha_k_max = {alpha_k_max:.2e}, alpha_mu = {alpha_mu:.2e}")
-                #     print(f"residual increase from {nlp_res:.2e} to {step_res_norm:.2e}")
-                    # breakpoint()
-
                 # do step!
                 w_current = w_candidate.copy()
                 t_ls += time.time() - t0_ls
-
-
-                # G_val_new = self.G_fun(w_current[:self.nw], p_val).full().flatten()
-                # if any(G_val_new < 0):
-                #     print("got G_val_new < 0")
-                #     print(f"{alpha=}, {alpha_k_max=}")
-                #     print(f"{G_val_new=}")
-                #     breakpoint()
 
                 if DEBUG:
                     maxA = np.max(np.abs(newton_matrix))
@@ -345,8 +334,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             # cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_all.append(w_current)
 
-            complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
-            complementarity_stats[ii] = complementarity_residual
             if opts.print_level > 1:
                 print(f"sigma = {sigma_k:.2e}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
             elif opts.print_level == 1:
@@ -354,10 +341,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 max_mu = np.max(self.get_mu(w_current))
                 print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t")
 
-            if complementarity_residual < opts.comp_tol:
-                break
-            if sigma_k <= opts.sigma_N:
-                break
+            # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
+            # complementarity_stats[ii] = complementarity_residual
+            # if complementarity_residual < opts.comp_tol:
+            #     break
 
             # Update the homotopy parameter.
             if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
@@ -384,7 +371,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         sum_iter = sum([i for i in nlp_iter if i is not None])
         total_time = sum([i for i in cpu_time_nlp if i is not None])
-        print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f}")
+        print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
         if nlp_res < sigma_k:
             results["status"] = Status.SUCCESS
