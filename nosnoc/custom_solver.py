@@ -153,6 +153,26 @@ class NosnocCustomSolver(NosnocSolverBase):
         # naive
         step = scipy.sparse.linalg.spsolve(matrix, rhs)
         return step
+
+    def compute_step_sparse_schur(self, matrix, rhs):
+        C = matrix[-self.n_mu:, :-self.n_mu]
+        A = matrix[:-self.n_mu, :-self.n_mu]
+        B = matrix[:-self.n_mu, -self.n_mu:]
+        y1 = rhs[:-self.n_mu]
+        y2 = rhs[-self.n_mu:]
+        # d_diag = matrix[-self.n_mu:, -self.n_mu:].diagonal()
+
+        D_inv = scipy.sparse.diags(1.0 / matrix[-self.n_mu:, -self.n_mu:].diagonal())
+        D_inv_C = D_inv @ C
+
+        S = A - B @ D_inv_C
+        x1_rhs = y1 - B @ D_inv @ y2
+        x1 = scipy.sparse.linalg.spsolve(S, x1_rhs)
+
+        x2 = D_inv @ (y2 - C@x1)
+        step = np.concatenate((x1, x2))
+
+        return step
 # Schur complement:
 # [ A, B,
 # C, D]
@@ -298,12 +318,13 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 rhs = - kkt_val.full().flatten()
 
-
                 ## compute step
                 # step = self.compute_step_schur_np(newton_matrix, rhs)
                 # step = self.compute_step_schur_scipy(newton_matrix, rhs)
                 # step = self.compute_step(newton_matrix, rhs)
+
                 step = self.compute_step_sparse(newton_matrix, rhs)
+                # step = self.compute_step_sparse_schur(newton_matrix, rhs)
                 t_la += time.time() - t0_la
 
                 step_norm = np.linalg.norm(step)
