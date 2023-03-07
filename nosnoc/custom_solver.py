@@ -342,13 +342,14 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # compute alpha_mu_k
                 mu_current = self.get_mu(w_current)
                 mu_step = self.get_mu(step)
-                alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step)
+                alpha_mu = get_fraction_to_boundary(tau_j, mu_current, mu_step, offset=None)
                 w_candidate[-n_mu:] = mu_current + alpha_mu * mu_step
 
                 # fraction to boundary G1, G2 > 0
                 G_val = self.G_fun(w_current[:self.nw], p_val).full().flatten()
                 G_delta_val = self.G_fun(step[:self.nw], p_val).full().flatten()
-                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val)
+                G0 = self.G_fun(np.zeros((self.nw,)), p_val).full().flatten()
+                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=G0)
 
                 # line search:
                 alpha = alpha_k_max
