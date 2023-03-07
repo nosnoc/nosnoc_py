@@ -24,8 +24,7 @@ def latexify_plot():
     matplotlib.rcParams.update(params)
 
 
-def plot_timings(timings: np.ndarray, latexify=True, title='', figure_filename=''):
-    # latexify plot
+def plot_timings(timings: np.ndarray, latexify=True, title=None, figure_filename=None):
     if latexify:
         latexify_plot()
 
@@ -51,8 +50,9 @@ def plot_timings(timings: np.ndarray, latexify=True, title='', figure_filename='
     plt.legend()
     plt.xlim(x_range)
     plt.grid(alpha=0.3)
-    plt.title(title)
-    if figure_filename != '':
+    if title is not None:
+        plt.title(title)
+    if figure_filename is not None:
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 
@@ -63,9 +63,8 @@ def plot_iterates(problem: NosnocProblem,
                   iterates: list,
                   latexify=False,
                   title_list=[],
-                  figure_filename=''):
+                  figure_filename=None):
 
-    # latexify plot
     if latexify:
         latexify_plot()
 
@@ -121,7 +120,7 @@ def plot_iterates(problem: NosnocProblem,
         plt.grid(alpha=0.3)
         plt.legend()
 
-    if figure_filename != '':
+    if figure_filename is not None:
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
 

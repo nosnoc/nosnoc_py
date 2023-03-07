@@ -11,7 +11,9 @@ class NosnocSimLooper:
                  x0: np.ndarray,
                  Nsim: int,
                  p_values: Optional[np.ndarray] = None,
-                 w_init: Optional[list] = None):
+                 w_init: Optional[list] = None,
+                 print_level: Optional[int] = None
+                ):
         """
         :param solver: NosnocSolver to be called in a loop
         :param x0: np.ndarray: initial state
@@ -44,6 +46,11 @@ class NosnocSimLooper:
         self.w_all = []
         self.cost_vals = []
         self.w_init = w_init
+        if print_level is not None:
+            self.print_level = print_level
+        else:
+            self.print_level = solver.opts.print_level
+        self.status = []
 
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + 1))
 
@@ -69,6 +76,9 @@ class NosnocSimLooper:
             self.w_sim += [results["w_sol"]]
             self.w_all += [results["w_all"]]
             self.cost_vals.append(results["cost_val"])
+            self.status.append(results["status"])
+            if self.print_level > 0:
+                print(f"Sim step {i + 1}/{self.Nsim}\t status: {results['status']}")
 
     def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))
@@ -79,8 +89,10 @@ class NosnocSimLooper:
             "t_grid": self.t_grid,
             "theta_sim": self.theta_sim,
             "lambda_sim": self.lambda_sim,
+            "alpha_sim": self.alpha_sim,
             "w_sim": self.w_sim,
             "w_all": self.w_all,
-            "cost_vals": self.cost_vals
+            "cost_vals": self.cost_vals,
+            "status": self.status,
         }
         return results

@@ -598,6 +598,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha[ctrl_idx].append(increment_indices(fe.ind_alpha, w_len))
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
+        self.ind_z[ctrl_idx].append(increment_indices(fe.ind_z, w_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: ca.SX, lb: np.array, ub, initial):
@@ -656,6 +657,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
+        self.ind_z = create_empty_list_matrix((opts.N_stages,))
 
         self.ind_u = []
         self.ind_h = []

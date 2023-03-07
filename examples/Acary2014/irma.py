@@ -35,6 +35,9 @@ def get_default_options():
     opts.n_s = 2
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.pss_mode = nosnoc.PssMode.STEP
+    opts.print_level = 0
+    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.LINEAR
+
     return opts
 
 
@@ -90,30 +93,67 @@ def solve_irma(opts=None, model=None):
     return results
 
 
-def plot_results(results):
+def plot_trajectory(results, figure_filename=None):
     nosnoc.latexify_plot()
 
-    plt.figure()
-    for i in range(len(X0)):
-        plt.subplot(5, 1, i+1)
-        plt.plot(results["t_grid"], results["X_sim"][:, i])
-        plt.hlines(thresholds[i], xmin=0, xmax=1000, linestyles='dotted')
-        plt.xlim(0, 1000)
-        plt.ylim(0, 1.1*max(results["X_sim"][:, i]))
-        plt.ylabel(f'$x_{i+1}$')
-        plt.xlabel('$t$')
+    n_subplot = len(X0)
+    fig, axs = plt.subplots(n_subplot, 1)
+    for i in range(n_subplot):
+        axs[i].plot(results["t_grid"], results["X_sim"][:, i])
+        axs[i].hlines(thresholds[i], xmin=0, xmax=TSIM, linestyles='dotted')
+        axs[i].set_xlim(0, TSIM)
+        axs[i].set_ylim(0, 1.1*max(results["X_sim"][:, i]))
+        axs[i].set_ylabel(f'$x_{i+1}$')
+        axs[i].grid()
+        if i == n_subplot - 1:
+            plt.xlabel('$t$ [min]')
+        else:
+            axs[i].xaxis.set_ticklabels([])
+
+    if figure_filename is not None:
+        plt.savefig(figure_filename)
+        print(f'stored figure as {figure_filename}')
+
     plt.show()
 
+def plot_algebraic_traj(results, figure_filename=None):
+    nosnoc.latexify_plot()
+    alpha_sim = np.array([results['alpha_sim'][0][0]] + nosnoc.flatten_layer(results['alpha_sim']))
+    n_subplot = len(alpha_sim[0])
+
+    fig, axs = plt.subplots(n_subplot, 1)
+    for i in range(n_subplot):
+        axs[i].plot(results["t_grid"], alpha_sim[:,i])
+        # axs[i].hlines(thresholds[i], xmin=0, xmax=TSIM, linestyles='dotted')
+        axs[i].set_xlim(0, TSIM)
+        axs[i].set_ylim(0, 1.1*max(alpha_sim[:, i]))
+        axs[i].set_ylabel(r'$\alpha_' + f'{i+1}$')
+        # axs[i].set_xlabel('$t$ [min]')
+        axs[i].grid()
+        if i == n_subplot - 1:
+            axs[i].set_xlabel('$t$ [min]')
+        else:
+            axs[i].xaxis.set_ticklabels([])
+
+    if figure_filename is not None:
+        plt.savefig(figure_filename)
+        print(f'stored figure as {figure_filename}')
+
+    plt.show()
 
 # EXAMPLE
 def example():
     opts = get_default_options()
     opts.print_level = 1
-    results = []
+
     model = get_irma_model(SWITCH_ON, LIFTING)
     results = solve_irma(opts=opts, model=model)
 
-    plot_results(results)
+    plot_algebraic_traj(results)
+    plot_trajectory(results)
+
+    # plot_algebraic_traj(results, figure_filename='irma_algebraic_traj.pdf')
+    # plot_trajectory(results, figure_filename='irma_traj.pdf')
 
 
 if __name__ == "__main__":

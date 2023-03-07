@@ -4,6 +4,7 @@ env
 *.egg-info
 
 *.pdf
+*.gif
 
 private*
 external

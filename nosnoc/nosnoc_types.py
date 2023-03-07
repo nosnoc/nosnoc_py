@@ -86,3 +86,8 @@ class PssMode(Enum):
     lambda_p_i >= 0;    for all i = 1,..., n_sys
     alpha_i >= 0;     for all i = 1,..., n_sys
     """
+
+
+class Status(Enum):
+    SUCCESS = auto()
+    INFEASIBLE = auto()

@@ -8,11 +8,11 @@ import time
 
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling
+from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
 from nosnoc.rk_utils import rk4_on_timegrid
-from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, flatten_outer_layers
+from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, flatten_outer_layers, check_ipopt_success
 
 
 class NosnocSolverBase(ABC):
@@ -293,7 +293,7 @@ class NosnocSolver(NosnocSolverBase):
             if opts.print_level:
                 self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
-            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found']:
+            if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
 
             if complementarity_residual < opts.comp_tol:
@@ -312,9 +312,8 @@ class NosnocSolver(NosnocSolverBase):
                         sigma_k**opts.homotopy_update_exponent))
 
         if opts.do_polishing_step:
-            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish -
-                                                             1] = self.polish_solution(
-                                                                 w_opt, lambda00, x0)
+            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
+                                            self.polish_solution(w_opt, lambda00, x0)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -342,14 +341,17 @@ class NosnocSolver(NosnocSolverBase):
         results["w_sol"] = w_opt
         results["cost_val"] = cost_val
 
+        if check_ipopt_success(status):
+            results["status"] = Status.SUCCESS
+        else:
+            results["status"] = Status.INFEASIBLE
+
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
     def polish_solution(self, w_guess, lambda00, x0):
         opts = self.opts
-        if opts.pss_mode != PssMode.STEWART:
-            raise NotImplementedError()
         prob = self.problem
 
         eps_sigma = 1e1 * opts.comp_tol
@@ -357,7 +359,7 @@ class NosnocSolver(NosnocSolverBase):
         ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
                           prob.ind_theta + prob.ind_mu)
         ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v)
+                               prob.ind_v + prob.ind_z)
         # sanity check
         ind_all = ind_set + ind_dont_set
         for iw in range(len(w_guess)):
@@ -413,7 +415,7 @@ class NosnocSolver(NosnocSolverBase):
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
 
-        return w_opt, cpu_time_nlp, nlp_iter
+        return w_opt, cpu_time_nlp, nlp_iter, status
 
 
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:

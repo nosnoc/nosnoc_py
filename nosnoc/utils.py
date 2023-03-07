@@ -3,6 +3,13 @@ from typing import Union, List, get_origin, get_args
 import casadi as ca
 
 
+def make_object_json_dumpable(input):
+    if isinstance(input, (np.ndarray)):
+        return input.tolist()
+    else:
+        raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
+
+
 def validate(obj: object) -> bool:
     for attr, expected_type in obj.__annotations__.items():
         value = getattr(obj, attr)
@@ -53,6 +60,12 @@ def casadi_sum_list(input: list):
         result += v
     return result
 
+
+def check_ipopt_success(status: str):
+    if status in ['Solve_Succeeded', 'Solved_To_Acceptable_Level', 'Feasible_Point_Found', 'Search_Direction_Becomes_Too_Small']:
+        return True
+    else:
+        return False
 
 # Note this is not generalized, it expects equivalent depth, greater than `layer`
 def flatten_layer(L: list, layer: int = 0):
