@@ -166,6 +166,8 @@ class NosnocModel:
                         raise ValueError(
                             f"model.F item {i} and S {i} should have the same number of columns")
         else:  # Only check Step because Stewart is not allowed for general inclusions
+            if opts.pss_mode == PssMode.STEWART:
+                raise ValueError("model formulation with general inclusions using model.f_x is not supported with PssMode.STEWART")
             n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
