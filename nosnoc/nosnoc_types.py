@@ -91,3 +91,4 @@ class PssMode(Enum):
 class Status(Enum):
     SUCCESS = auto()
     INFEASIBLE = auto()
+    NOT_CONVERGED = auto()

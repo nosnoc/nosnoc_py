@@ -11,7 +11,7 @@ import casadi as ca
 from nosnoc.problem import NosnocModel, NosnocOcp
 from nosnoc.solver import NosnocSolverBase, get_results_from_primal_vector
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling
+from nosnoc.nosnoc_types import MpccMode, InitializationStrategy, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, HomotopyUpdateRule, ConstraintHandling, Status
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list, print_casadi_vector, casadi_length, casadi_inf_norm_nan, flatten
 from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnitude_plot_with_sign
 
@@ -424,6 +424,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         sum_iter = sum([i for i in nlp_iter if i is not None])
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f}")
+
+        if nlp_res < opts.sigma_N:
+            results["status"] = Status.SUCCESS
+        else:
+            results["status"] = Status.NOT_CONVERGED
 
         # self.print_iterate(w_current)
         return results
