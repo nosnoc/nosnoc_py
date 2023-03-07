@@ -207,7 +207,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
         slack0 = np.ones((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, lampd0, slack0, self.mu_pd_0))
+        w_pd_0 = np.concatenate((prob.w0, slack0, lampd0, self.mu_pd_0))
 
         w_current = w_pd_0
 
@@ -261,6 +261,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                     break
 
                 newton_matrix = jac_kkt_val.sparse()
+                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
+                # print(f"cond(A) = {np.linalg.cond(newton_matrix.toarray()):.2e}")
                 rhs = - kkt_val.full().flatten()
                 # cond = np.linalg.cond(newton_matrix)
                 # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
@@ -339,7 +341,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             elif opts.print_level == 1:
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
-                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t")
+                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t{np.max(G_val):.2e}")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
@@ -380,6 +382,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             condA = np.linalg.cond((newton_matrix.toarray()))
             print(f"did not converge with last condition number {condA:.2e}")
             breakpoint()
+            # TODO: check:
+            #  w_current[-(self.n_mu+self.n_comp):-self.n_mu]
 
         # self.print_iterate(w_current)
         return results
