@@ -55,6 +55,7 @@ def plot_timings(timings: np.ndarray, latexify=True, title=None, figure_filename
     if figure_filename is not None:
         plt.savefig(figure_filename)
         print(f'stored figure as {figure_filename}')
+    print(f"mean CPU/step: {mean_cpu:.3f}")
 
     plt.show()
 
