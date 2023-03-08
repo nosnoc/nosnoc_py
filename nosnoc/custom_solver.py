@@ -121,11 +121,11 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
-        self.G_fun = ca.Function('G_fun', [prob.w], [self.G], casadi_function_opts)
+        self.G_fun = ca.Function('G_fun', [w_pd], [self.G], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
         # precompute
-        self.G_offset = self.G_fun(np.zeros((self.nw,))).full().flatten()
+        self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
 
         self.n_comp = n_comp
         self.n_H = n_H
@@ -284,13 +284,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
                 w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
-                # fraction to boundary G1, G2 > 0
-                G_val = self.G_fun(w_current[:self.nw]).full().flatten()
-                G_delta_val = self.G_fun(step[:self.nw]).full().flatten()
-                alpha_k_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                # fraction to boundary G, s > 0
+                G_val = self.G_fun(w_current).full().flatten()
+                G_delta_val = self.G_fun(step).full().flatten()
+                alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
                 # line search:
-                alpha = alpha_k_max
+                alpha = alpha_max
                 while True:
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     step_res_norm = ca.norm_inf(self.kkt_eq_fun(w_candidate, p_val)).full()[0][0]
