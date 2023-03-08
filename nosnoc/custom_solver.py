@@ -154,6 +154,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         for ii in range(casadi_length(self.G)):
             print(f"{ii}\t{self.G[ii].name():17}\t{G_val[ii]:.2e}")
 
+    def print_kkt_residual(self, kkt_res):
+        for ii in range(self.nw_pd):
+            eq_str = str(self.kkt_eq[ii])
+            print(f"{eq_str:20}\t{kkt_res[ii]:.2e}")
+
     def compute_step_sparse(self, matrix, rhs):
         # naive
         step = scipy.sparse.linalg.spsolve(matrix, rhs)
@@ -232,13 +237,13 @@ class NosnocCustomSolver(NosnocSolverBase):
         sigma_k = opts.sigma_0
 
         # TODO: make this options
-        max_gn_iter = 40
+        max_gn_iter = 50
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
         gamma = .3
         alpha_min = 0.01
-        kappaSigma = 1e10
+        kappaSigma = 1e9 # 1e10 is IPOPT default
 
         # timers
         t_la = 0.0
@@ -288,7 +293,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 t_la += time.time() - t0_la
 
                 step_norm = np.max(np.abs(step))
-                if step_norm < sigma_k:
+                if step_norm < sigma_k / 10:
                     break
 
                 t0_ls = time.time()
@@ -332,7 +337,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                     new = max(min(w_current[-n_mu+i], kappaSigma * tau_val / G_val[i]), tau_val/(kappaSigma * G_val[i]))
                     # if new != w_current[-n_mu+i]:
                     #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
-                    #     self.print_G_val(G_val)
+                        # breakpoint()
+                        # self.print_G_val(G_val)
+                        # self.print_kkt_residual(kkt_val.full().flatten())
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
@@ -390,7 +397,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         results = get_results_from_primal_vector(prob, w_current)
 
         if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
-            prob.w0[:] = w_current[:]
+            prob.w0[:] = w_current[:self.nw]
         # stats
         results["cpu_time_nlp"] = cpu_time_nlp
         results["nlp_iter"] = nlp_iter
