@@ -18,7 +18,7 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 DEBUG = False
 
 
-def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray, offset=Optional[np.ndarray]):
+def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray, offset: Optional[np.ndarray]=None):
     """Get fraction to boundary.
     :param tau: fraction that should be kept from boundary
     :param current: current value
