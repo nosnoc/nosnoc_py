@@ -237,7 +237,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
         gamma = .3
-        alpha_min = 0.05
+        alpha_min = 0.01
         kappaSigma = 1e10
 
         # timers
@@ -310,15 +310,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                 G_delta_val = self.G_fun(step).full().flatten()
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
-                # fraction to boundary lambda_comp
-                # alpha_max_lam_comp = get_fraction_to_boundary(tau_j, self.get_lambda_comp(w_current), self.get_lambda_comp(step), offset=None)
-                # alpha_max = min(alpha_max, alpha_max_lam_comp)
-                # if alpha_max < alpha_min:
-                #     print(f"alpha_max = {alpha_max:.2e} < alpha_min = {alpha_min:.2e}, alpha_mu = {alpha_mu:.2e}, nlp_res = {nlp_res:.2e}")
-                #     breakpoint()
-
                 # line search:
                 alpha = alpha_max
+                # alpha_min_k = min(alpha_min, alpha_max * 0.1)
                 while True:
                     if alpha < alpha_min:
                         alpha_min_counter += 1
@@ -339,9 +333,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                     # if new != w_current[-n_mu+i]:
                     #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
                     #     self.print_G_val(G_val)
-                    # if np.isnan(new):
-                    #     print("new is nan, probably becaause G is not initialized in interior")
-                    #     breakpoint()
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
