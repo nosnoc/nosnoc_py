@@ -222,7 +222,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         max_gn_iter = 40
         # line search
         tau_min = .99 # .99 is IPOPT default
-        rho = 0.9
+        rho = 0.9 # factor to shrink alpha in line search
         gamma = .3
         alpha_min = 0.05
 
