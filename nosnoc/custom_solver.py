@@ -309,16 +309,19 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # fraction to boundary lambda_comp
                 # alpha_max_lam_comp = get_fraction_to_boundary(tau_j, self.get_lambda_comp(w_current), self.get_lambda_comp(step), offset=None)
                 # alpha_max = min(alpha_max, alpha_max_lam_comp)
+                # if alpha_max < alpha_min:
+                #     print(f"alpha_max = {alpha_max:.2e} < alpha_min = {alpha_min:.2e}, alpha_mu = {alpha_mu:.2e}, nlp_res = {nlp_res:.2e}")
+                #     breakpoint()
 
                 # line search:
                 alpha = alpha_max
                 while True:
+                    if alpha < alpha_min:
+                        alpha_min_counter += 1
+                        break
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     step_res_norm = ca.norm_inf(self.kkt_eq_fun(w_candidate, p_val)).full()[0][0]
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
-                        break
-                    elif alpha < alpha_min:
-                        alpha_min_counter += 1
                         break
                     else:
                         alpha *= rho
