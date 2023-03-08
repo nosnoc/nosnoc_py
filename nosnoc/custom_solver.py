@@ -301,6 +301,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 G_delta_val = self.G_fun(step).full().flatten()
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
+                # fraction to boundary lambda_comp
                 # alpha_max_lam_comp = get_fraction_to_boundary(tau_j, self.get_lambda_comp(w_current), self.get_lambda_comp(step), offset=None)
                 # alpha_max = min(alpha_max, alpha_max_lam_comp)
 
