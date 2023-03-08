@@ -64,8 +64,9 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # setup primal dual variables:
         lam_H = ca.SX.sym('lam_H', n_H)
-        lam_comp = ca.SX.sym('lam_comp', n_comp)
-        lam_pd = ca.vertcat(lam_H, lam_comp)
+        # lam_comp = ca.SX.sym('lam_comp', n_comp)
+        # lam_pd = ca.vertcat(lam_H, lam_comp)
+        lam_pd = ca.vertcat(lam_H)
         self.lam_pd_0 = np.zeros((casadi_length(lam_pd),))
 
         mu_G = ca.SX.sym('mu_G', nG)
@@ -92,14 +93,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         slacked_complementarity = slack - self.slack0_expr
         stationarity_w = ca.jacobian(prob.cost, prob.w).T \
             + ca.jacobian(H, prob.w).T @ lam_H \
-            + ca.jacobian(slacked_complementarity, prob.w).T @ lam_comp \
+            + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
             - ca.jacobian(self.G, prob.w).T @ mu_G \
             - ca.jacobian(slack, prob.w).T @ mu_s
 
-        stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
-             - ca.jacobian(slack, slack).T @ mu_s
+        # stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
+        #      - ca.jacobian(slack, slack).T @ mu_s
+        # kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
 
-        kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
+        kkt_eq_without_comp = ca.vertcat(stationarity_w, H, slacked_complementarity)
 
         # treat IP complementarities:
         kkt_comp = []
@@ -188,8 +190,8 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
 
-    def get_lambda_comp(self, w_current):
-        return w_current[self.nw + self.n_comp + self.n_H: self.nw + 2*self.n_comp+self.n_H]
+    # def get_lambda_comp(self, w_current):
+    #     return w_current[self.nw + self.n_comp + self.n_H: self.nw + 2*self.n_comp+self.n_H]
 
     def solve(self) -> dict:
         """
@@ -209,7 +211,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                  np.array([opts.sigma_0, tau_val]), lambda00, x0))
 
         lamH0 = 1.0 * np.ones((self.n_H,))
-        lampd0 = np.concatenate((lamH0, np.ones(self.n_comp,)))
+        lampd0 = lamH0
+        # lampd0 = np.concatenate((lamH0, np.ones(self.n_comp,)))
 
         # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
         slack0 = np.ones((self.n_comp,))
@@ -289,6 +292,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 tau_j = max(tau_min, 1-tau_val)
                 # compute alpha_mu_k
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
+                # update mu
                 w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
                 # compute new nlp residual after mu step
@@ -332,8 +336,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                 elif opts.print_level > 1:
                     min_mu = np.min(self.get_mu(w_current))
                     max_mu = np.max(self.get_mu(w_current))
-                    min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t {min_lam_comp:.2e}")
+                    # min_lam_comp = np.min(self.get_lambda_comp(w_current))
+                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
 
             # NOTE: tried resetting mu to 1e-4 if it is too small, but this does not help
             # min_mu = np.min(self.get_mu(w_current))
@@ -353,8 +357,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             elif opts.print_level == 1:
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
-                min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t{min_lam_comp:.2e}")
+                # min_lam_comp = np.min(self.get_lambda_comp(w_current))
+                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
@@ -394,7 +398,10 @@ class NosnocCustomSolver(NosnocSolverBase):
             results["status"] = Status.NOT_CONVERGED
             condA = np.linalg.cond((newton_matrix.toarray()))
             print(f"did not converge with last condition number {condA:.2e}")
-            np.argmax(kkt_val)
+            ikkt = np.argmax(kkt_val)
+            print(f"biggest KKT res at {ikkt} with value {self.kkt_eq[ikkt]} = {kkt_val.full()[ikkt][0]:.2e}")
+            print("continue to print iterate and step")
+            breakpoint()
             self.print_iterates([w_current, step])
             breakpoint()
             # TODO: check:
