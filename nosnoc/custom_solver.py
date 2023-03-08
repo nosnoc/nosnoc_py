@@ -332,6 +332,17 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # do step!
                 w_current = w_candidate.copy()
+                G_val = self.G_fun(w_current).full().flatten()
+                # Waechter2006 eq (16): "Primal-dual barrier term Hessian should not deviate arbitrarily much from primal Hessian"
+                for i in range(n_mu):
+                    new = max(min(w_current[-n_mu+i], kappaSigma * tau_val / G_val[i]), tau_val/(kappaSigma * G_val[i]))
+                    # if new != w_current[-n_mu+i]:
+                    #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
+                    #     self.print_G_val(G_val)
+                    # if np.isnan(new):
+                    #     print("new is nan, probably becaause G is not initialized in interior")
+                    #     breakpoint()
+                    w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
                 if DEBUG:
