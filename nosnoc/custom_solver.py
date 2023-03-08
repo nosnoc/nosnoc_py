@@ -57,25 +57,26 @@ class NosnocCustomSolver(NosnocSolverBase):
         n_comp = casadi_length(G1)
         n_H = casadi_length(H)
 
-        # G = (G1, G2) \geq 0
-        self.G = self._setup_G()
-        nG = casadi_length(self.G)
-
-
         # setup primal dual variables:
+        slack = ca.SX.sym('slack', n_comp)
+
         lam_H = ca.SX.sym('lam_H', n_H)
         # lam_comp = ca.SX.sym('lam_comp', n_comp)
         # lam_pd = ca.vertcat(lam_H, lam_comp)
         lam_pd = ca.vertcat(lam_H)
         self.lam_pd_0 = np.zeros((casadi_length(lam_pd),))
 
+        # G = (G1, G2, s) \geq 0
+        self.G_no_slack = self._setup_G()
+        nG = casadi_length(self.G_no_slack)
+        self.G = ca.vertcat(self.G_no_slack, slack)
+
         mu_G = ca.SX.sym('mu_G', nG)
         mu_s = ca.SX.sym('mu_s', n_comp)
         mu_pd = ca.vertcat(mu_G, mu_s)
         self.mu_pd_0 = np.ones((casadi_length(mu_pd),))
-        self.n_mu = nG + n_comp
+        self.n_mu = casadi_length(mu_pd)
 
-        slack = ca.SX.sym('slack', n_comp)
         w_pd = ca.vertcat(prob.w, slack, lam_pd, mu_pd)
 
         self.w_pd = w_pd
@@ -94,8 +95,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         stationarity_w = ca.jacobian(prob.cost, prob.w).T \
             + ca.jacobian(H, prob.w).T @ lam_H \
             + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
-            - ca.jacobian(self.G, prob.w).T @ mu_G \
-            - ca.jacobian(slack, prob.w).T @ mu_s
+            - ca.jacobian(self.G, prob.w).T @ mu_pd
 
         # stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
         #      - ca.jacobian(slack, slack).T @ mu_s
@@ -234,6 +234,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         rho = 0.9 # factor to shrink alpha in line search
         gamma = .3
         alpha_min = 0.05
+        kappaSigma = 1e10
 
         # timers
         t_la = 0.0
