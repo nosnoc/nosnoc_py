@@ -131,7 +131,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         self.n_comp = n_comp
         self.n_H = n_H
-        kkt_block_sizes = [self.nw, n_comp, n_H, n_comp, nG, n_comp]
+        kkt_block_sizes = [self.nw, n_comp, n_H, nG, n_comp]
         self.kkt_eq_offsets = [0]  + np.cumsum(kkt_block_sizes).tolist()
 
         print(f"created primal dual problem with {casadi_length(w_pd)} variables and {casadi_length(kkt_eq)} equations, {n_comp=}, {self.nw=}, {n_H=}")
@@ -198,9 +198,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
-
-    # def get_lambda_comp(self, w_current):
-    #     return w_current[self.nw + self.n_comp + self.n_H: self.nw + 2*self.n_comp+self.n_H]
 
     def solve(self) -> dict:
         """
@@ -449,9 +446,9 @@ class NosnocCustomSolver(NosnocSolverBase):
     def add_scatter_spy_magnitude_plot(self, ax, fig, matrix):
         spy_magnitude_plot(matrix, ax=ax, fig=fig,
         # spy_magnitude_plot_with_sign(matrix, ax=ax, fig=fig,
-            xticklabels=[r'$w$', r'$s$', r'$\lambda_H$', r'$\lambda_{\mathrm{comp}}$', r'$\mu_G$', r'$\mu_s$'],
+            xticklabels=[r'$w$', r'$s$', r'$\lambda_H$', r'$\mu_G$', r'$\mu_s$'],
             xticks = self.kkt_eq_offsets[:-1],
-            yticklabels= ['stat w', 'stat s', '$H$', 'slacked comp', 'comp $G$', 'comp $s$'],
+            yticklabels= ['stat w', '$H$', 'slacked comp', 'comp $G$', 'comp $s$'],
             yticks = self.kkt_eq_offsets[:-1]
         )
         return
