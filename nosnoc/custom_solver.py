@@ -332,8 +332,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
             # print and process solution
             nlp_iter[ii] = gn_iter
-            # nlp_res = ca.norm_inf(sol['g']).full()[0][0]
-            # cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_all.append(w_current)
 
             if opts.print_level > 1:
