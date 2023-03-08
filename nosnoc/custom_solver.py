@@ -188,6 +188,9 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
 
+    def get_lambda_comp(self, w_current):
+        return w_current[self.nw + self.n_comp + self.n_H: self.nw + 2*self.n_comp+self.n_H]
+
     def solve(self) -> dict:
         """
         Solves the NLP with the currently stored parameters.
@@ -267,8 +270,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
                 # print(f"cond(A) = {np.linalg.cond(newton_matrix.toarray()):.2e}")
                 rhs = - kkt_val.full().flatten()
-                # cond = np.linalg.cond(newton_matrix)
-                # self.plot_newton_matrix(newton_matrix, title=f'newton matrix, cond(A) = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
+
+                # cond = np.linalg.cond(newton_matrix.toarray())
+                # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
 
                 t0_la = time.time()
                 step = self.compute_step_sparse(newton_matrix, rhs)
@@ -389,6 +393,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             results["status"] = Status.NOT_CONVERGED
             condA = np.linalg.cond((newton_matrix.toarray()))
             print(f"did not converge with last condition number {condA:.2e}")
+            np.argmax(kkt_val)
+            self.print_iterates([w_current, step])
             breakpoint()
             # TODO: check:
             #  w_current[-(self.n_mu+self.n_comp):-self.n_mu]
