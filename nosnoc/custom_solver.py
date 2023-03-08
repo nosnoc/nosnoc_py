@@ -249,7 +249,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
         if opts.print_level == 1:
-            print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G\t\tmin_lam_comp")
+            print(f"sigma\t\t iter \t res \t\tmin_steps \t min_mu \t min G")
 
         w_candidate = w_current.copy()
         # homotopy loop
@@ -260,7 +260,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                  np.array([sigma_k, tau_val]), lambda00, x0))
 
             if opts.print_level > 1:
-                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G\t min_lam_comp")
+                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G")
             t = time.time()
             alpha_min_counter = 0
 
@@ -368,7 +368,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
                 # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t")
+                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
