@@ -139,11 +139,14 @@ class NosnocCustomSolver(NosnocSolverBase):
     def print_iterate_threshold(self, iterate, threshold=1.0):
         for ii in range(self.nw_pd):
             if np.abs(iterate[ii]) > threshold:
-                print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
+                print(f"{ii}\t{self.w_pd[ii].name():15}\t{iterate[ii]:.2e}")
 
-    def print_iterate(self, iterate):
+    def print_iterates(self, iterate_list: list):
         for ii in range(self.nw_pd):
-            print(f"{ii}\t{self.w_pd[ii]}\t{iterate[ii]:.2e}")
+            line = f"{ii}\t{self.w_pd[ii].name():17}"
+            for it in iterate_list:
+                line += f'\t{it[ii]:.2e}'
+            print(line)
 
     def compute_step_sparse(self, matrix, rhs):
         # naive
@@ -235,7 +238,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
         if opts.print_level == 1:
-            print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G")
+            print(f"sigma\t\t iter \t res \t min_steps \t min_mu \t max mu \t min G\t\tmin_lam_comp")
 
         w_candidate = w_current.copy()
         # homotopy loop
@@ -246,7 +249,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                  np.array([sigma_k, tau_val]), lambda00, x0))
 
             if opts.print_level > 1:
-                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G")
+                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G\t min_lam_comp")
             t = time.time()
             alpha_min_counter = 0
 
@@ -284,10 +287,18 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
                 w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
+                # compute new nlp residual after mu step
+                # NOTE: not really necessary, maybe make optional
+                # kkt_val = self.kkt_eq_fun(w_candidate, p_val)
+                # nlp_res = ca.norm_inf(kkt_val).full()[0][0]
+
                 # fraction to boundary G, s > 0
                 G_val = self.G_fun(w_current).full().flatten()
                 G_delta_val = self.G_fun(step).full().flatten()
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+
+                # alpha_max_lam_comp = get_fraction_to_boundary(tau_j, self.get_lambda_comp(w_current), self.get_lambda_comp(step), offset=None)
+                # alpha_max = min(alpha_max, alpha_max_lam_comp)
 
                 # line search:
                 alpha = alpha_max
@@ -313,13 +324,11 @@ class NosnocCustomSolver(NosnocSolverBase):
                     tmp[tmp==0] = 1
                     minA = np.min(np.abs(tmp))
                     print(f"{alpha:.3f} \t {alpha_mu:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} \t {maxA:.2e} \t {minA:.2e}")
-                    # self.plot_newton_matrix(newton_matrix, title=f'regularized matrix: sigma = {sigma_k:.2e} cond = {cond:.2e}',
-                    #         fig_filename=f'newton_spy_reg_{prob.model.name}_{ii}_{gn_iter}.pdf'
-                    #  )
                 elif opts.print_level > 1:
                     min_mu = np.min(self.get_mu(w_current))
                     max_mu = np.max(self.get_mu(w_current))
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
+                    min_lam_comp = np.min(self.get_lambda_comp(w_current))
+                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t {min_lam_comp:.2e}")
 
             # NOTE: tried resetting mu to 1e-4 if it is too small, but this does not help
             # min_mu = np.min(self.get_mu(w_current))
@@ -339,7 +348,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             elif opts.print_level == 1:
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
-                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t{np.max(G_val):.2e}")
+                min_lam_comp = np.min(self.get_lambda_comp(w_current))
+                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t {min_mu:.2e} \t {max_mu:.2e} \t {np.min(G_val):.2e}\t{min_lam_comp:.2e}")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
