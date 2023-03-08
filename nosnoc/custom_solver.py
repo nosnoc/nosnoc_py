@@ -150,6 +150,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 line += f'\t{it[ii]:.2e}'
             print(line)
 
+    def print_G_val(self, G_val):
+        for ii in range(casadi_length(self.G)):
+            print(f"{ii}\t{self.G[ii].name():17}\t{G_val[ii]:.2e}")
+
     def compute_step_sparse(self, matrix, rhs):
         # naive
         step = scipy.sparse.linalg.spsolve(matrix, rhs)
