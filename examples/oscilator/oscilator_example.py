@@ -136,16 +136,18 @@ def main_custom_solver():
     model = get_oscilator_model()
 
     opts.terminal_time = TSTEP
-    opts.print_level = 1
+    # opts.print_level = 2
+    # opts.pss_mode = nosnoc.PssMode.STEP
+    # opts.init_lambda = .5
 
+    # opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_WOPT_PREV
     # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
     # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     # opts.sigma_0 = 1e-2
 
-
     solver = nosnoc.NosnocCustomSolver(opts, model)
     # solver = nosnoc.NosnocSolver(opts, model)
-    solver.print_problem()
+    # solver.print_problem()
     # loop
     looper = nosnoc.NosnocSimLooper(solver, model.x0, NSIM)
     # looper = nosnoc.NosnocSimLooper(solver, model.x0, NSIM, w_init=w_sim_ref)
