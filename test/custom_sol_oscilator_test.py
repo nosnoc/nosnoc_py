@@ -1,0 +1,58 @@
+from examples.oscilator.oscilator_example import (
+    get_default_options,
+    TSIM,
+    X_SOL,
+    get_oscilator_model,
+)
+from oscilator_test import compute_errors
+import unittest
+import nosnoc
+import numpy as np
+
+EXACT_SWITCH_TIME = 1
+X_SWITCH_EXACT = np.array([1.0, 0.0])
+
+class CustomSolverOscilatorTests(unittest.TestCase):
+
+    def test_oscilator_sim(self):
+        opts = get_default_options()
+        opts.print_level = 1
+        opts.n_s = 3
+        opts.N_finite_elements = 3
+
+        opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
+        opts.sigma_0 = 1e0
+
+        model = get_oscilator_model()
+        Nsim = 29
+        Tstep = TSIM / Nsim
+        opts.terminal_time = Tstep
+
+        solver = nosnoc.NosnocCustomSolver(opts, model)
+
+        # loop
+        looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
+        looper.run()
+        results = looper.get_results()
+
+        error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+        print(f"error wrt exact solution {error:.2e}")
+        # check all results['status'] are nosnoc.Status.SUCCESS
+        assert all([status == nosnoc.Status.SUCCESS for status in results["status"]])
+        breakpoint()
+
+        errors = compute_errors(results)
+        breakpoint()
+
+        print(errors)
+        tol = 1e-5
+        assert errors["t_switch"] < tol
+        assert errors["t_end"] < tol
+        assert errors["x_switch"] < tol
+        assert errors["x_end"] < tol
+
+if __name__ == "__main__":
+    unittest.main()
+    # uncomment to run single test locally
+    # oscilator_test = CustomSolverTests()
+    # oscilator_test.test_oscilator_sim()
