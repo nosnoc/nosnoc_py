@@ -316,7 +316,7 @@ class NosnocSolver(NosnocSolverBase):
                                             self.polish_solution(w_opt, lambda00, x0)
 
         # collect results
-        results = get_results_from_primal_vector(prob, w_opt)
+        results = get_results_from_primal_vector(prob, w_opt, p_val)
 
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
@@ -418,7 +418,7 @@ class NosnocSolver(NosnocSolverBase):
         return w_opt, cpu_time_nlp, nlp_iter, status
 
 
-def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
+def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray, p_val: np.ndarray) -> dict:
     opts = prob.opts
 
     results = dict()
@@ -462,5 +462,11 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["t_grid_u"] = [t_grid[i] for i in u_grid]
 
     results["v_global"] = w_opt[prob.ind_v_global]
+    # compute switch times
+    indicator = prob.switch_indicator_fun(w_opt, p_val).full().flatten()
+    for i in range(len(indicator)):
+        print(f"indicator[{i}]: {indicator[i]:.2e}")
+    switch_indices = np.where(indicator < prob.opts.comp_tol * 1e2)[0]
+    results["switch_times"] = time_steps[switch_indices]
 
     return results
