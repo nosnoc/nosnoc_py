@@ -141,6 +141,7 @@ def plot_voronoi_2d(Z, show=True, annotate=False, ax=None):
     if annotate:
         for i in range(Z.shape[0]):
             ax.text(Z[i, 0], Z[i, 1], f"p{i+1}")
+    plt.grid(visible=True)
 
     if show:
         plt.show()

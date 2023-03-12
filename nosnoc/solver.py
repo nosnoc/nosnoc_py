@@ -75,9 +75,9 @@ class NosnocSolverBase(ABC):
                     'initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.'
                 )
         elif field == 'u':
-            prob.w0[prob.ind_u] = value
+            prob.w0[np.array(prob.ind_u)] = value
         elif field == 'v_global':
-            prob.w0[prob.ind_v_global] = value
+            prob.w0[np.array(prob.ind_v_global)] = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
@@ -106,7 +106,7 @@ class NosnocSolverBase(ABC):
                 InitializationStrategy.ALL_XCURRENT_WOPT_PREV
         ]:
             for ind in prob.ind_x:
-                prob.w0[ind] = x0
+                prob.w0[np.array(ind)] = x0
         elif opts.initialization_strategy == InitializationStrategy.EXTERNAL:
             pass
         # This is experimental
@@ -464,15 +464,15 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results = dict()
     results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
-    results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
+    results["x_list"] = [w_opt[np.array(ind)] for ind in flatten_layer(prob.ind_x_cont)]
 
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
-    results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
-    results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+    results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
+    results["u_list"] = [w_opt[np.array(ind)] for ind in prob.ind_u]
 
-    results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
-    results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
+    results["theta_list"] = [w_opt[np.array(ind)] for ind in get_cont_algebraic_indices(prob.ind_theta)]
+    results["lambda_list"] = [w_opt[np.array(ind)] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
     # if opts.pss_mode == PssMode.STEP:
     results["alpha_list"] = [
