@@ -13,6 +13,7 @@ import matplotlib.patches as patches
 from functools import partial
 
 LONG = True
+DENSE = False
 
 
 def get_hopper_ocp_description(opts):
@@ -113,8 +114,19 @@ def get_hopper_ocp_description(opts):
     f_aux_pos = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal-J_tangent*mu)*a_n, 0)
     f_aux_neg = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal+J_tangent*mu)*a_n, 0)
 
-    F = [ca.horzcat(f_ode, f_ode, f_aux_pos, f_aux_neg)]
-    S = [np.array([[1, 0, 0], [-1, 1, 0], [-1, -1, 1], [-1, -1, -1]])]
+    if DENSE:
+        F = [ca.horzcat(f_ode, f_ode, f_ode, f_ode, f_ode, f_ode, f_aux_pos, f_aux_neg)]
+        S = [np.array([[1, 1, 1],
+                       [1, 1, -1],
+                       [1, -1, 1],
+                       [1, -1, -1],
+                       [-1, 1, 1],
+                       [-1, 1, -1],
+                       [-1, -1, 1],
+                       [-1, -1, -1]])]
+    else:
+        F = [ca.horzcat(f_ode, f_ode, f_aux_pos, f_aux_neg)]
+        S = [np.array([[1, 0, 0], [-1, 1, 0], [-1, -1, 1], [-1, -1, -1]])]
     c = [ca.vertcat(f_c, v_normal, v_tangent)]
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
