@@ -17,9 +17,6 @@ DENSE = False
 
 
 def get_hopper_ocp_description(opts):
-    # Parameters
-    x_goal = 0.7
-
     # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
@@ -61,19 +58,13 @@ def get_hopper_ocp_description(opts):
     f_v = (-C + B@u[0:2])
     f_c = q[1] - q[3]*ca.cos(q[2])
 
-    # The control u[2] is a slack for modelling of nonslipping constraints.
-    ubu = np.array([50, 50, 100, 20])
-    lbu = np.array([-50, -50, 0, 1])
-
-    ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5])
-    lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5])
-
     if LONG:
+        x_goal = 1.3
         x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
         x_mid1 = np.array([0.4, 0.65, 0, 0.2, 0, 0, 0, 0])
         x_mid2 = np.array([0.6, 0.5, 0, 0.5, 0, 0, 0, 0])
         x_mid3 = np.array([0.9, 0.65, 0, 0.2, 0, 0, 0, 0])
-        x_end = np.array([1.3, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
 
         interpolator1 = CubicSpline([0, 0.5, 1], [x0, x_mid1, x_mid2])
         interpolator2 = CubicSpline([0, 0.5, 1], [x_mid2, x_mid3, x_end])
@@ -82,12 +73,21 @@ def get_hopper_ocp_description(opts):
         x_ref2 = interpolator2(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
         x_ref = np.concatenate([x_ref1, x_ref2])
     else:
+        # Parameters
+        x_goal = 0.7
         x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
         x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
         x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
 
         interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
         x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+
+    # The control u[2] is a slack for modelling of nonslipping constraints.
+    ubu = np.array([50, 50, 100, 20])
+    lbu = np.array([-50, -50, 0, 1])
+
+    ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5, np.inf])
+    lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5, -np.inf])
 
     Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
@@ -145,7 +145,7 @@ def get_default_options():
     opts.homotopy_update_slope = 0.1
     opts.sigma_0 = 100.
     opts.n_s = 2
-    opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_DELTA
+    opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_MEAN
     opts.print_level = 1
 
     opts.opts_casadi_nlp['ipopt']['max_iter'] = 1000
@@ -222,6 +222,40 @@ def plot_results(results, opts, x_ref):
         ani.save('hopper.gif', writer='imagemagick', fps=10)
     except Exception:
         print("install imagemagick to save as gif")
+
+    # Plot Trajectory
+    plt.figure()
+    x_traj = np.array(results['x_traj'])
+    t = x_traj[:, -1]
+    x = x_traj[:, 0]
+    y = x_traj[:, 1]
+    theta = x_traj[:, 2]
+    leg_len = x_traj[:, 3]
+    plt.subplot(4, 1, 1)
+    plt.plot(results['t_grid'], t)
+    plt.subplot(4, 1, 2)
+    plt.plot(results['t_grid'], x)
+    plt.plot(results['t_grid'], y)
+    plt.subplot(4, 1, 3)
+    plt.plot(results['t_grid'], theta)
+    plt.subplot(4, 1, 4)
+    plt.plot(results['t_grid'], leg_len)
+    # Plot Controls
+    plt.figure()
+    breakpoint()
+    u_traj = np.array(results['u_traj'])
+    reaction = u_traj[:, 0]
+    leg_force = u_traj[:, 1]
+    slack = u_traj[:, 2]
+    sot = u_traj[:, 3]
+    plt.subplot(4, 1, 1)
+    plt.step(results['t_grid_u'], np.concatenate((reaction, [reaction[-1]])))
+    plt.subplot(4, 1, 2)
+    plt.step(results['t_grid_u'], np.concatenate((leg_force, [leg_force[-1]])))
+    plt.subplot(4, 1, 3)
+    plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
+    plt.subplot(4, 1, 4)
+    plt.step(results['t_grid_u'], np.concatenate((slack, [slack[-1]])))
     plt.show()
 
 
