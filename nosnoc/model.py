@@ -1,4 +1,5 @@
 from typing import Optional, List
+from warnings import warn
 
 import numpy as np
 import casadi as ca
@@ -309,6 +310,10 @@ class NosnocModel:
             raise ValueError("Please provide t_var for time freezing!")
 
         self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
+        if self.c is not None:
+            self.c_fun = ca.Function('c_fun', [self.x], [casadi_vertcat_list(self.c)])
+        else:
+            warn('No c_fun is created! switch_times will not be provided in output.')
 
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
         if opts.pss_mode == PssMode.STEWART:
