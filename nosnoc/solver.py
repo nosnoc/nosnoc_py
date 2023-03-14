@@ -463,6 +463,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
     results["v_global"] = w_opt[prob.ind_v_global]
 
+    # NOTE: this doesn't handle sliding modes well. But seems nontrivial.
     # compute based on changes in alpha or theta
     switch_indices = []
     if opts.pss_mode == PssMode.STEP:
