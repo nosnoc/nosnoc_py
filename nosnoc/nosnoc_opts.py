@@ -36,6 +36,8 @@ class NosnocOpts:
     constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
+
+    use_upper_bound_h: bool = False
     gamma_h: float = 1.0
 
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation

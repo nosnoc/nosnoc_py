@@ -36,9 +36,19 @@ def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray,
 class NosnocCustomSolver(NosnocSolverBase):
     def _setup_G(self) -> ca.SX:
         prob = self.problem
-        ind_pos = sum([flatten(x) for x in [prob.ind_lam, prob.ind_theta, prob.ind_lambda_n, prob.ind_lambda_p, prob.ind_alpha, prob.ind_h]], [])
-        ind_pos.sort()
-        return prob.w[ind_pos]
+        # ind_pos = sum([flatten(x) for x in [prob.ind_lam, prob.ind_theta, prob.ind_lambda_n, prob.ind_lambda_p, prob.ind_alpha, prob.ind_h]], [])
+        # ind_pos.sort()
+        # return prob.w[ind_pos]
+
+        G_list = []
+        for i in range(prob.lbw.size):
+            if not np.isinf(prob.lbw[i]):
+                G_list.append(prob.w[i] - prob.lbw[i])
+            if not np.isinf(prob.ubw[i]):
+                G_list.append(prob.ubw[i] - prob.w[i])
+        G_expr = casadi_vertcat_list(G_list)
+        print_casadi_vector(G_expr)
+        return G_expr
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)

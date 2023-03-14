@@ -250,7 +250,10 @@ class FiniteElement(FiniteElementBase):
         h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
-        ubh = (1 + opts.gamma_h) * h0
+        if opts.use_upper_bound_h:
+            ubh = (1 + opts.gamma_h) * h0
+        else:
+            ubh = np.inf
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
 
