@@ -463,15 +463,21 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray, p_val
 
     results["v_global"] = w_opt[prob.ind_v_global]
 
-    # compute switch times
+    # compute based on changes in alpha or theta
     switch_indices = []
-    c_prev = prob.model.c_fun(x0).full().flatten()
-    for i, x in enumerate(results['x_traj'][1:]):
-        c_new = prob.model.c_fun(x).full().flatten()
-        # print(f"c_new: {c_new}, c_prev: {c_prev}")
-        if not all(np.sign(c_prev) == np.sign(c_new)):
-            switch_indices.append(i)
-        c_prev = c_new
+    if opts.pss_mode == PssMode.STEP:
+        alpha_prev = results["alpha_list"][0]
+        for i, alpha in enumerate(results["alpha_list"][1:]):
+            if any(np.abs(alpha - alpha_prev) > 0.1):
+                switch_indices.append(i)
+            alpha_prev = alpha
+    else:
+        theta_prev = results["theta_list"][0]
+        for i, theta in enumerate(results["theta_list"][1:]):
+            if any(np.abs(theta.flatten() - theta_prev.flatten()) > 0.1):
+                switch_indices.append(i)
+            theta_prev = theta
+
     results["switch_times"] = time_steps[switch_indices]
 
     return results
