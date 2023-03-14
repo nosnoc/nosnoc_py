@@ -39,10 +39,8 @@ class CustomSolverOscilatorTests(unittest.TestCase):
         print(f"error wrt exact solution {error:.2e}")
         # check all results['status'] are nosnoc.Status.SUCCESS
         assert all([status == nosnoc.Status.SUCCESS for status in results["status"]])
-        breakpoint()
 
         errors = compute_errors(results)
-        breakpoint()
 
         print(errors)
         tol = 1e-5
