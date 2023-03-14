@@ -504,22 +504,28 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
-            return None
+            return
         if not self.fe_idx > 0:
-            return None
+            return
 
         prev_fe: FiniteElement = self.prev_fe
         delta_h_ki = self.h() - prev_fe.h()
-
-        nu_k = self.compute_nu_k(prev_fe)
-
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
             self.cost += opts.rho_h * (self.h() - h_fe)**2
+            return
         elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self.cost += opts.rho_h * delta_h_ki**2
+            return
 
-        elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
+        # modes that need nu_k
+        eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                prev_fe.sum_Theta() * self.sum_Theta()
+        nu_k = 1
+        for jjj in range(casadi_length(eta_k)):
+            nu_k = nu_k * eta_k[jjj]
+
+        if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
             self.cost += opts.rho_h * ca.tanh(nu_k / opts.step_equilibration_sigma) * delta_h_ki**2
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
             self.cost += opts.rho_h * nu_k * delta_h_ki**2
@@ -531,15 +537,7 @@ class FiniteElement(FiniteElementBase):
             self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
         #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
-        return nu_k
-
-    def compute_nu_k(self, prev_fe) -> ca.SX:
-        eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
-                prev_fe.sum_Theta() * self.sum_Theta()
-        nu_k = 1
-        for j in range(casadi_length(eta_k)):
-            nu_k = nu_k * eta_k[j]
-        return nu_k
+        return
 
 
 class NosnocProblem(NosnocFormulationObject):
@@ -681,7 +679,6 @@ class NosnocProblem(NosnocFormulationObject):
         if opts.time_freezing:
             t0 = model.t_fun(self.fe0.w[self.fe0.ind_x[-1]])
 
-        nu_k_list = []
         for ctrl_idx, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[ctrl_idx]]
             for _, fe in enumerate(stage):
@@ -693,7 +690,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.create_complementarity_constraints(sigma_p, tau, Uk)
 
                 # 3) Step Equilibration
-                nu_k_list.append(fe.step_equilibration(sigma_p, tau))
+                fe.step_equilibration(sigma_p, tau)
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
@@ -728,10 +725,6 @@ class NosnocProblem(NosnocFormulationObject):
                 for fe in flatten(self.stages)
             ])
 
-        # compute switch indicator
-        nu_k_list = [nu_k for nu_k in nu_k_list if nu_k is not None]
-        switch_indicator = ca.veccat(*nu_k_list)
-
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
@@ -749,7 +742,6 @@ class NosnocProblem(NosnocFormulationObject):
         self.cost_fun = ca.Function('cost_fun', [self.w], [self.cost])
         self.comp_res = ca.Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = ca.Function('g_fun', [self.w, self.p], [self.g])
-        self.switch_indicator_fun = ca.Function('switch_indicator_fun', [self.w, self.p], [switch_indicator])
 
         # copy original w0
         self.w0_original = self.w0.copy()

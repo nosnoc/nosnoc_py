@@ -316,7 +316,7 @@ class NosnocSolver(NosnocSolverBase):
                                             self.polish_solution(w_opt, lambda00, x0)
 
         # collect results
-        results = get_results_from_primal_vector(prob, w_opt, p_val)
+        results = get_results_from_primal_vector(prob, w_opt)
 
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
@@ -418,7 +418,7 @@ class NosnocSolver(NosnocSolverBase):
         return w_opt, cpu_time_nlp, nlp_iter, status
 
 
-def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray, p_val: np.ndarray) -> dict:
+def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
 
     results = dict()
