@@ -37,7 +37,7 @@ class NosnocOpts:
 
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
 
-    use_upper_bound_h: bool = False
+    use_upper_bound_h: bool = True
     gamma_h: float = 1.0
 
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation
