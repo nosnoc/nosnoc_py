@@ -198,27 +198,31 @@ class NosnocCustomSolver(NosnocSolverBase):
         nabla_w_G = -matrix[:self.nw, -self.n_mu:-self.n_comp] # const!
         L_mus = matrix[:self.nw, -self.n_comp:]
         slack_current = w_current[self.nw: self.nw+self.n_comp]
+        mu_G = w_current[-self.n_mu:-self.n_comp]
 
         G_val = self.G_no_slack_fun(w_current).full().flatten()
 
-        # K = matrix[:self.nw, :self.nw] + nabla_w_G @ scipy.sparse.diags(1./G_val) @ nabla_w_G.T
+        # update upper left block # TODO: not good with sparse!
+        matrix[:self.nw, :self.nw] += nabla_w_G @ scipy.sparse.diags(mu_G/G_val) @ nabla_w_G.T
 
-        # update upper left block
-        matrix[:self.nw, :self.nw] += nabla_w_G @ scipy.sparse.diags(1./G_val) @ nabla_w_G.T
-
-        matrix[:self.nw, self.nw:self.nw+self.n_comp] = -L_mus @ scipy.sparse.diags(w_current[-self.n_comp:])
+        # slack block
+        matrix[:self.nw, self.nw:self.nw+self.n_comp] = -L_mus @ scipy.sparse.diags(w_current[-self.n_comp:]/ slack_current)
 
         r_G = rhs[-self.n_mu:-self.n_comp]
         r_s = rhs[-self.n_comp:]
-        r_lw_tilde = rhs[:self.nw] - nabla_w_G @ scipy.sparse.diags(1./G_val) @ r_G \
+        # update rhs
+        r_lw_tilde = rhs[:self.nw] + nabla_w_G @ scipy.sparse.diags(1./G_val) @ r_G \
                     - L_mus @ scipy.sparse.diags(1./slack_current) @ r_s
 
         rhs[:self.nw] = r_lw_tilde
         n_red = self.nw_pd - self.n_mu
+        # solve reduced system
         step = scipy.sparse.linalg.spsolve(matrix[:n_red, :n_red], rhs[:n_red])
 
-        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - nabla_w_G.T @ step[:self.nw])
-        delta_mu_s = scipy.sparse.diags(1./slack_current) @ (r_s - step[self.nw: self.nw+self.n_comp] /w_current[-self.n_comp:])
+        # expand
+        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - scipy.sparse.diags(mu_G) @ nabla_w_G.T @ step[:self.nw])
+        delta_mu_s = scipy.sparse.diags(1./slack_current) @ \
+            (r_s - step[self.nw: self.nw+self.n_comp] * w_current[-self.n_comp:])
 
         step = np.concatenate((step, delta_mu_G, delta_mu_s))
 
@@ -324,10 +328,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # step = self.compute_step_sparse(newton_matrix, rhs)
                 step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
 
-                print(f"iterate at {gn_iter=}")
-                self.print_iterates([w_current, step])
-                if gn_iter > 2:
-                    exit(1)
+                # print(f"iterate at {gn_iter=}")
+                # self.print_iterates([w_current, step])
+                # if gn_iter > 2:
+                #     exit(1)
                 # step = self.compute_step_sparse_schur(newton_matrix, rhs)
                 t_la += time.time() - t0_la
 
