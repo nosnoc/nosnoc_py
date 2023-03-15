@@ -131,6 +131,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.G_no_slack_fun = ca.Function('G_no_slack_fun', [w_pd], [self.G_no_slack], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
+        self.kkt_max_res_fun = ca.Function('kkt_max_res_fun', [w_pd, prob.p], [ca.norm_inf(kkt_eq)], casadi_function_opts)
+
+
         # precompute nabla_w_G
         dummy = ca.SX.sym('dummy')
         nabla_w_G_fun = ca.Function('nabla_w_G_fun', [dummy], [ca.jacobian(self.G_no_slack, prob.w).T], casadi_function_opts)
@@ -258,7 +261,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def compute_step_elim_mu_s(self, w_current, p_val):
         mat, r_lw_tilde, nabla_w_compl, kkt_eq = self.dense_ls_fun(w_current, p_val)
-        mat = mat.sparse()
         mu_G = w_current[-self.n_mu:-self.n_comp]
 
         rhs = -kkt_eq.full().flatten()
@@ -266,19 +268,32 @@ class NosnocCustomSolver(NosnocSolverBase):
         r_s = rhs[-self.n_comp:]
 
         G_val = self.G_no_slack_fun(w_current).full().flatten()
-
         r_lw_tilde = -r_lw_tilde.full().flatten()
 
-        rhs_elim = np.concatenate((r_lw_tilde, rhs[self.nw:self.nw+self.n_H].flatten()))
-        step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+        rhs_elim = np.concatenate((r_lw_tilde, rhs[self.nw:self.nw+self.n_H]))
+
+        SPARSE = True
+        if SPARSE:
+            mat = mat.sparse()
+            step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+        else:
+            mat = mat.full()
+            step_w_lam = np.linalg.solve(mat, rhs_elim)
+
         slack_current = w_current[self.nw: self.nw+self.n_comp]
 
         # expand
-        delta_slack = rhs[self.nw +self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.sparse() @ step_w_lam[:self.nw]
-        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - scipy.sparse.diags(mu_G) @ self.nabla_w_G.T @ step_w_lam[:self.nw])
-        # breakpoint()
-        delta_mu_s = scipy.sparse.diags(1./slack_current) @ \
-            (r_s - delta_slack * w_current[-self.n_comp:])
+        delta_slack = rhs[self.nw +self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
+        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
+        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
+
+
+
+        # P = mat[:self.nw, :self.nw].toarray()
+        # cond_P = np.linalg.cond(P)
+        # cond_mat = np.linalg.cond(mat.toarray())
+        # np.linalg.eigvals(P)
+        # print(f"{cond_P=}, {cond_mat=}")
 
         # # plot reduced newton matrix:
         # spy_magnitude_plot(mat.toarray())
@@ -374,10 +389,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if nlp_res < sigma_k / 10:
                     break
 
-                newton_matrix = jac_kkt_val.sparse()
+                # newton_matrix = jac_kkt_val.sparse()
                 # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
                 # print(f"cond(A) = {np.linalg.cond(newton_matrix.toarray()):.2e}")
-                rhs = - kkt_val.full().flatten()
+                # rhs = - kkt_val.full().flatten()
 
                 # cond = np.linalg.cond(newton_matrix.toarray())
                 # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
@@ -425,7 +440,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                         alpha_min_counter += 1
                         break
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
-                    step_res_norm = ca.norm_inf(self.kkt_eq_fun(w_candidate, p_val)).full()[0][0]
+                    # t0_ca = time.time()
+                    step_res_norm = self.kkt_max_res_fun(w_candidate, p_val).full()[0][0]
+                    # step_res_norm = np.linalg.norm(self.kkt_eq_fun(w_candidate, p_val).full().flatten(), ord=np.inf)
+                    # t_ca += time.time() - t0_ca
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
                     else:
@@ -445,25 +463,11 @@ class NosnocCustomSolver(NosnocSolverBase):
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
-                if DEBUG:
-                    maxA = np.max(np.abs(newton_matrix))
-                    cond = np.linalg.cond(newton_matrix)
-                    tmp = newton_matrix.copy()
-                    tmp[tmp==0] = 1
-                    minA = np.min(np.abs(tmp))
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t {step_norm:.2e} \t {nlp_res:.2e} \t {cond:.2e} \t {maxA:.2e} \t {minA:.2e}")
-                elif opts.print_level > 1:
+                if opts.print_level > 1:
                     min_mu = np.min(self.get_mu(w_current))
                     max_mu = np.max(self.get_mu(w_current))
                     # min_lam_comp = np.min(self.get_lambda_comp(w_current))
                     print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
-
-            # NOTE: tried resetting mu to 1e-4 if it is too small, but this does not help
-            # min_mu = np.min(self.get_mu(w_current))
-            # if ii < opts.max_iter_homotopy - 1:
-            #     w_current[-n_mu:] = np.maximum(w_current[-n_mu:], 1e-4)
-            # min_mu_new = np.min(self.get_mu(w_current))
-            # print(f"min_mu = {min_mu:.2e}, min_mu_new = {min_mu_new:.2e}")
 
             cpu_time_nlp[ii] = time.time() - t
 
