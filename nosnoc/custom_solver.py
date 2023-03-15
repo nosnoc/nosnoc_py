@@ -131,10 +131,27 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.G_no_slack_fun = ca.Function('G_no_slack_fun', [w_pd], [self.G_no_slack], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
-        # super dense system
+        # precompute nabla_w_G
         dummy = ca.SX.sym('dummy')
         nabla_w_G_fun = ca.Function('nabla_w_G_fun', [dummy], [ca.jacobian(self.G_no_slack, prob.w).T], casadi_function_opts)
+        nabla_w_G = nabla_w_G_fun(1)
         self.nabla_w_G = nabla_w_G_fun(1).sparse()
+
+        # super dense system
+        compl_expr = ca.diag(G1) @ G2
+        nabla_w_compl = ca.jacobian(compl_expr, prob.w).T
+        nabla_w_H = ca.jacobian(self.H, prob.w).T
+        mat_elim_mus = ca.SX.zeros((self.nw+n_H, self.nw+n_H))
+        mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
+        mat_elim_mus[:self.nw, self.nw:] = nabla_w_H
+        mat_elim_mus[self.nw:, :self.nw] = nabla_w_H.T
+
+        r_lw_dtilde = stationarity_w \
+                    + nabla_w_G @ ca.diag(1/self.G_no_slack) @ kkt_comp[:nG] \
+                    - nabla_w_compl @ ca.diag(1/slack) @ kkt_comp[nG:] \
+                    + nabla_w_compl @ ca.diag(mu_s / slack) @ slacked_complementarity
+
+        self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p], [mat_elim_mus, r_lw_dtilde, nabla_w_compl, kkt_eq])
 
         # precompute
         self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
@@ -201,8 +218,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def compute_step_sparse_elim_mu(self, matrix, rhs, w_current):
         step = rhs
-        # nabla_w_G = -matrix[:self.nw, -self.n_mu:-self.n_comp] # const!
-        # breakpoint()
         L_mus = matrix[:self.nw, -self.n_comp:]
         slack_current = w_current[self.nw: self.nw+self.n_comp]
         mu_G = w_current[-self.n_mu:-self.n_comp]
@@ -241,6 +256,37 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
 
+    def compute_step_elim_mu_s(self, w_current, p_val):
+        mat, r_lw_tilde, nabla_w_compl, kkt_eq = self.dense_ls_fun(w_current, p_val)
+        mat = mat.sparse()
+        mu_G = w_current[-self.n_mu:-self.n_comp]
+
+        rhs = -kkt_eq.full().flatten()
+        r_G = rhs[-self.n_mu:-self.n_comp]
+        r_s = rhs[-self.n_comp:]
+
+        G_val = self.G_no_slack_fun(w_current).full().flatten()
+
+        r_lw_tilde = -r_lw_tilde.full().flatten()
+
+        rhs_elim = np.concatenate((r_lw_tilde, rhs[self.nw:self.nw+self.n_H].flatten()))
+        step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+        slack_current = w_current[self.nw: self.nw+self.n_comp]
+
+        # expand
+        delta_slack = rhs[self.nw +self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.sparse() @ step_w_lam[:self.nw]
+        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - scipy.sparse.diags(mu_G) @ self.nabla_w_G.T @ step_w_lam[:self.nw])
+        # breakpoint()
+        delta_mu_s = scipy.sparse.diags(1./slack_current) @ \
+            (r_s - delta_slack * w_current[-self.n_comp:])
+
+        # # plot reduced newton matrix:
+        # spy_magnitude_plot(mat.toarray())
+        # import matplotlib.pyplot as plt
+        # plt.show()
+
+        step = np.concatenate((step_w_lam[:self.nw], delta_slack, step_w_lam[self.nw:], delta_mu_G, delta_mu_s))
+        return step
 
     def check_newton_matrix(self, matrix):
         upper_left = matrix[:self.nw, :self.nw]
@@ -338,7 +384,8 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 t0_la = time.time()
                 # step = self.compute_step_sparse(newton_matrix, rhs)
-                step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
+                # step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
+                step = self.compute_step_elim_mu_s(w_current, p_val)
 
                 # print(f"iterate at {gn_iter=}")
                 # self.print_iterates([w_current, step])
