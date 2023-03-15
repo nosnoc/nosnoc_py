@@ -55,13 +55,12 @@ class NosnocCustomSolver(NosnocSolverBase):
         G1 = casadi_vertcat_list([casadi_sum_list(x[0]) for x in prob.comp_list])
         G2 = casadi_vertcat_list([x[1] for x in prob.comp_list])
         # equalities
-        H = casadi_vertcat_list( [prob.g[i] for i in range(len(prob.lbg)) if prob.lbg[i] == prob.ubg[i]] )
+        self.H = casadi_vertcat_list( [prob.g[i] for i in range(len(prob.lbg)) if prob.lbg[i] == prob.ubg[i]] )
 
-        self.H = H
         self.G1 = G1
         self.G2 = G2
         n_comp = casadi_length(G1)
-        n_H = casadi_length(H)
+        n_H = casadi_length(self.H)
 
         # setup primal dual variables:
         slack = ca.SX.sym('slack', n_comp)
@@ -85,10 +84,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         w_pd = ca.vertcat(prob.w, slack, lam_pd, mu_pd)
 
-        self.w_pd = w_pd
-        self.nw = casadi_length(prob.w)
-        self.nw_pd = casadi_length(w_pd)
-
         ## KKT system
         # slack = - G1 * G2 + sigma
         self.slack0_expr = -ca.diag(G1) @ G2 + prob.sigma
@@ -99,11 +94,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         # collect KKT system
         slacked_complementarity = slack - self.slack0_expr
         stationarity_w = ca.jacobian(prob.cost, prob.w).T \
-            + ca.jacobian(H, prob.w).T @ lam_H \
+            + ca.jacobian(self.H, prob.w).T @ lam_H \
             + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
             - ca.jacobian(self.G, prob.w).T @ mu_pd
 
-        kkt_eq_without_comp = ca.vertcat(stationarity_w, H, slacked_complementarity)
+        kkt_eq_without_comp = ca.vertcat(stationarity_w, self.H, slacked_complementarity)
 
         # treat IP complementarities:
         kkt_comp = []
@@ -123,6 +118,13 @@ class NosnocCustomSolver(NosnocSolverBase):
         if JIT:
             casadi_function_opts = {"compiler": "shell", "jit": True, "jit_options": {"compiler": "gcc", "flags": ["-O3"]}}
 
+        # dimensions
+        self.nw = casadi_length(prob.w)
+        self.nw_pd = casadi_length(w_pd)
+        self.n_comp = n_comp
+        self.n_H = n_H
+        self.nG = nG
+
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
         self.G_fun = ca.Function('G_fun', [w_pd], [self.G], casadi_function_opts)
@@ -132,9 +134,8 @@ class NosnocCustomSolver(NosnocSolverBase):
         # precompute
         self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
 
-        self.n_comp = n_comp
-        self.n_H = n_H
-        self.nG = nG
+        self.w_pd = w_pd
+
         kkt_block_sizes = [self.nw, n_comp, n_H, nG, n_comp]
         self.kkt_eq_offsets = [0]  + np.cumsum(kkt_block_sizes).tolist()
 

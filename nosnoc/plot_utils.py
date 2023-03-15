@@ -275,6 +275,10 @@ def spy_magnitude_plot(matrix: np.ndarray, ax=None, fig=None, xticks=None, xtick
     rows, cols = matrix.nonzero()
     values = np.abs(matrix[rows, cols])
 
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot()
+
     cmap = matplotlib.colormaps['inferno']
     marker_size = int(1000 / max(matrix.shape))
     # scatter spy
