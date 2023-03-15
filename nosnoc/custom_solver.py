@@ -131,6 +131,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.G_no_slack_fun = ca.Function('G_no_slack_fun', [w_pd], [self.G_no_slack], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
+        # super dense system
+        dummy = ca.SX.sym('dummy')
+        nabla_w_G_fun = ca.Function('nabla_w_G_fun', [dummy], [ca.jacobian(self.G_no_slack, prob.w).T], casadi_function_opts)
+        self.nabla_w_G = nabla_w_G_fun(1).sparse()
+
         # precompute
         self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
 
@@ -196,7 +201,8 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def compute_step_sparse_elim_mu(self, matrix, rhs, w_current):
         step = rhs
-        nabla_w_G = -matrix[:self.nw, -self.n_mu:-self.n_comp] # const!
+        # nabla_w_G = -matrix[:self.nw, -self.n_mu:-self.n_comp] # const!
+        # breakpoint()
         L_mus = matrix[:self.nw, -self.n_comp:]
         slack_current = w_current[self.nw: self.nw+self.n_comp]
         mu_G = w_current[-self.n_mu:-self.n_comp]
@@ -204,7 +210,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         G_val = self.G_no_slack_fun(w_current).full().flatten()
 
         # update upper left block # TODO: not good with sparse!
-        matrix[:self.nw, :self.nw] += nabla_w_G @ scipy.sparse.diags(mu_G/G_val) @ nabla_w_G.T
+        matrix[:self.nw, :self.nw] += self.nabla_w_G @ scipy.sparse.diags(mu_G/G_val) @ self.nabla_w_G.T
 
         # slack block
         matrix[:self.nw, self.nw:self.nw+self.n_comp] = -L_mus @ scipy.sparse.diags(w_current[-self.n_comp:]/ slack_current)
@@ -212,7 +218,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         r_G = rhs[-self.n_mu:-self.n_comp]
         r_s = rhs[-self.n_comp:]
         # update rhs
-        r_lw_tilde = rhs[:self.nw] + nabla_w_G @ scipy.sparse.diags(1./G_val) @ r_G \
+        r_lw_tilde = rhs[:self.nw] + self.nabla_w_G @ scipy.sparse.diags(1./G_val) @ r_G \
                     - L_mus @ scipy.sparse.diags(1./slack_current) @ r_s
 
         rhs[:self.nw] = r_lw_tilde
@@ -221,11 +227,16 @@ class NosnocCustomSolver(NosnocSolverBase):
         step = scipy.sparse.linalg.spsolve(matrix[:n_red, :n_red], rhs[:n_red])
 
         # expand
-        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - scipy.sparse.diags(mu_G) @ nabla_w_G.T @ step[:self.nw])
+        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - scipy.sparse.diags(mu_G) @ self.nabla_w_G.T @ step[:self.nw])
         delta_mu_s = scipy.sparse.diags(1./slack_current) @ \
             (r_s - step[self.nw: self.nw+self.n_comp] * w_current[-self.n_comp:])
 
         step = np.concatenate((step, delta_mu_G, delta_mu_s))
+
+        # plot reduced newton matrix:
+        # spy_magnitude_plot(matrix[:n_red, :n_red].toarray())
+        # import matplotlib.pyplot as plt
+        # plt.show()
 
         return step
 
