@@ -98,13 +98,17 @@ def plot_trajectory(results, figure_filename=None):
 
     n_subplot = len(X0)
     fig, axs = plt.subplots(n_subplot, 1)
+    print(results["switch_times"])
+    xnames = ['Gal4', 'Swi5', 'Ash1', 'Cbf1', 'Gal80']
     for i in range(n_subplot):
-        axs[i].plot(results["t_grid"], results["X_sim"][:, i])
-        axs[i].hlines(thresholds[i], xmin=0, xmax=TSIM, linestyles='dotted')
+        axs[i].plot(results["t_grid"], results["X_sim"][:, i], linewidth=2)
+        axs[i].hlines(thresholds[i], xmin=0, xmax=TSIM, linestyles='dotted', linewidth=1)
         axs[i].set_xlim(0, TSIM)
         axs[i].set_ylim(0, 1.1*max(results["X_sim"][:, i]))
-        axs[i].set_ylabel(f'$x_{i+1}$')
+        axs[i].set_ylabel(xnames[i])
         axs[i].grid()
+        for t in results['switch_times']:
+            axs[i].axvline(t, linestyle="dashed", color="r", linewidth=0.5)
         if i == n_subplot - 1:
             plt.xlabel('$t$ [min]')
         else:

@@ -51,6 +51,7 @@ class NosnocSimLooper:
         else:
             self.print_level = solver.opts.print_level
         self.status = []
+        self.switch_times = []
 
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + 1))
 
@@ -65,6 +66,12 @@ class NosnocSimLooper:
                 self.solver.set("p_global", self.p_values[i, :])
             # solve
             results = self.solver.solve()
+
+            # add previous time to switch times
+            if results["switch_times"].size > 0:
+                switch_times_sim = results["switch_times"] + np.sum(self.time_steps)
+                self.switch_times += switch_times_sim.tolist()
+
             # collect
             self.X_sim += results["x_list"]
             self.xcurrent = self.X_sim[-1]
@@ -94,5 +101,6 @@ class NosnocSimLooper:
             "w_all": self.w_all,
             "cost_vals": self.cost_vals,
             "status": self.status,
+            "switch_times": self.switch_times,
         }
         return results

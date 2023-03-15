@@ -72,7 +72,7 @@ def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
     print(f"error wrt exact solution {error:.2e}")
 
     if do_plot:
-        plot_oscilator(results["X_sim"], results["t_grid"])
+        plot_oscilator(results["X_sim"], results["t_grid"], switch_times=results["switch_times"])
     # nosnoc.plot_timings(results["cpu_nlp"])
 
     # store solution
@@ -151,16 +151,22 @@ def main_polishing():
     nosnoc.plot_timings(results["cpu_nlp"])
 
 
-def plot_oscilator(X_sim, t_grid, latexify=True):
+def plot_oscilator(X_sim, t_grid, latexify=True, switch_times=None):
     if latexify:
         nosnoc.latexify_plot()
+
+    # trajectory
     plt.figure()
     plt.subplot(1, 2, 1)
     plt.plot(t_grid, X_sim)
     plt.ylabel("$x$")
     plt.xlabel("$t$")
+    if switch_times is not None:
+        for t in switch_times:
+            plt.axvline(t, linestyle="dashed", color="k")
     plt.grid()
 
+    # state space plot
     ax = plt.subplot(1, 2, 2)
     plt.ylabel("$x_2$")
     plt.xlabel("$x_1$")
