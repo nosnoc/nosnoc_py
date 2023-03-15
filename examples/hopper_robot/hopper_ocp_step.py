@@ -12,8 +12,9 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
 from functools import partial
 
-LONG = False
+
 DENSE = False
+lift_algebraic = False
 x_goal = 0.7
 
 
@@ -26,6 +27,16 @@ def get_hopper_ocp_description(opts):
     x = ca.vertcat(q, v)
     u = ca.SX.sym('u', 3)
     sot = ca.SX.sym('sot')
+
+    alpha = ca.SX.sym('alpha', 3)
+    theta = ca.SX.sym('theta', 3)
+    if lift_algebraic:
+        beta = ca.SX.sym('beta', 1)
+        z = ca.vertcat(theta, beta)
+        z0 = np.ones((4,))
+    else:
+        z = theta
+        z0 = np.ones((3,))
 
     # dims
     n_q = 4
@@ -59,29 +70,12 @@ def get_hopper_ocp_description(opts):
     f_v = (-C + B@u[0:2])
     f_c = q[1] - q[3]*ca.cos(q[2])
 
-    if LONG:
-        x_goal = 1.3
-        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-        x_mid1 = np.array([0.4, 0.65, 0, 0.2, 0, 0, 0, 0])
-        x_mid2 = np.array([0.6, 0.5, 0, 0.5, 0, 0, 0, 0])
-        x_mid3 = np.array([0.9, 0.65, 0, 0.2, 0, 0, 0, 0])
-        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
+    x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+    x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
+    x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
 
-        interpolator1 = CubicSpline([0, 0.5, 1], [x0, x_mid1, x_mid2])
-        interpolator2 = CubicSpline([0, 0.5, 1], [x_mid2, x_mid3, x_end])
-
-        x_ref1 = interpolator1(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
-        x_ref2 = interpolator2(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
-        x_ref = np.concatenate([x_ref1, x_ref2])
-    else:
-        # Parameters
-        x_goal = 0.7
-        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-        x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
-        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
-
-        interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-        x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+    interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
+    x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
 
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
@@ -95,8 +89,7 @@ def get_hopper_ocp_description(opts):
     R = np.diag([0.01, 0.01, 100])
 
     # path comp to avoid slipping
-    g_comp_path = ca.horzcat(ca.vertcat(v_tangent, f_c), ca.vertcat(u[2], u[2]))
-
+    g_comp_path = ca.horzcat(v_tangent, theta[1]+theta[2])
     # Hand create least squares cost
     p_x_ref = ca.SX.sym('x_ref', n_x)
 
@@ -115,23 +108,22 @@ def get_hopper_ocp_description(opts):
     f_aux_pos = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal-J_tangent*mu)*a_n, 0)
     f_aux_neg = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal+J_tangent*mu)*a_n, 0)
 
-    if DENSE:
-        F = [ca.horzcat(f_ode, f_ode, f_ode, f_ode, f_ode, f_ode, f_aux_pos, f_aux_neg)]
-        S = [np.array([[1, 1, 1],
-                       [1, 1, -1],
-                       [1, -1, 1],
-                       [1, -1, -1],
-                       [-1, 1, 1],
-                       [-1, 1, -1],
-                       [-1, -1, 1],
-                       [-1, -1, -1]])]
-    else:
-        F = [ca.horzcat(f_ode, f_ode, f_aux_pos, f_aux_neg)]
-        S = [np.array([[1, 0, 0], [-1, 1, 0], [-1, -1, 1], [-1, -1, -1]])]
     c = [ca.vertcat(f_c, v_normal, v_tangent)]
+    f_x = theta[0]*f_ode + theta[1]*f_aux_pos+theta[2]*f_aux_neg
 
-    model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
-                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t)
+    if lift_algebraic:
+        g_z = ca.vertcat(theta-ca.vertcat(alpha[0]+beta,
+                                          beta*alpha[2],
+                                          beta*(1-alpha[2])),
+                         beta-(1-alpha[0])*(1-alpha[1]))
+    else:
+        g_z = theta-ca.vertcat(alpha[0]+(1-alpha[0])*(1-alpha[1]),
+                               (1-alpha[0])*(1-alpha[1])*alpha[2],
+                               (1-alpha[0])*(1-alpha[1])*(1-alpha[2]))
+
+    model = ns.NosnocModel(x=ca.vertcat(x, t), f_x=[f_x], alpha=[alpha], c=c, x0=np.concatenate((x0, [0])),
+                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t,
+                           z=z, z0=z0, g_z=g_z)
     ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
 
     v_tangent_fun = ca.Function('v_normal_fun', [x], [v_tangent])
@@ -157,10 +149,7 @@ def get_default_options():
 
     opts.time_freezing = True
     opts.equidistant_control_grid = True
-    if LONG:
-        opts.N_stages = 30
-    else:
-        opts.N_stages = 20
+    opts.N_stages = 20
     opts.N_finite_elements = 3
     opts.max_iter_homotopy = 6
     return opts
@@ -175,7 +164,6 @@ def solve_ocp(opts=None):
     opts.terminal_time = 1
 
     solver = ns.NosnocSolver(opts, model, ocp)
-    breakpoint()
     results = solver.solve()
     plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun)
 
@@ -203,16 +191,11 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
 
 def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     fig, ax = plt.subplots()
-    if LONG:
-        ax.set_xlim(0, 1.5)
-        ax.set_ylim(-0.1, 1.1)
-        patch = patches.Rectangle((-0.1, -0.1), 1.6, 0.1, color='grey')
-        ax.add_patch(patch)
-    else:
-        ax.set_xlim(0, x_goal+0.1)
-        ax.set_ylim(-0.1, 1.1)
-        patch = patches.Rectangle((-0.1, -0.1), x_goal+0.1, 0.1, color='grey')
-        ax.add_patch(patch)
+
+    ax.set_xlim(0, x_goal+0.1)
+    ax.set_ylim(-0.1, 1.1)
+    patch = patches.Rectangle((-0.1, -0.1), x_goal+0.1, 0.1, color='grey')
+    ax.add_patch(patch)
     ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
     head = ax.scatter([0], [0], color='b', s=[100])
     foot = ax.scatter([0], [0], color='r', s=[50])
@@ -227,6 +210,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     except Exception:
         print("install imagemagick to save as gif")
 
+    breakpoint()
     # Plot Trajectory
     plt.figure()
     x_traj = np.array(results['x_traj'])
