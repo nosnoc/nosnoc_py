@@ -103,10 +103,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
             - ca.jacobian(self.G, prob.w).T @ mu_pd
 
-        # stationarity_s = ca.jacobian(slacked_complementarity, slack).T @ lam_comp \
-        #      - ca.jacobian(slack, slack).T @ mu_s
-        # kkt_eq_without_comp = ca.vertcat(stationarity_w, stationarity_s, H, slacked_complementarity)
-
         kkt_eq_without_comp = ca.vertcat(stationarity_w, H, slacked_complementarity)
 
         # treat IP complementarities:
@@ -130,6 +126,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
         self.G_fun = ca.Function('G_fun', [w_pd], [self.G], casadi_function_opts)
+        self.G_no_slack_fun = ca.Function('G_no_slack_fun', [w_pd], [self.G_no_slack], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
         # precompute
@@ -137,6 +134,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         self.n_comp = n_comp
         self.n_H = n_H
+        self.nG = nG
         kkt_block_sizes = [self.nw, n_comp, n_H, nG, n_comp]
         self.kkt_eq_offsets = [0]  + np.cumsum(kkt_block_sizes).tolist()
 
@@ -194,6 +192,38 @@ class NosnocCustomSolver(NosnocSolverBase):
         x2 = (y2 - C@x1) * d_diag_inv
         step = np.concatenate((x1, x2))
         return step
+
+    def compute_step_sparse_elim_mu(self, matrix, rhs, w_current):
+        step = rhs
+        nabla_w_G = -matrix[:self.nw, -self.n_mu:-self.n_comp] # const!
+        L_mus = matrix[:self.nw, -self.n_comp:]
+        slack_current = w_current[self.nw: self.nw+self.n_comp]
+
+        G_val = self.G_no_slack_fun(w_current).full().flatten()
+
+        # K = matrix[:self.nw, :self.nw] + nabla_w_G @ scipy.sparse.diags(1./G_val) @ nabla_w_G.T
+
+        # update upper left block
+        matrix[:self.nw, :self.nw] += nabla_w_G @ scipy.sparse.diags(1./G_val) @ nabla_w_G.T
+
+        matrix[:self.nw, self.nw:self.nw+self.n_comp] = -L_mus @ scipy.sparse.diags(w_current[-self.n_comp:])
+
+        r_G = rhs[-self.n_mu:-self.n_comp]
+        r_s = rhs[-self.n_comp:]
+        r_lw_tilde = rhs[:self.nw] - nabla_w_G @ scipy.sparse.diags(1./G_val) @ r_G \
+                    - L_mus @ scipy.sparse.diags(1./slack_current) @ r_s
+
+        rhs[:self.nw] = r_lw_tilde
+        n_red = self.nw_pd - self.n_mu
+        step = scipy.sparse.linalg.spsolve(matrix[:n_red, :n_red], rhs[:n_red])
+
+        delta_mu_G = scipy.sparse.diags(1./G_val) @ (r_G - nabla_w_G.T @ step[:self.nw])
+        delta_mu_s = scipy.sparse.diags(1./slack_current) @ (r_s - step[self.nw: self.nw+self.n_comp] /w_current[-self.n_comp:])
+
+        step = np.concatenate((step, delta_mu_G, delta_mu_s))
+
+        return step
+
 
 
     def check_newton_matrix(self, matrix):
@@ -291,7 +321,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
 
                 t0_la = time.time()
-                step = self.compute_step_sparse(newton_matrix, rhs)
+                # step = self.compute_step_sparse(newton_matrix, rhs)
+                step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
+
+                print(f"iterate at {gn_iter=}")
+                self.print_iterates([w_current, step])
+                if gn_iter > 2:
+                    exit(1)
                 # step = self.compute_step_sparse_schur(newton_matrix, rhs)
                 t_la += time.time() - t0_la
 
