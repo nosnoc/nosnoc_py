@@ -209,9 +209,17 @@ class NosnocCustomSolver(NosnocSolverBase):
         if SPARSE:
             mat = mat.sparse()
             step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+
+            # mat = mat.full()
+            # decomp = eigenpy.LDLT(mat)
+            # step_w_lam = decomp.solve(rhs_elim)
+
+            # scipy.linalg.ldl()
+            # L, D, perm = ldl(M)
         else:
             mat = mat.full()
-            step_w_lam = np.linalg.solve(mat, rhs_elim)
+            # step_w_lam = np.linalg.solve(mat, rhs_elim)
+            step_w_lam = scipy.linalg.solve(mat, rhs_elim)
 
         slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
 
@@ -262,9 +270,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         mu_pd_0 = np.ones((self.n_mu,))
         # slack0 = self.slack0_fun(prob.w0, self.p_val).full().flatten()
         slack0 = np.ones((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, lamH0, slack0, mu_pd_0))
-
-        w_current = w_pd_0
+        w_current = np.concatenate((prob.w0, lamH0, slack0, mu_pd_0))
 
         w_all = [w_current.copy()]
         n_max_iter_inc_polish = opts.max_iter_homotopy + 1
@@ -300,7 +306,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             self.setup_p_val(sigma_k, tau_val)
 
             if opts.print_level > 1:
-                print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G")
+                print("alpha \t alpha_mu \talpha_max\t step norm \t kkt res \t min mu \t min G")
             t = time.time()
             alpha_min_counter = 0
 
@@ -322,9 +328,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # cond = np.linalg.cond(newton_matrix.toarray())
                 # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{newton_iter}.pdf')
 
-                # t0_la = time.time()
+                t0_la = time.time()
                 # step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
                 step = self.compute_step_elim_mu_s(w_current)
+                t_la += time.time() - t0_la
 
                 # print(f"iterate at {newton_iter=}")
                 # self.print_iterates([w_current, step])
@@ -378,17 +385,17 @@ class NosnocCustomSolver(NosnocSolverBase):
                     new = max(min(w_current[-n_mu+i], kappaSigma * tau_val / G_val[i]), tau_val/(kappaSigma * G_val[i]))
                     # if new != w_current[-n_mu+i]:
                     #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
-                        # breakpoint()
-                        # self.print_G_val(G_val)
-                        # self.print_kkt_residual(kkt_val.full().flatten())
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
                 if opts.print_level > 1:
                     min_mu = np.min(self.get_mu(w_current))
                     max_mu = np.max(self.get_mu(w_current))
+                    max_slack_comp_viol = np.max(np.abs(kkt_val[self.nw+self.n_H:self.nw+self.n_H+self.n_comp]))
+                    max_H_viol = np.max(np.abs(kkt_val[self.nw:self.nw+self.n_H]))
+                    max_comp_viol = np.max(np.abs(kkt_val[:-self.n_mu]))
                     # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t")
+                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {alpha_max:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t {max_slack_comp_viol:.2e}\t{max_H_viol:.2e}\t{max_comp_viol:.2e}")
 
             cpu_time_nlp[ii] = time.time() - t
 
