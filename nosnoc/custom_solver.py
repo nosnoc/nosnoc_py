@@ -417,13 +417,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             #     break
 
             # Update the homotopy parameter.
-            if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
-                sigma_k = opts.homotopy_update_slope * sigma_k
-            elif opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
-                sigma_k = max(
-                    opts.sigma_N,
-                    min(opts.homotopy_update_slope * sigma_k,
-                        sigma_k**opts.homotopy_update_exponent))
+            sigma_k = self.homotopy_sigma_update(sigma_k)
 
         # if opts.do_polishing_step: ...
 

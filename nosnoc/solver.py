@@ -167,6 +167,16 @@ class NosnocSolverBase(ABC):
               f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
 
 
+    def homotopy_sigma_update(self, sigma_k):
+        opts = self.opts
+        if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
+            return opts.homotopy_update_slope * sigma_k
+        elif opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
+            return max(opts.sigma_N,
+                min(opts.homotopy_update_slope * sigma_k,
+                    sigma_k**opts.homotopy_update_exponent))
+
+
 class NosnocSolver(NosnocSolverBase):
     """
     Main solver class which solves the nonsmooth problem by applying a homotopy
@@ -304,13 +314,7 @@ class NosnocSolver(NosnocSolverBase):
                 break
 
             # Update the homotopy parameter.
-            if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
-                sigma_k = opts.homotopy_update_slope * sigma_k
-            elif opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
-                sigma_k = max(
-                    opts.sigma_N,
-                    min(opts.homotopy_update_slope * sigma_k,
-                        sigma_k**opts.homotopy_update_exponent))
+            sigma_k = self.homotopy_sigma_update(sigma_k)
 
         if opts.do_polishing_step:
             w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
