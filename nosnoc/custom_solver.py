@@ -1,9 +1,6 @@
 from typing import Optional, List
-from abc import ABC, abstractmethod
 import time
 import scipy
-from copy import copy
-from dataclasses import dataclass, field
 
 import numpy as np
 import casadi as ca
@@ -209,10 +206,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         if SPARSE:
             mat = mat.sparse()
             step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
-
-            # mat = mat.full()
-            # decomp = eigenpy.LDLT(mat)
-            # step_w_lam = decomp.solve(rhs_elim)
 
             # scipy.linalg.ldl()
             # L, D, perm = ldl(M)
