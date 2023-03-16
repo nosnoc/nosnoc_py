@@ -545,8 +545,7 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
         Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu,
-                          np.zeros((self.model.dims.n_u,)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
 
         # Create Finite elements in this control stage
         control_stage = []
