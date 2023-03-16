@@ -400,7 +400,7 @@ class NosnocModel:
         self.mu_smooth_fun = ca.Function('mu_smooth_fun', [self.x, self.p], [mu_smooth])
         self.lambda_smooth_fun = ca.Function('lambda_smooth_fun', [self.x, self.p], [lambda_smooth])
 
-    def get_lambda00(self, opts: NosnocOpts):
+    def compute_lambda00(self, opts: NosnocOpts):
         x0 = self.x0
         p0 = self.p_val_ctrl_stages[0]
         if opts.rootfinder_for_initial_z:

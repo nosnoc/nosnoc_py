@@ -91,13 +91,16 @@ class NosnocSolverBase(ABC):
         else:
             raise NotImplementedError()
 
-    def print_problem(self):
+    def print_problem(self) -> None:
         self.problem.print()
+        return
 
-    def initialize(self):
+    def initialize(self) -> None:
         opts = self.opts
         prob = self.problem
         x0 = prob.model.x0
+
+        self.compute_lambda00()
 
         if opts.initialization_strategy in [
                 InitializationStrategy.ALL_XCURRENT_W0_START,
@@ -160,6 +163,7 @@ class NosnocSolverBase(ABC):
             # print(prob.w0)
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
+        return
 
     def _print_iter_stats(self, sigma_k, complementarity_residual, nlp_res, cost_val, cpu_time_nlp,
                           nlp_iter, status):
@@ -175,6 +179,17 @@ class NosnocSolverBase(ABC):
             return max(opts.sigma_N,
                 min(opts.homotopy_update_slope * sigma_k,
                     sigma_k**opts.homotopy_update_exponent))
+
+    def compute_lambda00(self) -> None:
+        self.lambda00 = self.problem.model.compute_lambda00(self.opts)
+        return
+
+    def setup_p_val(self, sigma, tau) -> None:
+        model: NosnocModel = self.problem.model
+        self.p_val = np.concatenate(
+                (model.p_val_ctrl_stages.flatten(),
+                 np.array([sigma, tau]), self.lambda00, model.x0))
+        return
 
 
 class NosnocSolver(NosnocSolverBase):
@@ -212,16 +227,19 @@ class NosnocSolver(NosnocSolverBase):
 
         :return: Returns a dictionary containing ... TODO document all fields
         """
-        self.initialize()
         opts = self.opts
         prob = self.problem
+
+        # initialize
+        self.initialize()
+
         w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
-        n_iter_polish = opts.max_iter_homotopy + 1
-        complementarity_stats = n_iter_polish * [None]
-        cpu_time_nlp = n_iter_polish * [None]
-        nlp_iter = n_iter_polish * [None]
+        n_max_iter_inc_polish = opts.max_iter_homotopy + 1
+        complementarity_stats = n_max_iter_inc_polish * [None]
+        cpu_time_nlp = n_max_iter_inc_polish * [None]
+        nlp_iter = n_max_iter_inc_polish * [None]
 
         if opts.print_level:
             print('-------------------------------------------')
@@ -231,14 +249,13 @@ class NosnocSolver(NosnocSolverBase):
 
         # lambda00 initialization
         x0 = prob.model.x0
-        lambda00 = prob.model.get_lambda00(opts)
 
         if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
             lbw = prob.lbw.copy()
             ubw = prob.ubw.copy()
 
             # lambda00 != 0.0 -> corresponding thetas on first fe are zero
-            I_active_lam = np.where(lambda00 > 1e1*opts.comp_tol)[0].tolist()
+            I_active_lam = np.where(self.lambda00 > 1e1*opts.comp_tol)[0].tolist()
             ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2)  # flatten sys
             w_zero_indices = []
             for i in range(opts.n_s):
@@ -250,7 +267,7 @@ class NosnocSolver(NosnocSolverBase):
 
             # if all but one lambda are zero: this theta can be fixed to 1.0, all other thetas are 0.0
             w_one_indices = []
-            # I_lam_zero = set(range(len(lambda00))).difference( I_active_lam )
+            # I_lam_zero = set(range(len(self.lambda00))).difference( I_active_lam )
             # n_lam = sum(prob.model.dims.n_f_sys)
             # if len(I_active_lam) == n_lam - 1:
             #     for i in range(opts.n_s):
@@ -258,7 +275,7 @@ class NosnocSolver(NosnocSolverBase):
             #         w_one_indices += [tmp[i] for i in I_lam_zero]
             if opts.print_level > 1:
                 print(f"fixing {prob.w[w_one_indices]} = 1. and {prob.w[w_zero_indices]} = 0.")
-                print(f"Since lambda00 = {lambda00}")
+                print(f"Since self.lambda00 = {self.lambda00}")
             w0[w_zero_indices] = 0.0
             lbw[w_zero_indices] = 0.0
             ubw[w_zero_indices] = 0.0
@@ -274,9 +291,7 @@ class NosnocSolver(NosnocSolverBase):
         for ii in range(opts.max_iter_homotopy):
             tau_val = min(sigma_k ** 1.5, sigma_k)
             # tau_val = sigma_k**1.5*1e3
-            p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k,
-                                                                   tau_val]), lambda00, x0))
+            self.setup_p_val(sigma_k, tau_val)
 
             # solve NLP
             t = time.time()
@@ -285,7 +300,7 @@ class NosnocSolver(NosnocSolverBase):
                               ubg=prob.ubg,
                               lbx=lbw,
                               ubx=ubw,
-                              p=p_val)
+                              p=self.p_val)
             cpu_time_nlp[ii] = time.time() - t
 
             # print and process solution
@@ -298,7 +313,7 @@ class NosnocSolver(NosnocSolverBase):
             w0 = w_opt
             w_all.append(w_opt)
 
-            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
+            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
@@ -317,8 +332,8 @@ class NosnocSolver(NosnocSolverBase):
             sigma_k = self.homotopy_sigma_update(sigma_k)
 
         if opts.do_polishing_step:
-            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
-                                            self.polish_solution(w_opt, lambda00, x0)
+            w_opt, cpu_time_nlp[n_max_iter_inc_polish - 1], nlp_iter[n_max_iter_inc_polish - 1], status = \
+                                            self.polish_solution(w_opt, self.lambda00, x0)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -326,7 +341,7 @@ class NosnocSolver(NosnocSolverBase):
         # print constraint violation
         if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
             threshold = np.max([np.sqrt(cost_val) / 100, opts.comp_tol * 1e2, 1e-5])
-            g_val = prob.g_fun(w_opt, p_val).full().flatten()
+            g_val = prob.g_fun(w_opt, self.p_val).full().flatten()
             if max(abs(g_val)) > threshold:
                 print("\nconstraint violations:")
                 for ii in range(len(g_val)):
@@ -396,13 +411,11 @@ class NosnocSolver(NosnocSolverBase):
                 w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
 
             sigma_k, tau_val = 0.0, 0.0
-            p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k,
-                                                                   tau_val]), lambda00, x0))
+            self.setup_p_val(sigma_k, tau_val)
 
             # solve NLP
             t = time.time()
-            sol = self.solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=p_val)
+            sol = self.solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
             cpu_time_nlp = time.time() - t
 
             # print and process solution
@@ -413,7 +426,7 @@ class NosnocSolver(NosnocSolverBase):
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
 
-            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
+            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
             if opts.print_level:
                 self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
                                        cpu_time_nlp, nlp_iter, status)

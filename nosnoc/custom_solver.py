@@ -192,8 +192,8 @@ class NosnocCustomSolver(NosnocSolverBase):
         step = scipy.sparse.linalg.spsolve(matrix, rhs)
         return step
 
-    def compute_step_elim_mu_s(self, w_current, p_val):
-        mat, r_lw_tilde, nabla_w_compl, kkt_eq = self.dense_ls_fun(w_current, p_val)
+    def compute_step_elim_mu_s(self, w_current):
+        mat, r_lw_tilde, nabla_w_compl, kkt_eq = self.dense_ls_fun(w_current, self.p_val)
         mu_G = w_current[-self.n_mu:-self.n_comp]
 
         rhs = -kkt_eq.full().flatten()
@@ -255,27 +255,22 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # initialize
         self.initialize()
-        # slack0
-        x0 = prob.model.x0
-        lambda00 = prob.model.get_lambda00(opts)
+
         tau_val = opts.sigma_0
-        p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(),
-                 np.array([opts.sigma_0, tau_val]), lambda00, x0))
 
         lamH0 = 1.0 * np.ones((self.n_H,))
         mu_pd_0 = np.ones((self.n_mu,))
-        # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
+        # slack0 = self.slack0_fun(prob.w0, self.p_val).full().flatten()
         slack0 = np.ones((self.n_comp,))
         w_pd_0 = np.concatenate((prob.w0, lamH0, slack0, mu_pd_0))
 
         w_current = w_pd_0
 
         w_all = [w_current.copy()]
-        n_iter_polish = opts.max_iter_homotopy + 1
-        complementarity_stats = n_iter_polish * [None]
-        cpu_time_nlp = n_iter_polish * [None]
-        nlp_iter = n_iter_polish * [None]
+        n_max_iter_inc_polish = opts.max_iter_homotopy + 1
+        complementarity_stats = n_max_iter_inc_polish * [None]
+        cpu_time_nlp = n_max_iter_inc_polish * [None]
+        nlp_iter = n_max_iter_inc_polish * [None]
         sigma_k = opts.sigma_0
 
         # TODO: make this options
@@ -302,9 +297,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             tau_val = sigma_k
-            p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(),
-                 np.array([sigma_k, tau_val]), lambda00, x0))
+            self.setup_p_val(sigma_k, tau_val)
 
             if opts.print_level > 1:
                 print("alpha \t alpha_mu \t step norm \t kkt res \t min mu \t min G")
@@ -314,7 +307,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             for newton_iter in range(max_newton_iter):
 
                 t0_ca = time.time()
-                kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
+                kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, self.p_val)
                 t_ca += time.time() - t0_ca
 
                 nlp_res = ca.norm_inf(kkt_val).full()[0][0]
@@ -331,7 +324,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # t0_la = time.time()
                 # step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
-                step = self.compute_step_elim_mu_s(w_current, p_val)
+                step = self.compute_step_elim_mu_s(w_current)
 
                 # print(f"iterate at {newton_iter=}")
                 # self.print_iterates([w_current, step])
@@ -353,7 +346,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # compute new nlp residual after mu step
                 # NOTE: not really necessary, maybe make optional
-                # kkt_val = self.kkt_eq_fun(w_candidate, p_val)
+                # kkt_val = self.kkt_eq_fun(w_candidate, self.p_val)
                 # nlp_res = ca.norm_inf(kkt_val).full()[0][0]
 
                 # fraction to boundary G, s > 0
@@ -369,8 +362,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                         break
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     # t0_ca = time.time()
-                    step_res_norm = self.kkt_max_res_fun(w_candidate, p_val).full()[0][0]
-                    # step_res_norm = np.linalg.norm(self.kkt_eq_fun(w_candidate, p_val).full().flatten(), ord=np.inf)
+                    step_res_norm = self.kkt_max_res_fun(w_candidate, self.p_val).full()[0][0]
+                    # step_res_norm = np.linalg.norm(self.kkt_eq_fun(w_candidate, self.p_val).full().flatten(), ord=np.inf)
                     # t_ca += time.time() - t0_ca
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
@@ -411,7 +404,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # min_lam_comp = np.min(self.get_lambda_comp(w_current))
                 print(f"{sigma_k:.2e} \t {newton_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
 
-            # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
+            # complementarity_residual = prob.comp_res(w_current[:self.nw], self.p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
             # if complementarity_residual < opts.comp_tol:
             #     break
