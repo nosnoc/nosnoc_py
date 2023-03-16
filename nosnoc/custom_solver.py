@@ -285,7 +285,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         rho = 0.9 # factor to shrink alpha in line search
         gamma = .3
         alpha_min = 0.01
-        kappaSigma = 1e9 # 1e10 is IPOPT default
+        kappaSigma = 1e10 # 1e10 is IPOPT default
 
         # timers
         t_la = 0.0
@@ -425,7 +425,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     min(opts.homotopy_update_slope * sigma_k,
                         sigma_k**opts.homotopy_update_exponent))
 
-        # if opts.do_polishing_step:
+        # if opts.do_polishing_step: ...
 
         # collect results
         results = get_results_from_primal_vector(prob, w_current)
