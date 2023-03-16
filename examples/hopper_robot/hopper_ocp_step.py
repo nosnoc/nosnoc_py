@@ -15,7 +15,7 @@ from functools import partial
 
 DENSE = False
 lift_algebraic = False
-x_goal = 0.7
+x_goal = 4.0
 
 
 def get_hopper_ocp_description(opts):
@@ -86,10 +86,10 @@ def get_hopper_ocp_description(opts):
 
     Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
-    R = np.diag([0.01, 0.01, 100])
+    R = np.diag([0.01, 0.01, 1e-5])
 
     # path comp to avoid slipping
-    g_comp_path = ca.horzcat(v_tangent, theta[1]+theta[2])
+    
     # Hand create least squares cost
     p_x_ref = ca.SX.sym('x_ref', n_x)
 
@@ -116,10 +116,12 @@ def get_hopper_ocp_description(opts):
                                           beta*alpha[2],
                                           beta*(1-alpha[2])),
                          beta-(1-alpha[0])*(1-alpha[1]))
+        g_comp_path = ca.horzcat(ca.vertcat(v_tangent, -v_tangent), ca.vertcat(beta, beta))
     else:
         g_z = theta-ca.vertcat(alpha[0]+(1-alpha[0])*(1-alpha[1]),
                                (1-alpha[0])*(1-alpha[1])*alpha[2],
                                (1-alpha[0])*(1-alpha[1])*(1-alpha[2]))
+        g_comp_path = ca.horzcat(ca.vertcat(v_tangent, -v_tangent), ca.vertcat(theta[1]+theta[2], theta[1]+theta[2]))
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), f_x=[f_x], alpha=[alpha], c=c, x0=np.concatenate((x0, [0])),
                            u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t,
@@ -149,7 +151,7 @@ def get_default_options():
 
     opts.time_freezing = True
     opts.equidistant_control_grid = True
-    opts.N_stages = 20
+    opts.N_stages = 40
     opts.N_finite_elements = 3
     opts.max_iter_homotopy = 6
     return opts
@@ -161,7 +163,7 @@ def solve_ocp(opts=None):
 
     model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts)
 
-    opts.terminal_time = 1
+    opts.terminal_time = 4.0
 
     solver = ns.NosnocSolver(opts, model, ocp)
     results = solver.solve()
@@ -210,7 +212,6 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     except Exception:
         print("install imagemagick to save as gif")
 
-    breakpoint()
     # Plot Trajectory
     plt.figure()
     x_traj = np.array(results['x_traj'])
@@ -251,6 +252,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     plt.subplot(4, 1, 4)
     plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
     plt.show()
+    breakpoint()
 
 
 if __name__ == '__main__':
