@@ -50,12 +50,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         super().__init__(opts, model, ocp)
         prob = self.problem
 
-        # assume SCHOLTES_INEQ, or any mpcc_mode that transforms complementarities into inequalites.
         # complements
         G1 = casadi_vertcat_list([casadi_sum_list(x[0]) for x in prob.comp_list])
         G2 = casadi_vertcat_list([x[1] for x in prob.comp_list])
         # equalities
         self.H = casadi_vertcat_list( [prob.g[i] for i in range(len(prob.lbg)) if prob.lbg[i] == prob.ubg[i]] )
+
+        # G = (G1, G2, s) \geq 0
+        self.G_no_slack = self._setup_G()
+        nG = casadi_length(self.G_no_slack)
 
         self.G1 = G1
         self.G2 = G2
@@ -71,20 +74,16 @@ class NosnocCustomSolver(NosnocSolverBase):
         lam_pd = ca.vertcat(lam_H)
         self.lam_pd_0 = np.zeros((casadi_length(lam_pd),))
 
-        # G = (G1, G2, s) \geq 0
-        self.G_no_slack = self._setup_G()
-        nG = casadi_length(self.G_no_slack)
-        self.G = ca.vertcat(self.G_no_slack, slack)
-
         mu_G = ca.SX.sym('mu_G', nG)
         mu_s = ca.SX.sym('mu_s', n_comp)
         mu_pd = ca.vertcat(mu_G, mu_s)
-        self.mu_pd_0 = np.ones((casadi_length(mu_pd),))
         self.n_mu = casadi_length(mu_pd)
 
         w_pd = ca.vertcat(prob.w, lam_pd, slack, mu_pd)
 
         ## KKT system
+        self.G = ca.vertcat(self.G_no_slack, slack)
+
         # slack = - G1 * G2 + sigma
         self.slack0_expr = -ca.diag(G1) @ G2 + prob.sigma
 
@@ -265,12 +264,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                  np.array([opts.sigma_0, tau_val]), lambda00, x0))
 
         lamH0 = 1.0 * np.ones((self.n_H,))
-        lampd0 = lamH0
-        # lampd0 = np.concatenate((lamH0, np.ones(self.n_comp,)))
-
+        mu_pd_0 = np.ones((self.n_mu,))
         # slack0 = self.slack0_fun(prob.w0, p_val).full().flatten()
         slack0 = np.ones((self.n_comp,))
-        w_pd_0 = np.concatenate((prob.w0, lampd0, slack0, self.mu_pd_0))
+        w_pd_0 = np.concatenate((prob.w0, lamH0, slack0, mu_pd_0))
 
         w_current = w_pd_0
 
@@ -282,7 +279,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         sigma_k = opts.sigma_0
 
         # TODO: make this options
-        max_gn_iter = 50
+        max_newton_iter = 50
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
@@ -314,7 +311,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             t = time.time()
             alpha_min_counter = 0
 
-            for gn_iter in range(max_gn_iter):
+            for newton_iter in range(max_newton_iter):
 
                 t0_ca = time.time()
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, p_val)
@@ -324,24 +321,21 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if nlp_res < sigma_k / 10:
                     break
 
-                # newton_matrix[-n_mu:, -n_mu:] += 1e-5 * scipy.sparse.eye(n_mu)
-                # print(f"cond(A) = {np.linalg.cond(newton_matrix.toarray()):.2e}")
-
                 # simple sparse
-                newton_matrix = jac_kkt_val.sparse()
-                rhs = - kkt_val.full().flatten()
-                step = self.compute_step_sparse(newton_matrix, rhs)
+                # newton_matrix = jac_kkt_val.sparse()
+                # rhs = - kkt_val.full().flatten()
+                # step = self.compute_step_sparse(newton_matrix, rhs)
 
-                cond = np.linalg.cond(newton_matrix.toarray())
-                self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{gn_iter}.pdf')
+                # cond = np.linalg.cond(newton_matrix.toarray())
+                # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{newton_iter}.pdf')
 
                 # t0_la = time.time()
                 # step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
                 step = self.compute_step_elim_mu_s(w_current, p_val)
 
-                # print(f"iterate at {gn_iter=}")
+                # print(f"iterate at {newton_iter=}")
                 # self.print_iterates([w_current, step])
-                # if gn_iter > 2:
+                # if newton_iter > 2:
                 #     exit(1)
 
                 step_norm = np.max(np.abs(step))
@@ -369,7 +363,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # line search:
                 alpha = alpha_max
-                # alpha_min_k = min(alpha_min, alpha_max * 0.1)
                 while True:
                     if alpha < alpha_min:
                         alpha_min_counter += 1
@@ -407,16 +400,16 @@ class NosnocCustomSolver(NosnocSolverBase):
             cpu_time_nlp[ii] = time.time() - t
 
             # print and process solution
-            nlp_iter[ii] = gn_iter
+            nlp_iter[ii] = newton_iter
             w_all.append(w_current)
 
             if opts.print_level > 1:
-                print(f"sigma = {sigma_k:.2e}, iter {gn_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
+                print(f"sigma = {sigma_k:.2e}, iter {newton_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
             elif opts.print_level == 1:
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
                 # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                print(f"{sigma_k:.2e} \t {gn_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
+                print(f"{sigma_k:.2e} \t {newton_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
