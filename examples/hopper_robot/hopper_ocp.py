@@ -14,10 +14,9 @@ from functools import partial
 
 LONG = False
 DENSE = False
-x_goal = 0.7
 
 
-def get_hopper_ocp_description(opts):
+def get_hopper_ocp_description(opts, x_goal, dense):
     # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
@@ -75,7 +74,6 @@ def get_hopper_ocp_description(opts):
         x_ref = np.concatenate([x_ref1, x_ref2])
     else:
         # Parameters
-        x_goal = 0.7
         x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
         x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
         x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
@@ -86,13 +84,14 @@ def get_hopper_ocp_description(opts):
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
     lbu = np.array([-50, -50, 0, 0.1])
+    u_guess = np.array([0, 0, 0, 1])
 
     ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5, np.inf])
     lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5, -np.inf])
 
     Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
-    R = np.diag([0.01, 0.01, 100])
+    R = np.diag([0.01, 0.01, 1e-5])
 
     # path comp to avoid slipping
     g_comp_path = ca.horzcat(ca.vertcat(v_tangent, f_c), ca.vertcat(u[2], u[2]))
@@ -115,7 +114,7 @@ def get_hopper_ocp_description(opts):
     f_aux_pos = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal-J_tangent*mu)*a_n, 0)
     f_aux_neg = ca.vertcat(ca.SX.zeros(n_q, 1), inv_M_aux@(J_normal+J_tangent*mu)*a_n, 0)
 
-    if DENSE:
+    if dense:
         F = [ca.horzcat(f_ode, f_ode, f_ode, f_ode, f_ode, f_ode, f_aux_pos, f_aux_neg)]
         S = [np.array([[1, 1, 1],
                        [1, 1, -1],
@@ -132,7 +131,7 @@ def get_hopper_ocp_description(opts):
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
                            u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t)
-    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
+    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, u_guess=u_guess, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
 
     v_tangent_fun = ca.Function('v_normal_fun', [x], [v_tangent])
     v_normal_fun = ca.Function('v_normal_fun', [x], [v_normal])
@@ -166,22 +165,48 @@ def get_default_options():
     return opts
 
 
-def solve_ocp(opts=None):
+def solve_ocp(opts=None, plot=True, dense=DENSE):
     if opts is None:
         opts = get_default_options()
+        opts.terminal_time = 1.0
+        opts.N_stages = 20
 
-    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts)
-
-    opts.terminal_time = 1
+    x_goal = 0.7
+    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts, x_goal, dense)
 
     solver = ns.NosnocSolver(opts, model, ocp)
-    breakpoint()
+
+    # Calculate time steps and initialize x to [xref, t]
+    opts.initialization_strategy = ns.InitializationStrategy.EXTERNAL
+    t_steps = np.linspace(0, opts.terminal_time, opts.N_stages)
+    solver.set('x', np.c_[x_ref, t_steps])
     results = solver.solve()
-    plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun)
+    if plot:
+        plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal)
 
     return results
 
+def speed_experiment():
+    # Try running solver with multiple n_s with both dense and sparse S
+    cpu_times_dense = []
+    cpu_times_sparse = []
 
+    for n_s in [2, 3, 4, 5, 6]:
+        opts = get_default_options()
+        opts.terminal_time = 1.0
+        opts.N_stages = 20
+        opts.n_s = n_s
+        results = solve_ocp(opts=opts, plot=False, dense=False)
+        cpu_times_sparse.append(sum(results['cpu_time_nlp']))
+
+    for n_s in [2, 3, 4, 5, 6]:
+        opts = get_default_options()
+        opts.terminal_time = 1.0
+        opts.N_stages = 20
+        opts.n_s = n_s
+        results = solve_ocp(opts=opts, plot=False, dense=True)
+        cpu_times_dense.append(sum(results['cpu_time_nlp']))
+    breakpoint()
 def init_func(htrail, ftrail):
     htrail.set_data([], [])
     ftrail.set_data([], [])
@@ -201,7 +226,7 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
     return head, foot, body, ftrail, htrail
 
 
-def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
+def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal):
     fig, ax = plt.subplots()
     if LONG:
         ax.set_xlim(0, 1.5)
@@ -211,7 +236,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     else:
         ax.set_xlim(0, x_goal+0.1)
         ax.set_ylim(-0.1, 1.1)
-        patch = patches.Rectangle((-0.1, -0.1), x_goal+0.1, 0.1, color='grey')
+        patch = patches.Rectangle((-0.1, -0.1), x_goal+0.2, 0.1, color='grey')
         ax.add_patch(patch)
     ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
     head = ax.scatter([0], [0], color='b', s=[100])
@@ -269,5 +294,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     plt.show()
 
 
+
 if __name__ == '__main__':
-    solve_ocp()
+    #solve_ocp()
+    speed_experiment()
