@@ -129,6 +129,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
         self.kkt_max_res_fun = ca.Function('kkt_max_res_fun', [w_pd, prob.p], [ca.norm_inf(kkt_eq)], casadi_function_opts)
+        self.max_violation_fun = ca.Function('max_violation_fun', [w_pd, prob.p], [ca.norm_inf(ca.vertcat(slacked_complementarity, self.H))], casadi_function_opts)
+        breakpoint()
+        log_merit = prob.cost - tau * ca.sum1(ca.log(self.G))
+        self.log_merit_fun = ca.Function('log_merit_fun', [w_pd, prob.p], [log_merit], casadi_function_opts)
 
         # precompute nabla_w_G
         dummy = ca.SX.sym('dummy')
@@ -347,6 +351,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     break
 
                 t0_ls = time.time()
+                viol_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
 
                 ## LINE SEARCH + fraction to boundary
                 tau_j = max(tau_min, 1-tau_val)
@@ -374,10 +379,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                         break
                     w_candidate[:n_all_but_mu] = w_current[:n_all_but_mu] + alpha * step[:n_all_but_mu]
                     # t0_ca = time.time()
-                    step_res_norm = self.kkt_max_res_fun(w_candidate, self.p_val).full()[0][0]
-                    # step_res_norm = np.linalg.norm(self.kkt_eq_fun(w_candidate, self.p_val).full().flatten(), ord=np.inf)
+                    step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
                     # t_ca += time.time() - t0_ca
-                    if step_res_norm < (1-gamma*alpha) * nlp_res:
+                    if step_viol < (1-gamma*alpha) * viol_current:
                         break
                     else:
                         # reject step
