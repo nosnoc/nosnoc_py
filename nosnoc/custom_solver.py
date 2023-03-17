@@ -124,6 +124,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
         self.G_fun = ca.Function('G_fun', [w_pd], [self.G], casadi_function_opts)
+        self.H_fun = ca.Function('H_fun', [w_pd, prob.p], [self.H], casadi_function_opts)
         self.G_no_slack_fun = ca.Function('G_no_slack_fun', [w_pd], [self.G_no_slack], casadi_function_opts)
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
@@ -150,6 +151,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                     + nabla_w_compl @ ca.diag(mu_s / slack) @ slacked_complementarity
 
         self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p], [mat_elim_mus, r_lw_dtilde, nabla_w_compl])
+        self.nabla_w_compl_fun = ca.Function('nabla_w_compl_fun', [w_pd, prob.p], [nabla_w_compl])
+        self.slacked_compl_fun = ca.Function('slacked_compl_fun', [w_pd, prob.p], [slacked_complementarity])
 
         # precompute
         self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
@@ -195,11 +198,13 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         r_G = -self.kkt_val[-self.n_mu:-self.n_comp]
         r_s = -self.kkt_val[-self.n_comp:]
+        r_comp = -self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
+        r_eq = -self.kkt_val[self.nw : self.nw+self.n_H]
 
         G_val = self.G_no_slack_fun(w_current).full().flatten()
-        r_lw_tilde = -r_lw_tilde.full().flatten()
+        self.r_lw_tilde = -r_lw_tilde.full().flatten()
 
-        rhs_elim = np.concatenate((r_lw_tilde, -self.kkt_val[self.nw:self.nw+self.n_H]))
+        rhs_elim = np.concatenate((self.r_lw_tilde, r_eq))
 
         SPARSE = True
         if SPARSE:
@@ -222,7 +227,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
 
         # expand
-        delta_slack = -self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
+        delta_slack = r_comp - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
         delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
         delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
 
@@ -232,12 +237,28 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
 
-    def get_second_order_correction(self, w_current, w_step):
+    def get_second_order_correction(self, w_current, w_candidate, alpha):
         # setup rhs
+        r_eq_candidate = self.H_fun(w_candidate, self.p_val).full().flatten()
+        r_eq_soc = -(alpha * self.kkt_val[self.nw : self.nw+self.n_H] + r_eq_candidate)
 
+        # this one is a residual and should be evaluated again
+        r_comp_cand = self.slacked_compl_fun(w_candidate, self.p_val).full().flatten()
+        r_comp_soc = - (alpha * self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] + r_comp_cand)
+
+        rhs_elim = np.concatenate((self.r_lw_tilde, r_eq_soc))
 
         # compute step
-        return
+        step_w_lam = self.lu_factor(rhs_elim)
+        # this is an equality jacobian and should not be evaluated again (?)
+        nabla_w_compl = self.nabla_w_compl_fun(w_current, self.p_val)
+        delta_slack = r_comp_soc - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
+        # for i in range(self.n_H):
+        #     print(f"{r_eq[i]:.2e} {r_eq_test[i]:.2e} {r_eq_soc[i]:.2e}")
+
+        # compute step
+        step = np.concatenate((step_w_lam, delta_slack))
+        return step
 
 
 
@@ -318,14 +339,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # self.plot_newton_matrix(newton_matrix.toarray(), title=f'Newton matrix, cond() = {cond:.2e}', fig_filename=f'newton_matrix_{ii}_{newton_iter}.pdf')
 
                 t0_la = time.time()
-                # step = self.compute_step_sparse_elim_mu(newton_matrix, rhs, w_current)
                 step = self.compute_step_elim_mu_s(w_current)
                 t_la += time.time() - t0_la
-
-                # print(f"iterate at {newton_iter=}")
-                # self.print_iterates([w_current, step])
-                # if newton_iter > 2:
-                #     exit(1)
 
                 step_norm = np.max(np.abs(step))
                 if step_norm < sigma_k / 10:
@@ -351,12 +366,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
                 # line search:
+                n_all_but_mu = self.nw_pd - self.n_mu
                 alpha = alpha_max
                 while True:
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
                         break
-                    w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
+                    w_candidate[:n_all_but_mu] = w_current[:n_all_but_mu] + alpha * step[:n_all_but_mu]
                     # t0_ca = time.time()
                     step_res_norm = self.kkt_max_res_fun(w_candidate, self.p_val).full()[0][0]
                     # step_res_norm = np.linalg.norm(self.kkt_eq_fun(w_candidate, self.p_val).full().flatten(), ord=np.inf)
@@ -365,13 +381,14 @@ class NosnocCustomSolver(NosnocSolverBase):
                         break
                     else:
                         # reject step
-                        # self.get_second_order_correction(w_current, step)
+                        if alpha == alpha_max:
+                            step = self.get_second_order_correction(w_current, w_candidate, alpha)
                         alpha *= rho
 
-                # do step!
+                # do step
                 w_current = w_candidate.copy()
-                G_val = self.G_fun(w_current).full().flatten()
                 # Waechter2006 eq (16): "Primal-dual barrier term Hessian should not deviate arbitrarily much from primal Hessian"
+                G_val = self.G_fun(w_current).full().flatten()
                 for i in range(n_mu):
                     new = max(min(w_current[-n_mu+i], kappaSigma * tau_val / G_val[i]), tau_val/(kappaSigma * G_val[i]))
                     # if new != w_current[-n_mu+i]:
