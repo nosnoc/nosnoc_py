@@ -205,7 +205,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         SPARSE = True
         if SPARSE:
             mat = mat.sparse()
-            step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+            # step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+            lu_factor = scipy.sparse.linalg.factorized(mat)
+            step_w_lam = lu_factor(rhs_elim)
 
             # mat = mat.full()
             # L, D, perm = scipy.linalg.ldl(mat, lower=True)
@@ -225,31 +227,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
         delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
 
-
-        # P = mat[:self.nw, :self.nw].toarray()
-        # cond_P = np.linalg.cond(P)
-        # cond_mat = np.linalg.cond(mat.toarray())
-        # np.linalg.eigvals(P)
-        # print(f"{cond_P=}, {cond_mat=}")
-
-        # # plot reduced newton matrix:
-        # from nosnoc.plot_utils import latexify_plot
-        # latexify_plot()
-        # spy_magnitude_plot(mat.toarray())
-        # import matplotlib.pyplot as plt
-        # plt.show()
-
         step = np.concatenate((step_w_lam, delta_slack, delta_mu_G, delta_mu_s))
         return step
 
-    def check_newton_matrix(self, matrix):
-        upper_left = matrix[:self.nw, :self.nw]
-        lower_right = matrix[-self.n_mu:, -self.n_mu:]
-        print(f"conditioning: upper left {np.linalg.cond(upper_left):.3e}, lower right {np.linalg.cond(lower_right):.3e}")
-        return
-
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
+
+    # def get_second_order_correction(self, w_current, w_step):
+
+
 
     def solve(self) -> dict:
         """
@@ -305,7 +291,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             if opts.print_level > 1:
                 print("alpha \t alpha_mu \talpha_max\t step norm \t kkt res \t min mu \t min G")
             t = time.time()
-            alpha_min_counter = 0
+            self.alpha_min_counter = 0
 
             for newton_iter in range(max_newton_iter):
 
@@ -362,7 +348,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha = alpha_max
                 while True:
                     if alpha < alpha_min:
-                        alpha_min_counter += 1
+                        self.alpha_min_counter += 1
                         break
                     w_candidate[:-n_mu] = w_current[:-n_mu] + alpha * step[:-n_mu]
                     # t0_ca = time.time()
@@ -372,6 +358,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                     if step_res_norm < (1-gamma*alpha) * nlp_res:
                         break
                     else:
+                        # reject step
+                        # self.get_second_order_correction(w_current, step)
                         alpha *= rho
 
                 # do step!
@@ -401,12 +389,12 @@ class NosnocCustomSolver(NosnocSolverBase):
             w_all.append(w_current)
 
             if opts.print_level > 1:
-                print(f"sigma = {sigma_k:.2e}, iter {newton_iter}, res {nlp_res:.2e}, min_steps {alpha_min_counter}")
+                print(f"sigma = {sigma_k:.2e}, iter {newton_iter}, res {nlp_res:.2e}, min_steps {self.alpha_min_counter}")
             elif opts.print_level == 1:
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
                 # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                print(f"{sigma_k:.2e} \t {newton_iter} \t {nlp_res:.2e} \t {alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
+                print(f"{sigma_k:.2e} \t {newton_iter} \t {nlp_res:.2e} \t {self.alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], self.p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
@@ -438,8 +426,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
-            condA = np.linalg.cond((newton_matrix.toarray()))
-            print(f"did not converge with last condition number {condA:.2e}")
             ikkt = np.argmax(kkt_val)
             print(f"biggest KKT res at {ikkt} with value {self.kkt_eq[ikkt]} = {kkt_val.full()[ikkt][0]:.2e}")
             print("continue to print iterate and step")
