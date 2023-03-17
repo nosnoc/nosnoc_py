@@ -207,8 +207,12 @@ class NosnocCustomSolver(NosnocSolverBase):
             mat = mat.sparse()
             step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
 
-            # scipy.linalg.ldl()
-            # L, D, perm = ldl(M)
+            # mat = mat.full()
+            # L, D, perm = scipy.linalg.ldl(mat, lower=True)
+            # y = np.linalg.solve(L, rhs_elim[perm])
+            # x = np.linalg.solve(D, y)
+            # step_w_lam = np.zeros_like(x)
+            # step_w_lam[perm] = x
         else:
             mat = mat.full()
             # step_w_lam = np.linalg.solve(mat, rhs_elim)
