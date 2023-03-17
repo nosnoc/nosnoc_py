@@ -149,7 +149,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     - nabla_w_compl @ ca.diag(1/slack) @ kkt_comp[nG:] \
                     + nabla_w_compl @ ca.diag(mu_s / slack) @ slacked_complementarity
 
-        self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p], [mat_elim_mus, r_lw_dtilde, nabla_w_compl, kkt_eq])
+        self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p], [mat_elim_mus, r_lw_dtilde, nabla_w_compl])
 
         # precompute
         self.G_offset = self.G_fun(np.zeros((self.nw_pd,))).full().flatten()
@@ -190,24 +190,23 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
     def compute_step_elim_mu_s(self, w_current):
-        mat, r_lw_tilde, nabla_w_compl, kkt_eq = self.dense_ls_fun(w_current, self.p_val)
+        mat, r_lw_tilde, nabla_w_compl = self.dense_ls_fun(w_current, self.p_val)
         mu_G = w_current[-self.n_mu:-self.n_comp]
 
-        rhs = -kkt_eq.full().flatten()
-        r_G = rhs[-self.n_mu:-self.n_comp]
-        r_s = rhs[-self.n_comp:]
+        r_G = -self.kkt_val[-self.n_mu:-self.n_comp]
+        r_s = -self.kkt_val[-self.n_comp:]
 
         G_val = self.G_no_slack_fun(w_current).full().flatten()
         r_lw_tilde = -r_lw_tilde.full().flatten()
 
-        rhs_elim = np.concatenate((r_lw_tilde, rhs[self.nw:self.nw+self.n_H]))
+        rhs_elim = np.concatenate((r_lw_tilde, -self.kkt_val[self.nw:self.nw+self.n_H]))
 
         SPARSE = True
         if SPARSE:
             mat = mat.sparse()
             # step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
-            lu_factor = scipy.sparse.linalg.factorized(mat)
-            step_w_lam = lu_factor(rhs_elim)
+            self.lu_factor = scipy.sparse.linalg.factorized(mat)
+            step_w_lam = self.lu_factor(rhs_elim)
 
             # mat = mat.full()
             # L, D, perm = scipy.linalg.ldl(mat, lower=True)
@@ -223,7 +222,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
 
         # expand
-        delta_slack = rhs[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
+        delta_slack = -self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
         delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
         delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
 
@@ -233,7 +232,13 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
 
-    # def get_second_order_correction(self, w_current, w_step):
+    def get_second_order_correction(self, w_current, w_step):
+        # setup rhs
+
+
+        # compute step
+        return
+
 
 
 
@@ -297,6 +302,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 t0_ca = time.time()
                 kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, self.p_val)
+                self.kkt_val = kkt_val.full().flatten()
                 t_ca += time.time() - t0_ca
 
                 nlp_res = ca.norm_inf(kkt_val).full()[0][0]
