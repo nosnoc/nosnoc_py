@@ -212,9 +212,9 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         SPARSE = True
         if SPARSE:
-            mat = mat.sparse()
+            self.mat = mat.sparse()
             # step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
-            self.lu_factor = scipy.sparse.linalg.factorized(mat)
+            self.lu_factor = scipy.sparse.linalg.factorized(self.mat)
             step_w_lam = self.lu_factor(rhs_elim)
 
             # mat = mat.full()
@@ -357,13 +357,9 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 t0_ls = time.time()
                 viol_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
-
+                log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
                 ## LINE SEARCH + fraction to boundary
                 tau_j = max(tau_min, 1-tau_val)
-                # compute alpha_mu_k
-                alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
-                # update mu
-                w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
                 # compute new nlp residual after mu step
                 # NOTE: not really necessary, maybe make optional
@@ -382,18 +378,30 @@ class NosnocCustomSolver(NosnocSolverBase):
                 while True:
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
+                        condA = np.linalg.cond(self.mat.toarray())
+                        # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
+                        # breakpoint()
                         break
                     w_candidate[:n_all_but_mu] = w_current[:n_all_but_mu] + alpha * step[:n_all_but_mu]
                     # t0_ca = time.time()
                     step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+                    step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                     # t_ca += time.time() - t0_ca
-                    if step_viol < (1-gamma*alpha) * viol_current:
+                    if step_viol < (1-gamma*alpha) * viol_current or step_log_merit < log_merit - gamma*viol_current:
                         break
                     else:
                         # reject step
                         if alpha == alpha_max:
+                            # if True:
                             step = self.get_second_order_correction(w_current, w_candidate, alpha)
+                            G_delta_val = self.G_fun(step).full().flatten()
+                            alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                            print(f"performing SOC at {ii} {newton_iter}, got alpha {alpha:.2e} step_viol {step_viol:.2e}, viol_current {viol_current:.2e} step_log_merit {step_log_merit:.2e}")
                         alpha *= rho
+
+                # compute alpha_mu_k
+                alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
+                w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
                 # do step
                 w_current = w_candidate.copy()
