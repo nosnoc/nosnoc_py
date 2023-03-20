@@ -132,6 +132,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.max_violation_fun = ca.Function('max_violation_fun', [w_pd, prob.p], [ca.norm_inf(ca.vertcat(slacked_complementarity, self.H))], casadi_function_opts)
         log_merit = prob.cost - tau * ca.sum1(ca.log(self.G))
         self.log_merit_fun = ca.Function('log_merit_fun', [w_pd, prob.p], [log_merit], casadi_function_opts)
+        self.log_merit_fun_jac = ca.Function('log_merit_fun_jac', [w_pd, prob.p], [log_merit, ca.jacobian(log_merit, prob.w)], casadi_function_opts)
 
         # precompute nabla_w_G
         dummy = ca.SX.sym('dummy')
@@ -146,9 +147,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         mat_elim_mus = ca.SX.zeros((self.nw+n_H, self.nw+n_H))
 
         # stationarity_w_no_H = ca.jacobian(prob.cost, prob.w).T \
-        #     + ca.jacobian(self.H, prob.w).T @ lam_H \
-        #     + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
-        #     - ca.jacobian(self.G, prob.w).T @ mu_pd
+            # + ca.jacobian(self.H, prob.w).T @ lam_H \
+            # + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
+            # - ca.jacobian(self.G, prob.w).T @ mu_pd
 
         # mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w_no_H, prob.w) + \
         mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + \
@@ -316,11 +317,12 @@ class NosnocCustomSolver(NosnocSolverBase):
         nlp_iter = n_max_iter_inc_polish * [None]
 
         # TODO: make this options
-        max_newton_iter = 50
+        max_newton_iter = 100
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
-        gamma = .3
+        gamma_phi = 1e-8
+        gamma_theta = 1e-5
         alpha_min = 0.01
         kappaSigma = 1e10 # 1e10 is IPOPT default
 
@@ -375,7 +377,12 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 t0_ls = time.time()
                 viol_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
-                log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
+
+                # log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
+                log_merit, dlog_merit_x = self.log_merit_fun_jac(w_candidate, self.p_val)
+                log_merit = log_merit.full()[0][0]
+                dlog_merit_x = dlog_merit_x.full()
+
                 ## LINE SEARCH + fraction to boundary
                 tau_j = max(tau_min, 1-tau_val)
 
@@ -390,9 +397,15 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
                 alpha_max_slack = get_fraction_to_boundary(tau_j, self.get_slack(w_current), self.get_slack(step))
 
+                if any(G_val < 0):
+                    print("G_val < 0 should never happen")
+                    breakpoint()
+                eta_phi = 1e-8
+
                 # line search:
                 n_all_but_mu = self.nw_pd - self.n_mu
                 alpha = alpha_max
+                soc_iter = False
                 while True:
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
@@ -403,18 +416,31 @@ class NosnocCustomSolver(NosnocSolverBase):
                     w_candidate[:n_all_but_mu] = w_current[:n_all_but_mu] + alpha * step[:n_all_but_mu]
                     # t0_ca = time.time()
                     step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                     # t_ca += time.time() - t0_ca
-                    if step_viol < (1-gamma*alpha) * viol_current or step_log_merit < log_merit - gamma*viol_current:
+                    # if step_viol < (1-gamma*alpha) * viol_current or step_log_merit < log_merit - gamma*viol_current:
+                    # if step_viol < viol_current or step_log_merit < log_merit - viol_current:
+
+                    # Waechter2006 (18)
+                    if step_viol < (1-gamma_theta) * viol_current or step_log_merit < log_merit - gamma_phi*viol_current:
+                        if soc_iter:
+                            print(f"alpha {alpha:.2e} theta_step {step_viol:.2e} theta {viol_current:.2e} delta phi {step_log_merit:.2e} phi {log_merit:.2e}")
+                        break
+                    # Waechter2006 (20)
+                    elif soc_iter and step_log_merit < log_merit + eta_phi * alpha * dlog_merit_x @ step[:self.nw]:
+                        print(f"SOC step {alpha:.2e} theta_step {step_viol:.2e} delta phi {step_log_merit:.4e} phi {log_merit:.4e}")
                         break
                     else:
                         # reject step
                         if alpha == alpha_max:
                             # if True:
                             step = self.get_second_order_correction(w_current, w_candidate, alpha)
+                            soc_iter = True
                             G_delta_val = self.G_fun(step).full().flatten()
                             alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                            print(f"performing SOC at {ii} {newton_iter}, got alpha {alpha:.2e} step_viol {step_viol:.2e}, viol_current {viol_current:.2e} step_log_merit {step_log_merit:.2e}")
+                            print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {step_viol:.2e} theta {viol_current:.2e} delta phi {step_log_merit:.2e} phi {log_merit:.2e}")
+
                         alpha *= rho
 
                 # compute alpha_mu_k
