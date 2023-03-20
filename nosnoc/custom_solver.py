@@ -245,6 +245,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         return w_current[self.nw+self.n_H:self.nw+self.n_H+self.n_comp]
 
     def get_second_order_correction(self, w_current, w_candidate, alpha):
+        mu_G = w_current[-self.n_mu:-self.n_comp]
         # setup rhs
         r_eq_candidate = self.H_fun(w_candidate, self.p_val).full().flatten()
         r_eq_soc = -(alpha * self.kkt_val[self.nw : self.nw+self.n_H] + r_eq_candidate)
@@ -253,18 +254,27 @@ class NosnocCustomSolver(NosnocSolverBase):
         r_comp_cand = self.slacked_compl_fun(w_candidate, self.p_val).full().flatten()
         r_comp_soc = - (alpha * self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] + r_comp_cand)
 
-        rhs_elim = np.concatenate((self.r_lw_tilde, r_eq_soc))
+        A_k = self.mat[:self.nw, self.nw:]
+        rhs_elim = np.concatenate((self.r_lw_tilde -A_k @ w_current[self.nw:self.nw+self.n_H], r_eq_soc))
 
         # compute step
         step_w_lam = self.lu_factor(rhs_elim)
         # this is an equality jacobian and should not be evaluated again (?)
         nabla_w_compl = self.nabla_w_compl_fun(w_current, self.p_val)
         delta_slack = r_comp_soc - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
-        # for i in range(self.n_H):
-        #     print(f"{r_eq[i]:.2e} {r_eq_test[i]:.2e} {r_eq_soc[i]:.2e}")
 
-        # compute step
-        step = np.concatenate((step_w_lam, delta_slack))
+        # expand mu
+        kkt_val = self.kkt_eq_fun(w_candidate, self.p_val).full().flatten()
+        G_val = self.G_no_slack_fun(w_current).full().flatten()
+        slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
+
+        r_G = -kkt_val[-self.n_mu:-self.n_comp]
+        r_s = -kkt_val[-self.n_comp:]
+        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
+        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
+
+        step = np.concatenate((step_w_lam, delta_slack, delta_mu_G, delta_mu_s))
+
         return step
 
 
