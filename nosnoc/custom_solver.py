@@ -146,14 +146,18 @@ class NosnocCustomSolver(NosnocSolverBase):
         nabla_w_H = ca.jacobian(self.H, prob.w).T
         mat_elim_mus = ca.SX.zeros((self.nw+n_H, self.nw+n_H))
 
-        # stationarity_w_no_H = ca.jacobian(prob.cost, prob.w).T \
-            # + ca.jacobian(self.H, prob.w).T @ lam_H \
-            # + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
-            # - ca.jacobian(self.G, prob.w).T @ mu_pd
+        GGN_style_hess = False
+        if GGN_style_hess:
+            stationarity_w_no_H = ca.jacobian(prob.cost, prob.w).T \
+                + ca.jacobian(self.H, prob.w).T @ lam_H \
+                + ca.jacobian(slacked_complementarity, prob.w).T @ mu_s \
+                - ca.jacobian(self.G, prob.w).T @ mu_pd
 
-        # mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w_no_H, prob.w) + \
-        mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + \
-             nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
+            mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w_no_H, prob.w) + \
+                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
+        else:
+            mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + \
+                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
         mat_elim_mus[:self.nw, self.nw:] = nabla_w_H
         mat_elim_mus[self.nw:, :self.nw] = nabla_w_H.T
 
