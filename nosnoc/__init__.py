@@ -12,6 +12,7 @@ from .rk_utils import rk4
 
 from .scholtes_fb_solver import NosnocCustomScholtesFBSolver
 from .custom_solver import NosnocCustomSolver
+from .multi_ipopt_solver import NosnocMIpoptSolver
 
 import warnings
 warnings.simplefilter("always")
