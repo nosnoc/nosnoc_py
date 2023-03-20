@@ -130,7 +130,6 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         self.kkt_max_res_fun = ca.Function('kkt_max_res_fun', [w_pd, prob.p], [ca.norm_inf(kkt_eq)], casadi_function_opts)
         self.max_violation_fun = ca.Function('max_violation_fun', [w_pd, prob.p], [ca.norm_inf(ca.vertcat(slacked_complementarity, self.H))], casadi_function_opts)
-        breakpoint()
         log_merit = prob.cost - tau * ca.sum1(ca.log(self.G))
         self.log_merit_fun = ca.Function('log_merit_fun', [w_pd, prob.p], [log_merit], casadi_function_opts)
 
@@ -184,7 +183,8 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def print_G_val(self, G_val):
         for ii in range(casadi_length(self.G)):
-            print(f"{ii}\t{self.G[ii].name():17}\t{G_val[ii]:.2e}")
+            eq_str = str(self.G[ii])
+            print(f"{ii}\t{eq_str:17}\t{G_val[ii]:.2e}")
 
     def print_kkt_residual(self, kkt_res):
         for ii in range(self.nw_pd):
@@ -241,6 +241,9 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_mu(self, w_current):
         return w_current[-self.n_mu:]
 
+    def get_slack(self, w_current):
+        return w_current[self.nw+self.n_H:self.nw+self.n_H+self.n_comp]
+
     def get_second_order_correction(self, w_current, w_candidate, alpha):
         # setup rhs
         r_eq_candidate = self.H_fun(w_candidate, self.p_val).full().flatten()
@@ -278,6 +281,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.initialize()
 
         tau_val = opts.sigma_0
+        sigma_k = opts.sigma_0
+
+        self.setup_p_val(sigma_k, tau_val)
 
         lamH0 = 1.0 * np.ones((self.n_H,))
         mu_pd_0 = np.ones((self.n_mu,))
@@ -290,7 +296,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         complementarity_stats = n_max_iter_inc_polish * [None]
         cpu_time_nlp = n_max_iter_inc_polish * [None]
         nlp_iter = n_max_iter_inc_polish * [None]
-        sigma_k = opts.sigma_0
 
         # TODO: make this options
         max_newton_iter = 50
@@ -369,6 +374,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 G_val = self.G_fun(w_current).full().flatten()
                 G_delta_val = self.G_fun(step).full().flatten()
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                alpha_max_slack = get_fraction_to_boundary(tau_j, self.get_slack(w_current), self.get_slack(step))
 
                 # line search:
                 n_all_but_mu = self.nw_pd - self.n_mu
@@ -449,12 +455,13 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
-        if nlp_res < sigma_k:
+        if nlp_res < sigma_k or step_norm < sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
             ikkt = np.argmax(kkt_val)
-            print(f"biggest KKT res at {ikkt} with value {self.kkt_eq[ikkt]} = {kkt_val.full()[ikkt][0]:.2e}")
+            condA = np.linalg.cond(self.mat.toarray())
+            print(f"biggest KKT res at {ikkt} with value {self.kkt_eq[ikkt]} = {kkt_val.full()[ikkt][0]:.2e}, condA = {condA:.2e}")
             print("continue to print iterate and step")
             breakpoint()
             self.print_iterates([w_current, step])
