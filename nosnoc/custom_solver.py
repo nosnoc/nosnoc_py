@@ -120,6 +120,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.n_comp = n_comp
         self.n_H = n_H
         self.nG = nG
+        self.n_all_but_mu = self.nw_pd - self.n_mu
 
         self.kkt_eq_jac_fun = ca.Function('kkt_eq_jac_fun', [w_pd, prob.p], [kkt_eq, kkt_eq_jac], casadi_function_opts)
         self.kkt_eq_fun = ca.Function('kkt_eq_fun', [w_pd, prob.p], [kkt_eq], casadi_function_opts)
@@ -297,16 +298,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
 
-    def check_Waechter20(self, step_log_merit, eta_phi, step, alpha) -> bool:
-        return (step_log_merit < self.log_merit + eta_phi * alpha * self.dlog_merit_x @ step[:self.nw])
+    def check_Waechter20(self, step_log_merit, eta_phi, step, alpha, dir_der_log_merit) -> bool:
+        return (step_log_merit < self.log_merit + eta_phi * alpha * dir_der_log_merit)
 
 
-    def check_Waechter19(self, step, alpha, theta_current) -> bool:
+    def check_Waechter19(self, step, alpha, theta_current, dir_der_log_merit) -> bool:
         s_phi = 2.3 # IPOPT: 2.3
         s_theta = 1.1 # IPOPT: 1.1
         delta = 1.0 # IPOPT: 1.0
 
-        dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
         if dir_der_log_merit >= 0.0:
             return False
         if alpha * (-dir_der_log_merit)**s_phi > delta * theta_current**s_theta:
@@ -443,7 +443,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                 eta_phi = 1e-8
 
                 # line search:
-                n_all_but_mu = self.nw_pd - self.n_mu
                 alpha = alpha_max
                 soc_iter = False
                 theta_min = theta_min_fact * max(1, theta_0)
@@ -454,19 +453,20 @@ class NosnocCustomSolver(NosnocSolverBase):
                         # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
                         # breakpoint()
                         break
-                    w_candidate[:n_all_but_mu] = w_current[:n_all_but_mu] + alpha * step[:n_all_but_mu]
+                    w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
                     step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
 
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
+                    dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
 
-                    if not self.check_Waechter19(step, alpha, theta_current):
+                    if not self.check_Waechter19(step, alpha, theta_current, dir_der_log_merit):
                         # Waechter case 2
                         if self.check_Waechter18(step_viol, theta_current, step_log_merit):
                             break
                     elif theta_current < theta_min:
                         # Waechter case 1
-                        if self.check_Waechter20(step_log_merit, eta_phi, step, alpha):
+                        if self.check_Waechter20(step_log_merit, eta_phi, step, alpha, dir_der_log_merit):
                             break
                     else:
                         # Waechter case 2
