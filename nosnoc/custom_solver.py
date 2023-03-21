@@ -355,6 +355,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # TODO: make this options
         max_newton_iter = 100
+        kappa_res_sigma = 0.5 # break loop if nlp_res < kappa_res_sigma * sigma
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
@@ -396,7 +397,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 t_ca += time.time() - t0_ca
 
                 nlp_res = ca.norm_inf(kkt_val).full()[0][0]
-                if nlp_res < sigma_k / 10:
+                if nlp_res < kappa_res_sigma * sigma_k:
                     break
 
                 # simple sparse
@@ -444,7 +445,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # line search:
                 alpha = alpha_max
-                soc_iter = False
+                soc_iter = 0
                 theta_min = theta_min_fact * max(1, theta_0)
                 ls_iter = 0
                 while True:
@@ -473,7 +474,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                        or (ls_iter == 0 and theta_step > theta_current)): # skip SOC if theta_step < theta_current
                         # if True:
                         step = self.get_second_order_correction(w_current, w_candidate, alpha)
-                        soc_iter = True
+                        soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
                         theta_step_no_SOC = theta_step
@@ -487,8 +488,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"SOC at it {ii} {newton_iter}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Dtheta_no_SOC {theta_step_no_SOC:.4e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
-
+                    print(f"SOC at it {ii} {newton_iter}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Dtheta_no_SOC {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    if theta_step_no_SOC < theta_step:
+                        print("SOC Warning: violation did not decrease")
 
                 # compute alpha_mu_k
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
@@ -532,9 +534,9 @@ class NosnocCustomSolver(NosnocSolverBase):
             # complementarity_stats[ii] = complementarity_residual
             # if complementarity_residual < opts.comp_tol:
             #     break
-
-            # Update the homotopy parameter.
-            sigma_k = self.homotopy_sigma_update(sigma_k)
+            if ii < opts.max_iter_homotopy - 1:
+                # Update the homotopy parameter.
+                sigma_k = self.homotopy_sigma_update(sigma_k)
 
         # if opts.do_polishing_step: ...
 
@@ -554,7 +556,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
-        if nlp_res < sigma_k or step_norm < sigma_k:
+        if nlp_res < kappa_res_sigma * sigma_k or step_norm < sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
