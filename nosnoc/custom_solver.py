@@ -314,10 +314,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         else:
             return False
 
-    def check_Waechter18(self, step_viol, theta_current, step_log_merit):
+    def check_Waechter18(self, theta_step, theta_current, step_log_merit):
         gamma_phi = 1e-8
         gamma_theta = 1e-5
-        if step_viol < (1-gamma_theta) * theta_current:
+        if theta_step < (1-gamma_theta) * theta_current:
             return True
         elif step_log_merit < self.log_merit - gamma_phi*theta_current:
             return True
@@ -446,23 +446,19 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha = alpha_max
                 soc_iter = False
                 theta_min = theta_min_fact * max(1, theta_0)
+                ls_iter = 0
                 while True:
-                    if alpha < alpha_min:
-                        self.alpha_min_counter += 1
-                        # condA = np.linalg.cond(self.mat.toarray())
-                        # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
-                        # breakpoint()
-                        break
                     w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
-                    step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+                    theta_step = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
 
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                     dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
 
+                    # A-5.4 check sufficient decrease
                     if not self.check_Waechter19(step, alpha, theta_current, dir_der_log_merit):
                         # Waechter case 2
-                        if self.check_Waechter18(step_viol, theta_current, step_log_merit):
+                        if self.check_Waechter18(theta_step, theta_current, step_log_merit):
                             break
                     elif theta_current < theta_min:
                         # Waechter case 1
@@ -470,20 +466,28 @@ class NosnocCustomSolver(NosnocSolverBase):
                             break
                     else:
                         # Waechter case 2
-                        if self.check_Waechter18(step_viol, theta_current, step_log_merit):
+                        if self.check_Waechter18(theta_step, theta_current, step_log_merit):
                             break
-                    # reject step
-                    if alpha == alpha_max: # if this is the first step
+                    # A-5.5 Initialize SOC
+                    if (alpha == alpha_max # if this is the first step
+                       or (ls_iter == 0 and theta_step > theta_current)): # skip SOC if theta_step < theta_current
                         # if True:
                         step = self.get_second_order_correction(w_current, w_candidate, alpha)
                         soc_iter = True
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                        print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {step_viol:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                        print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {theta_step:.5e} theta {theta_current:.5e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    if alpha < alpha_min:
+                        self.alpha_min_counter += 1
+                        # condA = np.linalg.cond(self.mat.toarray())
+                        # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
+                        # breakpoint()
+                        break
                     alpha *= rho
+                    ls_iter += 1
 
                 if soc_iter:
-                    print(f"alpha {alpha:.2e} theta_step {step_viol:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"alpha {alpha:.2e} theta_step {theta_step:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
 
                 # compute alpha_mu_k
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
