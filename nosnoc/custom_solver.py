@@ -371,7 +371,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
         if opts.print_level == 1:
-            print(f"sigma\t\t iter \t res \t\tmin_steps \t min_mu \t min G")
+            print(f"sigma\t\titer \tres \t\tmin_steps \tmin_mu \tmin G")
 
         w_candidate = w_current.copy()
         # homotopy loop
@@ -380,7 +380,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             self.setup_p_val(sigma_k, tau_val)
 
             if opts.print_level > 1:
-                print("alpha \t alpha_mu \talpha_max\t step norm \t kkt res \t min mu \t min G")
+                print("alpha \talpha_mu \talpha_max\tstep norm \tkkt res \tmin mu \tmin G")
             t = time.time()
             self.alpha_min_counter = 0
 
@@ -476,7 +476,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                         soc_iter = True
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                        print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {theta_step:.5e} theta {theta_current:.5e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                        theta_step_no_SOC = theta_step
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
                         # condA = np.linalg.cond(self.mat.toarray())
@@ -487,7 +487,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"alpha {alpha:.2e} theta_step {theta_step:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"SOC at it {ii} {newton_iter}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Dtheta_no_SOC {theta_step_no_SOC:.4e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+
 
                 # compute alpha_mu_k
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
@@ -511,7 +512,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     max_H_viol = np.max(np.abs(kkt_val[self.nw:self.nw+self.n_H]))
                     max_comp_viol = np.max(np.abs(kkt_val[:-self.n_mu]))
                     # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                    print(f"{alpha:.3f} \t {alpha_mu:.3f} \t\t {alpha_max:.3f} \t\t {step_norm:.2e} \t {nlp_res:.2e} \t {min_mu:.2e}\t {np.min(G_val):.2e}\t {max_slack_comp_viol:.2e}\t{max_H_viol:.2e}\t{max_comp_viol:.2e}")
+                    print(f"{alpha:.3f}\t{alpha_mu:.3f} \t\t{alpha_max:.3f} \t\t{step_norm:.2e} \t{nlp_res:.2e} \t{min_mu:.2e}\t{np.min(G_val):.2e}\t{max_slack_comp_viol:.2e}\t{max_H_viol:.2e}\t{max_comp_viol:.2e}")
 
             cpu_time_nlp[ii] = time.time() - t
 
@@ -525,7 +526,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 min_mu = np.min(self.get_mu(w_current))
                 max_mu = np.max(self.get_mu(w_current))
                 # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                print(f"{sigma_k:.2e} \t {newton_iter} \t {nlp_res:.2e} \t {self.alpha_min_counter}\t\t {min_mu:.2e} \t {np.min(G_val):.2e}\t")
+                print(f"{sigma_k:.2e}\t{newton_iter}\t{nlp_res:.2e}\t{self.alpha_min_counter}\t\t {min_mu:.2e}\t{np.min(G_val):.2e}")
 
             # complementarity_residual = prob.comp_res(w_current[:self.nw], self.p_val).full()[0][0]
             # complementarity_stats[ii] = complementarity_residual
