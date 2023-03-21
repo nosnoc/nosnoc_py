@@ -223,6 +223,12 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         rhs_elim = np.concatenate((self.r_lw_tilde, r_eq))
 
+        # from nosnoc.plot_utils import latexify_plot
+        # latexify_plot()
+        # spy_magnitude_plot(mat.toarray())
+        # import matplotlib.pyplot as plt
+        # plt.show()
+
         SPARSE = True
         if SPARSE:
             self.mat = mat.sparse()
@@ -291,6 +297,33 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
 
+    def check_Waechter20(self, step_log_merit, eta_phi, step, alpha) -> bool:
+        return (step_log_merit < self.log_merit + eta_phi * alpha * self.dlog_merit_x @ step[:self.nw])
+
+
+    def check_Waechter19(self, step, alpha, theta_current) -> bool:
+        s_phi = 2.3 # IPOPT: 2.3
+        s_theta = 1.1 # IPOPT: 1.1
+        delta = 1.0 # IPOPT: 1.0
+
+        dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
+        if dir_der_log_merit >= 0.0:
+            return False
+        if alpha * (-dir_der_log_merit)**s_phi > delta * theta_current**s_theta:
+            return True
+        else:
+            return False
+
+    def check_Waechter18(self, step_viol, theta_current, step_log_merit):
+        gamma_phi = 1e-8
+        gamma_theta = 1e-5
+        if step_viol < (1-gamma_theta) * theta_current:
+            return True
+        elif step_log_merit < self.log_merit - gamma_phi*theta_current:
+            return True
+        else:
+            return False
+
 
 
     def solve(self) -> dict:
@@ -325,10 +358,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
-        gamma_phi = 1e-8
-        gamma_theta = 1e-5
         alpha_min = 0.01
         kappaSigma = 1e10 # 1e10 is IPOPT default
+        theta_min_fact = 0.0001 # IPOPT 0.0001
 
         # timers
         t_la = 0.0
@@ -352,10 +384,14 @@ class NosnocCustomSolver(NosnocSolverBase):
             t = time.time()
             self.alpha_min_counter = 0
 
+            theta_0 = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+
             for newton_iter in range(max_newton_iter):
 
                 t0_ca = time.time()
-                kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, self.p_val)
+                # kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, self.p_val)
+                # self.kkt_val = kkt_val.full().flatten()
+                kkt_val = self.kkt_eq_fun(w_current, self.p_val)
                 self.kkt_val = kkt_val.full().flatten()
                 t_ca += time.time() - t0_ca
 
@@ -380,12 +416,12 @@ class NosnocCustomSolver(NosnocSolverBase):
                     break
 
                 t0_ls = time.time()
-                viol_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+                theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
 
                 # log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
                 log_merit, dlog_merit_x = self.log_merit_fun_jac(w_candidate, self.p_val)
-                log_merit = log_merit.full()[0][0]
-                dlog_merit_x = dlog_merit_x.full()
+                self.log_merit = log_merit.full()[0][0]
+                self.dlog_merit_x = dlog_merit_x.full()
 
                 ## LINE SEARCH + fraction to boundary
                 tau_j = max(tau_min, 1-tau_val)
@@ -399,7 +435,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 G_val = self.G_fun(w_current).full().flatten()
                 G_delta_val = self.G_fun(step).full().flatten()
                 alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                alpha_max_slack = get_fraction_to_boundary(tau_j, self.get_slack(w_current), self.get_slack(step))
+                # alpha_max_slack = get_fraction_to_boundary(tau_j, self.get_slack(w_current), self.get_slack(step))
 
                 if any(G_val < 0):
                     print("G_val < 0 should never happen")
@@ -410,10 +446,11 @@ class NosnocCustomSolver(NosnocSolverBase):
                 n_all_but_mu = self.nw_pd - self.n_mu
                 alpha = alpha_max
                 soc_iter = False
+                theta_min = theta_min_fact * max(1, theta_0)
                 while True:
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
-                        condA = np.linalg.cond(self.mat.toarray())
+                        # condA = np.linalg.cond(self.mat.toarray())
                         # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
                         # breakpoint()
                         break
@@ -422,30 +459,31 @@ class NosnocCustomSolver(NosnocSolverBase):
                     step_viol = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
 
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
-                    # t_ca += time.time() - t0_ca
-                    # if step_viol < (1-gamma*alpha) * viol_current or step_log_merit < log_merit - gamma*viol_current:
-                    # if step_viol < viol_current or step_log_merit < log_merit - viol_current:
 
-                    # Waechter2006 (18)
-                    if step_viol < (1-gamma_theta) * viol_current or step_log_merit < log_merit - gamma_phi*viol_current:
-                        if soc_iter:
-                            print(f"alpha {alpha:.2e} theta_step {step_viol:.2e} theta {viol_current:.2e} delta phi {step_log_merit:.2e} phi {log_merit:.2e}")
-                        break
-                    # Waechter2006 (20)
-                    elif soc_iter and step_log_merit < log_merit + eta_phi * alpha * dlog_merit_x @ step[:self.nw]:
-                        print(f"SOC step {alpha:.2e} theta_step {step_viol:.2e} delta phi {step_log_merit:.4e} phi {log_merit:.4e}")
-                        break
+                    if not self.check_Waechter19(step, alpha, theta_current):
+                        # Waechter case 2
+                        if self.check_Waechter18(step_viol, theta_current, step_log_merit):
+                            break
+                    elif theta_current < theta_min:
+                        # Waechter case 1
+                        if self.check_Waechter20(step_log_merit, eta_phi, step, alpha):
+                            break
                     else:
-                        # reject step
-                        if alpha == alpha_max:
-                            # if True:
-                            step = self.get_second_order_correction(w_current, w_candidate, alpha)
-                            soc_iter = True
-                            G_delta_val = self.G_fun(step).full().flatten()
-                            alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                            print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {step_viol:.2e} theta {viol_current:.2e} delta phi {step_log_merit:.2e} phi {log_merit:.2e}")
+                        # Waechter case 2
+                        if self.check_Waechter18(step_viol, theta_current, step_log_merit):
+                            break
+                    # reject step
+                    if alpha == alpha_max: # if this is the first step
+                        # if True:
+                        step = self.get_second_order_correction(w_current, w_candidate, alpha)
+                        soc_iter = True
+                        G_delta_val = self.G_fun(step).full().flatten()
+                        alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                        print(f"SOC at it {ii} {newton_iter}. alpha_max {alpha:.2e} theta_step {step_viol:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    alpha *= rho
 
-                        alpha *= rho
+                if soc_iter:
+                    print(f"alpha {alpha:.2e} theta_step {step_viol:.2e} theta {theta_current:.2e} delta phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
 
                 # compute alpha_mu_k
                 alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
