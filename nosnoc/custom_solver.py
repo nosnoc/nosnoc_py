@@ -264,15 +264,20 @@ class NosnocCustomSolver(NosnocSolverBase):
     def get_slack(self, w_current):
         return w_current[self.nw+self.n_H:self.nw+self.n_H+self.n_comp]
 
-    def get_second_order_correction(self, w_current, w_candidate, alpha):
+    def get_second_order_correction(self, w_current, w_candidate, alpha, soc_iter):
         mu_G = w_current[-self.n_mu:-self.n_comp]
+
         # setup rhs
         r_eq_candidate = self.H_fun(w_candidate, self.p_val).full().flatten()
-        r_eq_soc = -(alpha * self.kkt_val[self.nw : self.nw+self.n_H] + r_eq_candidate)
-
-        # this one is a residual and should be evaluated again
         r_comp_cand = self.slacked_compl_fun(w_candidate, self.p_val).full().flatten()
-        r_comp_soc = - (alpha * self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] + r_comp_cand)
+        if soc_iter == 0:
+            self.c_soc_k_eq = alpha * self.kkt_val[self.nw : self.nw+self.n_H] + r_eq_candidate
+            self.c_soc_k_comp = alpha * self.kkt_val[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] + r_comp_cand
+        else:
+            self.c_soc_k_eq = alpha * self.c_soc_k_eq + r_eq_candidate
+            self.c_soc_k_comp = alpha * self.c_soc_k_comp + r_comp_cand
+        r_eq_soc = - self.c_soc_k_eq
+        r_comp_soc = - self.c_soc_k_comp
 
         A_k = self.mat[:self.nw, self.nw:]
         rhs_elim = np.concatenate((self.r_lw_tilde -A_k @ w_current[self.nw:self.nw+self.n_H], r_eq_soc))
@@ -315,8 +320,8 @@ class NosnocCustomSolver(NosnocSolverBase):
             return False
 
     def check_Waechter18(self, theta_step, theta_current, step_log_merit):
-        gamma_phi = 1e-8
-        gamma_theta = 1e-5
+        gamma_phi = 1e-8 # IPOPT: 1e-8
+        gamma_theta = 1e-5 # IPOPT gamma_theta 1e-5
         if theta_step < (1-gamma_theta) * theta_current:
             return True
         elif step_log_merit < self.log_merit - gamma_phi*theta_current:
@@ -362,6 +367,8 @@ class NosnocCustomSolver(NosnocSolverBase):
         alpha_min = 0.01
         kappaSigma = 1e10 # 1e10 is IPOPT default
         theta_min_fact = 0.0001 # IPOPT 0.0001
+        max_soc = 4 # IPOPT 4
+        kappa_soc = 0.99 # IPOPT: 0.99
 
         # timers
         t_la = 0.0
@@ -458,37 +465,52 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                     # A-5.4 check sufficient decrease
                     if not self.check_Waechter19(step, alpha, theta_current, dir_der_log_merit):
-                        # Waechter case 2
+                        # Waechter case 2: check sufficient progress wrt either goal
                         if self.check_Waechter18(theta_step, theta_current, step_log_merit):
                             break
                     elif theta_current < theta_min:
-                        # Waechter case 1
+                        # Waechter case 1: log barrier descent
                         if self.check_Waechter20(step_log_merit, eta_phi, step, alpha, dir_der_log_merit):
                             break
                     else:
-                        # Waechter case 2
+                        # Waechter case 2: check sufficient progress wrt either goal
                         if self.check_Waechter18(theta_step, theta_current, step_log_merit):
                             break
                     # A-5.5 Initialize SOC
-                    if (alpha == alpha_max # if this is the first step
-                       or (ls_iter == 0 and theta_step > theta_current)): # skip SOC if theta_step < theta_current
-                        # if True:
-                        step = self.get_second_order_correction(w_current, w_candidate, alpha)
+                    if (ls_iter > 0):
+                        do_soc = False
+                    elif (theta_step < theta_current):
+                            do_soc = False
+                    else:
+                        do_soc = True
+                        theta_old_soc = theta_current
+                        theta_step_no_SOC = theta_step
+                    # A-5.9. Next SOC
+                    if soc_iter > 0:
+                        if soc_iter == max_soc or theta_step > kappa_soc * theta_old_soc:
+                            # abort SOC: continue with current one.
+                            do_soc = False
+                        else:
+                            do_soc = True
+                    # NOTE: to get multiple SOC: we need that theta is decreasing within SOC, but not "too much" in the kappa_soc sense.
+
+                    if do_soc:
+                        step = self.get_second_order_correction(w_current, w_candidate, alpha, soc_iter)
                         soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                        theta_step_no_SOC = theta_step
+                    else:
+                        alpha *= rho
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
                         # condA = np.linalg.cond(self.mat.toarray())
                         # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
                         # breakpoint()
                         break
-                    alpha *= rho
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"SOC at it {ii} {newton_iter}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Dtheta_no_SOC {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                     if theta_step_no_SOC < theta_step:
                         print("SOC Warning: violation did not decrease")
 
