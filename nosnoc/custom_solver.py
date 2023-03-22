@@ -276,17 +276,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         else:
             self.c_soc_k_eq = alpha * self.c_soc_k_eq + r_eq_candidate
             self.c_soc_k_comp = alpha * self.c_soc_k_comp + r_comp_cand
-        r_eq_soc = - self.c_soc_k_eq
-        r_comp_soc = - self.c_soc_k_comp
 
         A_k = self.mat[:self.nw, self.nw:]
-        rhs_elim = np.concatenate((self.r_lw_tilde -A_k @ w_current[self.nw:self.nw+self.n_H], r_eq_soc))
+        rhs_elim = np.concatenate((self.r_lw_tilde -A_k @ w_current[self.nw:self.nw+self.n_H], - self.c_soc_k_eq))
 
         # compute step
         step_w_lam = self.lu_factor(rhs_elim)
         # this is an equality jacobian and should not be evaluated again (?)
         nabla_w_compl = self.nabla_w_compl_fun(w_current, self.p_val)
-        delta_slack = r_comp_soc - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
+        delta_slack = - self.c_soc_k_comp - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
 
         # expand mu
         kkt_val = self.kkt_eq_fun(w_candidate, self.p_val).full().flatten()
