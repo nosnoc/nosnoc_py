@@ -15,7 +15,7 @@ from functools import partial
 
 
 
-def get_hopper_ocp_step(opts, lift_algebraic, x_goal):
+def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
     # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
@@ -67,12 +67,30 @@ def get_hopper_ocp_step(opts, lift_algebraic, x_goal):
     f_v = (-C + B@u[0:2])
     f_c = q[1] - q[3]*ca.cos(q[2])
 
-    x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-    x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
-    x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
-
-    interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-    x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+    if multijump:
+        n_jumps = int(np.round(x_goal-0.1))
+        x_step = (x_goal-0.1)/n_jumps
+        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_ref = np.empty((0,n_x))
+        x_start = x0
+        # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well 
+        for ii in range(n_jumps):
+            # Parameters
+            x_mid = np.array([x_start[0] + x_step/2, 0.8, 0, 0.1, 0, 0, 0, 0])
+            x_end = np.array([x_start[0] + x_step, 0.5, 0, 0.5, 0, 0, 0, 0])
+            interpolator = CubicSpline([0, 0.5, 1], [x_start, x_mid, x_end])
+            t_pts = np.linspace(0, 1, int(np.floor(opts.N_stages/n_jumps))+1)
+            x_ref = np.concatenate((x_ref, interpolator(t_pts[:-1])))
+            x_start = x_end
+            breakpoint()
+            x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
+    else:
+        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+        x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
+        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
+        
+        interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
+        x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
 
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
@@ -157,11 +175,17 @@ def get_default_options_step():
     return opts
 
 
-def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=1.0):
+def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=1.0, ref_as_init=False, multijump=False):
     if opts is None:
         opts = get_default_options_step()
 
-    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_step(opts, lift_algebraic, x_goal)
+    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump)
+
+    # Calculate time steps and initialize x to [xref, t]
+    if ref_as_init:
+        opts.initialization_strategy = ns.InitializationStrategy.EXTERNAL
+        t_steps = np.linspace(0, opts.terminal_time, opts.N_stages)
+        solver.set('x', np.c_[x_ref, t_steps])
 
     solver = ns.NosnocSolver(opts, model, ocp)
     results = solver.solve()

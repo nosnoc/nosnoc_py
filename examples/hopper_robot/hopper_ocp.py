@@ -16,7 +16,7 @@ LONG = False
 DENSE = False
 
 
-def get_hopper_ocp_description(opts, x_goal, dense):
+def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
@@ -73,29 +73,30 @@ def get_hopper_ocp_description(opts, x_goal, dense):
         x_ref2 = interpolator2(np.linspace(0, 1, int(np.floor(opts.N_stages/2))))
         x_ref = np.concatenate([x_ref1, x_ref2])
     else:
-        x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-        x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
-        x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
+        if multijump:
+            n_jumps = int(np.round(x_goal-0.1))
+            x_step = (x_goal-0.1)/n_jumps
+            x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+            x_ref = np.empty((0,n_x))
+            x_start = x0
+            # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well 
+            for ii in range(n_jumps):
+                # Parameters
+                x_mid = np.array([x_start[0] + x_step/2, 0.8, 0, 0.1, 0, 0, 0, 0])
+                x_end = np.array([x_start[0] + x_step, 0.5, 0, 0.5, 0, 0, 0, 0])
+                interpolator = CubicSpline([0, 0.5, 1], [x_start, x_mid, x_end])
+                t_pts = np.linspace(0, 1, int(np.floor(opts.N_stages/n_jumps))+1)
+                x_ref = np.concatenate((x_ref, interpolator(t_pts[:-1])))
+                x_start = x_end
+            breakpoint()
+            x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
+        else:
+            x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
+            x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
+            x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
 
-
-        interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-        x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
-        # n_jumps = int(np.round(x_goal-0.1))
-        # x_step = (x_goal-0.1)/n_jumps
-        # x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-        # x_ref = np.empty((0,n_x))
-        # x_start = x0
-        # # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well 
-        # for ii in range(n_jumps):
-        #     # Parameters
-        #     x_mid = np.array([x_start[0] + x_step/2, 0.8, 0, 0.1, 0, 0, 0, 0])
-        #     x_end = np.array([x_start[0] + x_step, 0.5, 0, 0.5, 0, 0, 0, 0])
-        #     interpolator = CubicSpline([0, 0.5, 1], [x_start, x_mid, x_end])
-        #     t_pts = np.linspace(0, 1, int(np.floor(opts.N_stages/n_jumps))+1)
-        #     x_ref = np.concatenate((x_ref, interpolator(t_pts[:-1])))
-        #     x_start = x_end
-        # breakpoint()
-        # x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
+            interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
+            x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
     lbu = np.array([-50, -50, 0, 0.1])
@@ -183,13 +184,13 @@ def get_default_options():
     return opts
 
 
-def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0):
+def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0, multijump=False):
     if opts is None:
         opts = get_default_options()
         opts.terminal_time = 1.0
         opts.N_stages = 20
 
-    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts, x_goal, dense)
+    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts, x_goal, dense, multijump)
 
     solver = ns.NosnocSolver(opts, model, ocp)
 
@@ -205,37 +206,6 @@ def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0):
 
     return results
 
-def ns_experiment():
-    # Try running solver with multiple n_s with both dense and sparse S
-    cpu_times_dense = []
-    cpu_times_sparse = []
-    plt.ion()
-    ns = [2, 3, 4, 5, 6]
-    for n_s in ns:
-        opts = get_default_options()
-        opts.terminal_time = 5.0
-        opts.N_stages = 50
-        opts.n_s = n_s
-        results = solve_ocp(opts=opts, plot=True, dense=False, ref_as_init=False)
-        cpu_times_sparse.append(sum(results['cpu_time_nlp']))
-
-    for n_s in ns:
-        opts = get_default_options()
-        opts.terminal_time = 5.0
-        opts.N_stages = 50
-        opts.n_s = n_s
-        opts.pss_mode = ns.PssMode.STEWART
-        results = solve_ocp(opts=opts, plot=False, dense=True, ref_as_init=False)
-        cpu_times_dense.append(sum(results['cpu_time_nlp']))
-    breakpoint()
-    ns.latexify_plot()
-    plt.figure()
-    plt.plot(cpu_times_sparse,'Xb-', label="Step")
-    plt.plot(cpu_times_dense, 'Xr-', label="Stewart")
-    plt.xlabel('$n_s$')
-    plt.ylabel('cpu time [s]')
-    plt.legend(loc='best')
-    plt.show()
 
 def init_func(htrail, ftrail):
     htrail.set_data([], [])
