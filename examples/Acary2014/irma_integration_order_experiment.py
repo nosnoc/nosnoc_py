@@ -14,6 +14,8 @@ NS_VALUES = [1, 2, 3, 4]
 NFE_VALUES = [3]
 # NSIM_VALUES = [1, 3, 10, 20, 50, 100, 300] # convergence issues for Legendre
 NSIM_VALUES = [1, 3, 9, 18, 50, 100, 300]
+USE_FESD_VALUES = [True, False]
+# USE_FESD_VALUES = [False]
 
 
 # # NOTE: this has convergence issues
@@ -27,6 +29,10 @@ TSIM = 100
 
 
 def pickle_results(results, filename):
+    # create directory if it does not exist
+    if not os.path.exists(BENCHMARK_DATA_PATH):
+        os.makedirs(BENCHMARK_DATA_PATH)
+    # save
     file = os.path.join(BENCHMARK_DATA_PATH, filename)
     with open(file, 'wb') as f:
         pickle.dump(results, f)
@@ -71,11 +77,13 @@ def get_results_filename(opts):
     filename += 'dt' + str(opts.terminal_time) + '_'
     filename += 'Tsim' + str(TSIM) + '_'
     filename += opts.irk_scheme.name
+    if not opts.use_fesd:
+        filename += '_nofesd'
     filename += '.pickle'
     return filename
 
 
-def get_opts(Nsim, n_s, N_fe, scheme):
+def get_opts(Nsim, n_s, N_fe, scheme, use_fesd):
     opts = get_default_options()
     Tstep = TSIM / Nsim
     opts.terminal_time = Tstep
@@ -83,6 +91,7 @@ def get_opts(Nsim, n_s, N_fe, scheme):
     opts.sigma_N = TOL
     opts.irk_scheme = scheme
     opts.print_level = 1
+    opts.use_fesd = use_fesd
 
     opts.n_s = n_s
     opts.N_finite_elements = N_fe
@@ -92,10 +101,10 @@ def get_opts(Nsim, n_s, N_fe, scheme):
 
 
 def run_benchmark():
-    for n_s, N_fe, Nsim, scheme in itertools.product(NS_VALUES, NFE_VALUES, NSIM_VALUES, SCHEMES):
+    for n_s, N_fe, Nsim, scheme, use_fesd in itertools.product(NS_VALUES, NFE_VALUES, NSIM_VALUES, SCHEMES, USE_FESD_VALUES):
 
         model = get_irma_model(SWITCH_ON, LIFTING)
-        opts = get_opts(Nsim, n_s, N_fe, scheme)
+        opts = get_opts(Nsim, n_s, N_fe, scheme, use_fesd)
         solver = nosnoc.NosnocSolver(opts, model)
 
         # loop
@@ -128,41 +137,52 @@ def order_plot():
     ref_results = get_reference_solution()
     x_end_ref = ref_results['X_sim'][-1]
 
-    linestyles = ['-', '--', '-.', ':']
+    linestyles = ['-', '--', '-.', ':', ':', '-.', '--', '-']
+    marker_types = ['o', 's', 'v', '^', '>', '<', 'd', 'p']
+    # SCHEME = nosnoc.IrkSchemes.RADAU_IIA
     SCHEME = nosnoc.IrkSchemes.RADAU_IIA
 
-    plt.figure()
-    for i, n_s in enumerate(NS_VALUES):
-        errors = []
-        step_sizes = []
-        for Nsim in NSIM_VALUES:
-            opts = get_opts(Nsim, n_s, N_fe, SCHEME)
-            filename = get_results_filename(opts)
-            results = unpickle_results(filename)
-            x_end = results['X_sim'][-1]
-            n_fail = count_failures(results)
-            error = np.max(np.abs(x_end - x_end_ref))
-            print("opts.n_s: ", opts.n_s, "opts.terminal_time: ", opts.terminal_time, "error: ", error, "n_fail: ", n_fail)
-            errors.append(error)
-            step_sizes.append(opts.terminal_time)
+    ax = plt.figure()
+    for use_fesd in [True, False]:
+        for i, n_s in enumerate(NS_VALUES):
+            errors = []
+            step_sizes = []
+            for Nsim in NSIM_VALUES:
+                opts = get_opts(Nsim, n_s, N_fe, SCHEME, use_fesd)
+                filename = get_results_filename(opts)
+                results = unpickle_results(filename)
+                print(f"loading filde {filename}")
+                x_end = results['X_sim'][-1]
+                n_fail = count_failures(results)
+                error = np.max(np.abs(x_end - x_end_ref))
+                print("opts.n_s: ", opts.n_s, "opts.terminal_time: ", opts.terminal_time, "error: ", error, "n_fail: ", n_fail)
+                errors.append(error)
+                step_sizes.append(opts.terminal_time)
 
-        label = r'$n_s=' + str(n_s) +'$'
-        if results['opts'].irk_scheme == nosnoc.IrkSchemes.RADAU_IIA:
-            if n_s == 1:
-                label = 'implicit Euler: 1'
+            label = r'$n_s=' + str(n_s) +'$'
+            if results['opts'].irk_scheme == nosnoc.IrkSchemes.RADAU_IIA:
+                if n_s == 1:
+                    label = 'implicit Euler: 1'
+                else:
+                    label = 'Radau IIA: ' + str(2*n_s-1)
+            elif results['opts'].irk_scheme == nosnoc.IrkSchemes.GAUSS_LEGENDRE:
+                label = 'Gauss-Legendre: ' + str(2*n_s)
+            if use_fesd:
+                label += ', FESD'
             else:
-                label = 'Radau IIA: ' + str(2*n_s-1)
-        elif results['opts'].irk_scheme == nosnoc.IrkSchemes.GAUSS_LEGENDRE:
-            label = 'Gauss-Legendre: ' + str(2*n_s)
-        plt.plot(step_sizes, errors, label=label, marker='o', linestyle=linestyles[i])
+                label += ', Standard'
+            plt.plot(step_sizes, errors, label=label, marker=marker_types[i], linestyle=linestyles[i])
     plt.grid()
     plt.xlabel('Step size')
     plt.ylabel('Error')
     plt.yscale('log')
     plt.xscale('log')
-    plt.legend()
+    # plt.legend(loc='center left')
+    ax.legend(loc='upper left', bbox_to_anchor=(0.05, .97), ncol=2, framealpha=1.0)
 
-    plt.savefig(f'irma_benchmark_{SCHEME.name}.pdf', bbox_inches='tight')
+    fig_filename = f'irma_benchmark_{SCHEME.name}.pdf'
+    plt.savefig(fig_filename, bbox_inches='tight')
+    print(f"Saved figure to {fig_filename}")
     plt.show()
 
 
