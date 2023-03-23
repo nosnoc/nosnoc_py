@@ -13,7 +13,7 @@ import matplotlib.patches as patches
 from functools import partial
 
 LONG = False
-DENSE = False
+DENSE = True
 
 
 def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
@@ -25,6 +25,8 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     x = ca.vertcat(q, v)
     u = ca.SX.sym('u', 3)
     sot = ca.SX.sym('sot')
+
+    theta = ca.SX.sym('theta', 8)
 
     # dims
     n_q = 4
@@ -110,7 +112,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     R = np.diag([0.01, 0.01, 1e-5])
 
     # path comp to avoid slipping
-    g_comp_path = ca.horzcat(ca.vertcat(v_tangent, f_c), ca.vertcat(u[2], u[2]))
+    g_comp_path = ca.horzcat(ca.vertcat(v_tangent, -v_tangent), ca.vertcat(theta[-1]+theta[-2], theta[-1]+theta[-2]))
 
     # Hand create least squares cost
     p_x_ref = ca.SX.sym('x_ref', n_x)
@@ -146,7 +148,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     c = [ca.vertcat(f_c, v_normal, v_tangent)]
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
-                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t)
+                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t, theta=[theta])
     ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, u_guess=u_guess, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
 
     v_tangent_fun = ca.Function('v_normal_fun', [x], [v_tangent])
@@ -157,7 +159,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
 
 def get_default_options():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEP
+    opts.pss_mode = ns.PssMode.STEWART
     opts.use_fesd = True
     comp_tol = 1e-9
     opts.comp_tol = comp_tol

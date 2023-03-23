@@ -3,6 +3,7 @@ import casadi as ca
 import numpy as np
 import pickle
 import time
+import sys
 from multiprocessing import Pool, cpu_count
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -13,7 +14,7 @@ from hopper_ocp import solve_ocp, get_default_options
 X_GOAL = 3.0
 N_STAGES = 50
 TERMINAL_TIME = 5.0
-N_EXPR = [2, 3, 4, 5, 6, 7]
+N_EXPR = [1, 2, 3, 4, 5, 6, 7]
 
 
 def run_sparse(n_s):

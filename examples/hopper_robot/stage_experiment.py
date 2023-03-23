@@ -14,7 +14,7 @@ import sys
 X_GOAL = 3.0
 TERMINAL_TIME = 5.0
 N_S = 2
-N_EXPR = [50, 60, 70, 80, 90, 100]
+N_EXPR = [50, 55, 60, 65, 70, 75, 80, 85 90, 95, 100]
 
 
 def run_sparse(n_stages):
