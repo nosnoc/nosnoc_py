@@ -210,7 +210,6 @@ def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0, m
 def init_func(htrail, ftrail):
     htrail.set_data([], [])
     ftrail.set_data([], [])
-
     return htrail, ftrail
 
 
