@@ -1,12 +1,12 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from oscilator_example import get_oscilator_model, X_SOL, TSIM
+from oscillator_example import get_oscillator_model, X_SOL, TSIM
 import nosnoc
 import pickle
 import os
 import itertools
 
-BENCHMARK_DATA_PATH = 'private_oscilator_benchmark_data'
+BENCHMARK_DATA_PATH = 'private_oscillator_benchmark_data'
 SCHEMES = [nosnoc.IrkSchemes.GAUSS_LEGENDRE, nosnoc.IrkSchemes.RADAU_IIA]
 
 NS_VALUES = [1, 2, 3, 4]
@@ -34,7 +34,7 @@ def unpickle_results(filename):
 
 
 def get_results_filename(opts: nosnoc.NosnocOpts):
-    filename = 'oscilator_bm_results_'
+    filename = 'oscillator_bm_results_'
     filename += 'Nfe_' + str(opts.N_finite_elements) + '_'
     filename += 'ns' + str(opts.n_s) + '_'
     filename += 'tol' + str(opts.comp_tol) + '_'
@@ -68,7 +68,7 @@ def get_opts(Nsim, n_s, N_fe, scheme, use_fesd):
 def run_benchmark():
     for n_s, N_fe, Nsim, scheme, use_fesd in itertools.product(NS_VALUES, NFE_VALUES, NSIM_VALUES, SCHEMES, USE_FESD_VALUES):
 
-        model = get_oscilator_model()
+        model = get_oscillator_model()
         opts = get_opts(Nsim, n_s, N_fe, scheme, use_fesd)
         solver = nosnoc.NosnocSolver(opts, model)
 
@@ -137,7 +137,7 @@ def order_plot():
     plt.legend()
     # ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.0), ncol=2, framealpha=1.0)
 
-    fig_filename = f'oscilator_benchmark_{SCHEME.name}.pdf'
+    fig_filename = f'oscillator_benchmark_{SCHEME.name}.pdf'
     plt.savefig(fig_filename, bbox_inches='tight')
     print(f"Saved figure to {fig_filename}")
     plt.show()

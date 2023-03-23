@@ -1,8 +1,8 @@
-from examples.oscilator.oscilator_example import (
+from examples.oscillator.oscillator_example import (
     get_default_options,
     TSIM,
     X_SOL,
-    solve_oscilator,
+    solve_oscillator,
 )
 import unittest
 import nosnoc
@@ -31,12 +31,12 @@ def compute_errors(results) -> dict:
     }
 
 
-class OscilatorTests(unittest.TestCase):
+class OscillatorTests(unittest.TestCase):
 
     def test_default(self):
         opts = get_default_options()
         opts.print_level = 0
-        results = solve_oscilator(opts, do_plot=False)
+        results = solve_oscillator(opts, do_plot=False)
         errors = compute_errors(results)
 
         print(errors)
@@ -57,7 +57,7 @@ class OscilatorTests(unittest.TestCase):
         # opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
         # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
 
-        results = solve_oscilator(opts, do_plot=False)
+        results = solve_oscillator(opts, do_plot=False)
         errors = compute_errors(results)
 
         print(errors)
@@ -76,7 +76,7 @@ class OscilatorTests(unittest.TestCase):
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
         opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED
 
-        results = solve_oscilator(opts, do_plot=False)
+        results = solve_oscillator(opts, do_plot=False)
         errors = compute_errors(results)
 
         print(errors)
@@ -90,5 +90,5 @@ class OscilatorTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
     # uncomment to run single test locally
-    # oscilator_test = OscilatorTests()
-    # oscilator_test.test_least_squares_problem()
+    # oscillator_test = OscillatorTests()
+    # oscillator_test.test_least_squares_problem()
