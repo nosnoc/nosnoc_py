@@ -5,9 +5,11 @@ import pickle
 import time
 from multiprocessing import Pool, cpu_count
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from time import gmtime, strftime
 from hopper_ocp_step import solve_ocp_step, get_default_options_step
 from hopper_ocp import solve_ocp, get_default_options
+import sys
 
 X_GOAL = 3.0
 TERMINAL_TIME = 5.0
@@ -67,6 +69,15 @@ def stage_experiment_mp():
     breakpoint()
     plot_for_paper(cpu_times_sparse, cpu_times_dense, nlp_iter_sparse, nlp_iter_dense, n_expr)
 
+def plot_from_pickle(fname):
+    with open(fname, 'rb') as f:
+        experiment_results = pickle.load(f)
+        plot_for_paper(experiment_results['cpu_times_sparse'],
+                       experiment_results['cpu_times_dense'],
+                       experiment_results['nlp_iter_sparse'],
+                       experiment_results['nlp_iter_dense'],
+                       experiment_results['n_expr'])
+
 def plot_for_paper(cpu_times_sparse, cpu_times_dense, nlp_iter_sparse, nlp_iter_dense, n_expr):
     ns.latexify_plot()
     plt.figure()
@@ -88,4 +99,7 @@ def plot_for_paper(cpu_times_sparse, cpu_times_dense, nlp_iter_sparse, nlp_iter_
     plt.show()
     
 if __name__ == '__main__':
-    stage_experiment_mp()
+    if len(sys.argv) == 2:
+        plot_from_pickle(sys.argv[1])
+    else:
+        stage_experiment_mp()
