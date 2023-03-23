@@ -483,7 +483,7 @@ class FiniteElement(FiniteElementBase):
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau, Uk)
+                                            tau)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe

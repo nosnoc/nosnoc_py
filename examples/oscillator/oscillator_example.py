@@ -12,7 +12,7 @@ R_OSC = 1
 TSIM = np.pi / 2
 X_SOL = np.array([np.exp(TSIM-1) * np.cos(2*np.pi * (TSIM-1)), -np.exp(TSIM-1) * np.sin(2*np.pi*(TSIM-1))])
 
-def get_oscilator_model(use_g_Stewart=False):
+def get_oscillator_model(use_g_Stewart=False):
 
     # Initial Value
     x0 = np.array([np.exp([-1])[0], 0])
@@ -51,11 +51,11 @@ def get_default_options():
     return opts
 
 
-def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
+def solve_oscillator(opts=None, use_g_Stewart=False, do_plot=True):
     if opts is None:
         opts = get_default_options()
 
-    model = get_oscilator_model(use_g_Stewart)
+    model = get_oscillator_model(use_g_Stewart)
 
     Nsim = 29
     Tstep = TSIM / Nsim
@@ -72,12 +72,12 @@ def solve_oscilator(opts=None, use_g_Stewart=False, do_plot=True):
     print(f"error wrt exact solution {error:.2e}")
 
     if do_plot:
-        plot_oscilator(results["X_sim"], results["t_grid"], switch_times=results["switch_times"])
+        plot_oscillator(results["X_sim"], results["t_grid"], switch_times=results["switch_times"])
     # nosnoc.plot_timings(results["cpu_nlp"])
 
     # store solution
     # import json
-    # json_file = 'oscilator_results_ref.json'
+    # json_file = 'oscillator_results_ref.json'
     # with open(json_file, 'w') as f:
     #     json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
     # print(f"saved results in {json_file}")
@@ -87,7 +87,7 @@ def main_least_squares():
 
     # load reference solution
     # import json
-    # json_file = 'oscilator_results_ref.json'
+    # json_file = 'oscillator_results_ref.json'
     # with open(json_file, 'r') as f:
     #     w_sim_ref = json.load(f)
 
@@ -109,7 +109,7 @@ def main_least_squares():
     # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     opts.homotopy_update_slope = 0.1
 
-    model = get_oscilator_model()
+    model = get_oscillator_model()
 
     Nsim = 29
     Tstep = TSIM / Nsim
@@ -129,7 +129,7 @@ def main_least_squares():
     print(f"error wrt exact solution {error:.2e}")
 
     breakpoint()
-    plot_oscilator(results["X_sim"], results["t_grid"])
+    plot_oscillator(results["X_sim"], results["t_grid"])
     # nosnoc.plot_timings(results["cpu_nlp"])
 
 
@@ -145,13 +145,13 @@ def main_polishing():
     opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
     opts.print_level = 3
 
-    results = solve_oscilator(opts, do_plots=False)
+    results = solve_oscillator(opts, do_plots=False)
     print(f"max cost_val = {max(results['cost_vals']):.2e}")
 
     nosnoc.plot_timings(results["cpu_nlp"])
 
 
-def plot_oscilator(X_sim, t_grid, latexify=True, switch_times=None):
+def plot_oscillator(X_sim, t_grid, latexify=True, switch_times=None):
     if latexify:
         nosnoc.latexify_plot()
 
@@ -198,6 +198,6 @@ def make_object_json_dumpable(input):
         raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
 
 if __name__ == "__main__":
-    solve_oscilator(use_g_Stewart=False, do_plot=True)
+    solve_oscillator(use_g_Stewart=False, do_plot=True)
     # main_least_squares()
     # main_polishing()
