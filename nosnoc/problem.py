@@ -471,7 +471,7 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         X_fe = self.X_fe()
         for j in range(opts.n_s):
-            z = self.w[self.ind_z[j]]
+            z = self.rk_stage_z(j)
             stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau)

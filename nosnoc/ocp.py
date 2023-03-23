@@ -96,7 +96,7 @@ class NosnocOcp:
         self.g_global_comp_fun = ca.Function('g_global_comp_fun', [model.p_global, model.v_global], [self.g_global_comp])
         self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', [model.u, model.p, model.v_global], [self.g_ctrl_comp])
         self.g_rk_comp_fun = ca.Function('g_rk_comp_fun',
-                                            [model.x, model.u, model.z, model.p, model.v_global],
+                                            [model.x, model.u, model.z_all, model.p, model.v_global],
                                             [self.g_stage_comp])
 
         # path constraints
