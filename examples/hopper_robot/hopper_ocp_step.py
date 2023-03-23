@@ -13,12 +13,9 @@ import matplotlib.patches as patches
 from functools import partial
 
 
-DENSE = False
-lift_algebraic = False
-x_goal = 4.0
 
 
-def get_hopper_ocp_description(opts):
+def get_hopper_ocp_step(opts, lift_algebraic, x_goal):
     # hopper model
     # model vars
     q = ca.SX.sym('q', 4)
@@ -134,19 +131,22 @@ def get_hopper_ocp_description(opts):
     return model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun
 
 
-def get_default_options():
+def get_default_options_step():
     opts = ns.NosnocOpts()
     opts.pss_mode = ns.PssMode.STEP
     opts.use_fesd = True
     comp_tol = 1e-9
     opts.comp_tol = comp_tol
     opts.homotopy_update_slope = 0.1
-    opts.sigma_0 = 10.
+    opts.sigma_0 = 100.
+    opts.homotopy_update_rule = ns.HomotopyUpdateRule.LINEAR
     opts.n_s = 2
     opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.mpcc_mode = ns.MpccMode.SCHOLTES_INEQ
+    opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.print_level = 1
 
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 1000
+    opts.opts_casadi_nlp['ipopt']['max_iter'] = 2000
     opts.opts_casadi_nlp['ipopt']['acceptable_tol'] = 1e-6
 
     opts.time_freezing = True
@@ -157,17 +157,16 @@ def get_default_options():
     return opts
 
 
-def solve_ocp(opts=None):
+def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=1.0):
     if opts is None:
-        opts = get_default_options()
+        opts = get_default_options_step()
 
-    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts)
-
-    opts.terminal_time = 4.0
+    model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_step(opts, lift_algebraic, x_goal)
 
     solver = ns.NosnocSolver(opts, model, ocp)
     results = solver.solve()
-    plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun)
+    if plot:
+        plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal)
 
     return results
 
@@ -191,7 +190,7 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
     return head, foot, body, ftrail, htrail
 
 
-def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
+def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal):
     fig, ax = plt.subplots()
 
     ax.set_xlim(0, x_goal+0.1)
@@ -252,8 +251,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun):
     plt.subplot(4, 1, 4)
     plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
     plt.show()
-    breakpoint()
 
 
 if __name__ == '__main__':
-    solve_ocp()
+    solve_ocp_step()

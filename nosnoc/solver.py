@@ -268,14 +268,14 @@ class NosnocSolver(NosnocSolverBase):
                                                                    tau_val]), lambda00, x0))
 
             # solve NLP
-            t = time.time()
+            t = time.process_time()
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
                               lbx=lbw,
                               ubx=ubw,
                               p=p_val)
-            cpu_time_nlp[ii] = time.time() - t
+            cpu_time_nlp[ii] = time.process_time() - t
 
             # print and process solution
             solver_stats = self.solver.stats()

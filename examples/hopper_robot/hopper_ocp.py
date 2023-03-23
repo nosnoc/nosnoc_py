@@ -178,18 +178,17 @@ def get_default_options():
         opts.N_stages = 30
     else:
         opts.N_stages = 20
-    opts.N_finite_elements = 2
+    opts.N_finite_elements = 3
     opts.max_iter_homotopy = 6
     return opts
 
 
-def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True):
+def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0):
     if opts is None:
         opts = get_default_options()
         opts.terminal_time = 1.0
         opts.N_stages = 20
 
-    x_goal = 5.0
     model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts, x_goal, dense)
 
     solver = ns.NosnocSolver(opts, model, ocp)
@@ -206,7 +205,7 @@ def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True):
 
     return results
 
-def speed_experiment():
+def ns_experiment():
     # Try running solver with multiple n_s with both dense and sparse S
     cpu_times_dense = []
     cpu_times_sparse = []
@@ -236,7 +235,7 @@ def speed_experiment():
     plt.xlabel('$n_s$')
     plt.ylabel('cpu time [s]')
     plt.legend(loc='best')
-    plt.draw()
+    plt.show()
 
 def init_func(htrail, ftrail):
     htrail.set_data([], [])
@@ -256,8 +255,6 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
     htrail.set_data(np.append(htrail.get_xdata(orig=False), x_head), np.append(htrail.get_ydata(orig=False), y_head))
     return head, foot, body, ftrail, htrail
 
-def plot_robot():
-    pass
 
 def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal):
     fig, ax = plt.subplots()
@@ -324,11 +321,9 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     plt.step(results['t_grid_u'], np.concatenate((slack, [slack[-1]])))
     plt.subplot(4, 1, 4)
     plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
-    plt.draw()
+    plt.show()
 
 
 
 if __name__ == '__main__':
-    #solve_ocp()
-    speed_experiment()
-    plt.show()
+    solve_ocp()
