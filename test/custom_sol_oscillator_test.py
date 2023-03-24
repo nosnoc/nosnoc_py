@@ -1,10 +1,10 @@
-from examples.oscilator.oscilator_example import (
+from examples.oscillator.oscillator_example import (
     get_default_options,
     TSIM,
     X_SOL,
-    get_oscilator_model,
+    get_oscillator_model,
 )
-from oscilator_test import compute_errors
+from oscillator_test import compute_errors
 import unittest
 import nosnoc
 import numpy as np
@@ -14,7 +14,7 @@ X_SWITCH_EXACT = np.array([1.0, 0.0])
 
 class CustomSolverOscilatorTests(unittest.TestCase):
 
-    def test_oscilator_sim(self):
+    def test_oscillator_sim(self):
         opts = get_default_options()
         opts.print_level = 1
         opts.n_s = 3
@@ -23,7 +23,7 @@ class CustomSolverOscilatorTests(unittest.TestCase):
         opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
         opts.sigma_0 = 1e0
 
-        model = get_oscilator_model()
+        model = get_oscillator_model()
         Nsim = 29
         Tstep = TSIM / Nsim
         opts.terminal_time = Tstep
@@ -52,5 +52,5 @@ class CustomSolverOscilatorTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
     # uncomment to run single test locally
-    # oscilator_test = CustomSolverTests()
-    # oscilator_test.test_oscilator_sim()
+    # oscillator_test = CustomSolverTests()
+    # oscillator_test.test_oscillator_sim()

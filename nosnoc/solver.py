@@ -497,6 +497,6 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
                 switch_indices.append(i)
             theta_prev = theta
 
-    results["switch_times"] = time_steps[switch_indices]
+    results["switch_times"] = np.array([time_steps[i] for i in switch_indices])
 
     return results

@@ -1,7 +1,7 @@
-from examples.oscilator.oscilator_example import (
+from examples.oscillator.oscillator_example import (
     TSIM,
-    get_oscilator_model,
-    plot_oscilator,
+    get_oscillator_model,
+    plot_oscillator,
 )
 import unittest
 import nosnoc
@@ -32,7 +32,7 @@ class OscilatorSwitchTest(unittest.TestCase):
         # opts.fb_ip_aug1_weight = 1e-1  # ball
         # opts.fb_ip_aug2_weight = 1e-0  # banana
 
-        model = get_oscilator_model(use_g_Stewart)
+        model = get_oscillator_model(use_g_Stewart)
         model.x0 = X0
 
         solver = nosnoc.NosnocSolver(opts, model)
@@ -44,7 +44,7 @@ class OscilatorSwitchTest(unittest.TestCase):
         print(f"x_out {x_out[0]}, {x_out[1]}")
 
         if do_plot:
-            plot_oscilator([X0] + results["x_list"], results["t_grid"])
+            plot_oscillator([X0] + results["x_list"], results["t_grid"])
         assert(error < 1e-4)
 
 
@@ -60,7 +60,7 @@ class OscilatorSwitchTest(unittest.TestCase):
     #     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     #     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
 
-    #     model = get_oscilator_model(use_g_Stewart)
+    #     model = get_oscillator_model(use_g_Stewart)
     #     model.x0 = X0
 
     #     solver = nosnoc.NosnocCustomScholtesFBSolver(opts, model)
@@ -72,7 +72,7 @@ class OscilatorSwitchTest(unittest.TestCase):
     #     print(f"x_out {x_out[0]}, {x_out[1]}")
 
     #     if do_plot:
-    #         plot_oscilator([X0] + results["x_list"], results["t_grid"])
+    #         plot_oscillator([X0] + results["x_list"], results["t_grid"])
 
     #     assert(error < 1e-4)
 
@@ -87,7 +87,7 @@ class OscilatorSwitchTest(unittest.TestCase):
         opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
         opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
 
-        model = get_oscilator_model(use_g_Stewart)
+        model = get_oscillator_model(use_g_Stewart)
         model.x0 = X0
 
         solver = nosnoc.NosnocCustomSolver(opts, model)
@@ -99,12 +99,12 @@ class OscilatorSwitchTest(unittest.TestCase):
         print(f"x_out {x_out[0]}, {x_out[1]}")
 
         if do_plot:
-            plot_oscilator([X0] + results["x_list"], results["t_grid"])
+            plot_oscillator([X0] + results["x_list"], results["t_grid"])
 
         assert(error < 1e-4)
 
 
 if __name__ == "__main__":
     unittest.main()
-    # oscilator_test = OscilatorSwitchTest()
-    # oscilator_test.test_custom_solver(do_plot=True)
+    # oscillator_test = OscilatorSwitchTest()
+    # oscillator_test.test_custom_solver(do_plot=True)
