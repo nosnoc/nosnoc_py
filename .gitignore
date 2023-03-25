@@ -5,6 +5,7 @@ env
 
 *.pdf
 *.gif
+*.pkl
 
 private*
 external

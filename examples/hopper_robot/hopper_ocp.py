@@ -14,6 +14,7 @@ from functools import partial
 
 LONG = False
 DENSE = True
+HEIGHT = 1.0
 
 
 def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
@@ -79,26 +80,25 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
             n_jumps = int(np.round(x_goal-0.1))
             x_step = (x_goal-0.1)/n_jumps
             x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-            x_ref = np.empty((0,n_x))
+            x_ref = np.empty((0, n_x))
             x_start = x0
-            # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well 
+            # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well
             for ii in range(n_jumps):
                 # Parameters
-                x_mid = np.array([x_start[0] + x_step/2, 0.8, 0, 0.1, 0, 0, 0, 0])
+                x_mid = np.array([x_start[0] + x_step/2, HEIGHT, 0, 0.1, 0, 0, 0, 0])
                 x_end = np.array([x_start[0] + x_step, 0.5, 0, 0.5, 0, 0, 0, 0])
                 interpolator = CubicSpline([0, 0.5, 1], [x_start, x_mid, x_end])
                 t_pts = np.linspace(0, 1, int(np.floor(opts.N_stages/n_jumps))+1)
                 x_ref = np.concatenate((x_ref, interpolator(t_pts[:-1])))
                 x_start = x_end
-            breakpoint()
             x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
         else:
             x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-            x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
+            x_mid = np.array([(x_goal-0.1)/2+0.1, HEIGHT, 0, 0.1, 0, 0, 0, 0])
             x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
 
             interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-            x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+            x_ref = interpolator(np.linspace(0, 1, opts.N_stages+1))
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
     lbu = np.array([-50, -50, 0, 0.1])
@@ -107,7 +107,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5, np.inf])
     lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5, -np.inf])
 
-    Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
+    Q = np.diag([100, 100, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
     R = np.diag([0.01, 0.01, 1e-5])
 
@@ -148,7 +148,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     c = [ca.vertcat(f_c, v_normal, v_tangent)]
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), F=F, S=S, c=c, x0=np.concatenate((x0, [0])),
-                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t, theta=[theta])
+                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref[1:, :], t_var=t, theta=[theta])
     ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, u_guess=u_guess, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
 
     v_tangent_fun = ca.Function('v_normal_fun', [x], [v_tangent])
@@ -169,10 +169,10 @@ def get_default_options():
     opts.n_s = 2
     opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_MEAN
     opts.mpcc_mode = ns.MpccMode.SCHOLTES_INEQ
-    opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
+    #opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.print_level = 1
 
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 2000
+    opts.opts_casadi_nlp['ipopt']['max_iter'] = 4000
     opts.opts_casadi_nlp['ipopt']['acceptable_tol'] = 1e-6
 
     opts.time_freezing = True
@@ -186,11 +186,11 @@ def get_default_options():
     return opts
 
 
-def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0, multijump=False):
+def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=False, x_goal=1.0, multijump=False):
     if opts is None:
         opts = get_default_options()
-        opts.terminal_time = 1.0
-        opts.N_stages = 20
+        opts.terminal_time = 5.0
+        opts.N_stages = 50
 
     model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_description(opts, x_goal, dense, multijump)
 
@@ -200,8 +200,8 @@ def solve_ocp(opts=None, plot=True, dense=DENSE, ref_as_init=True, x_goal=1.0, m
     if ref_as_init:
         opts.initialization_strategy = ns.InitializationStrategy.EXTERNAL
         t_steps = np.linspace(0, opts.terminal_time, opts.N_stages)
-        solver.set('x', np.c_[x_ref, t_steps])
-    
+        solver.set('x', np.c_[x_ref[1:, :], t_steps])
+
     results = solver.solve()
     if plot:
         plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal)
@@ -236,7 +236,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
         ax.add_patch(patch)
     else:
         ax.set_xlim(0, x_goal+0.1)
-        ax.set_ylim(-0.1, 1.1)
+        ax.set_ylim(-0.1, HEIGHT+0.5)
         patch = patches.Rectangle((-0.1, -0.1), x_goal+0.2, 0.1, color='grey')
         ax.add_patch(patch)
     ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
@@ -247,7 +247,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     htrail, = ax.plot([], [], color='b', alpha=0.5)
     ani = FuncAnimation(fig, partial(animate_robot, head=head, foot=foot, body=body, htrail=htrail, ftrail=ftrail),
                         init_func=partial(init_func, htrail=htrail, ftrail=ftrail),
-                        frames=results['x_traj'], blit=True)
+                        frames=results['x_traj'], blit=True, repeat=False)
     try:
         ani.save('hopper.gif', writer='imagemagick', fps=10)
     except Exception:
@@ -297,4 +297,4 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
 
 
 if __name__ == '__main__':
-    solve_ocp()
+    solve_ocp(x_goal=5.0, multijump=True, ref_as_init=True)

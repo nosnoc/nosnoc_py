@@ -12,7 +12,7 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
 from functools import partial
 
-
+HEIGHT = 1.0
 
 
 def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
@@ -66,45 +66,42 @@ def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
 
     f_v = (-C + B@u[0:2])
     f_c = q[1] - q[3]*ca.cos(q[2])
-
     if multijump:
         n_jumps = int(np.round(x_goal-0.1))
         x_step = (x_goal-0.1)/n_jumps
         x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
-        x_ref = np.empty((0,n_x))
+        x_ref = np.empty((0, n_x))
         x_start = x0
-        # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well 
+        # TODO: if N_stages not divisible by n_jumps then this doesn't work... oh well
         for ii in range(n_jumps):
             # Parameters
-            x_mid = np.array([x_start[0] + x_step/2, 0.8, 0, 0.1, 0, 0, 0, 0])
+            x_mid = np.array([x_start[0] + x_step/2, HEIGHT, 0, 0.1, 0, 0, 0, 0])
             x_end = np.array([x_start[0] + x_step, 0.5, 0, 0.5, 0, 0, 0, 0])
             interpolator = CubicSpline([0, 0.5, 1], [x_start, x_mid, x_end])
             t_pts = np.linspace(0, 1, int(np.floor(opts.N_stages/n_jumps))+1)
             x_ref = np.concatenate((x_ref, interpolator(t_pts[:-1])))
             x_start = x_end
-            breakpoint()
-            x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
+        x_ref = np.concatenate((x_ref, np.expand_dims(x_end, axis=0)))
     else:
         x0 = np.array([0.1, 0.5, 0, 0.5, 0, 0, 0, 0])
         x_mid = np.array([(x_goal-0.1)/2+0.1, 0.8, 0, 0.1, 0, 0, 0, 0])
         x_end = np.array([x_goal, 0.5, 0, 0.5, 0, 0, 0, 0])
-        
+
         interpolator = CubicSpline([0, 0.5, 1], [x0, x_mid, x_end])
-        x_ref = interpolator(np.linspace(0, 1, opts.N_stages))
+        x_ref = interpolator(np.linspace(0, 1, opts.N_stages+1))
 
     # The control u[2] is a slack for modelling of nonslipping constraints.
     ubu = np.array([50, 50, 100, 20])
     lbu = np.array([-50, -50, 0, 0.1])
+    u_guess = np.array([0, 0, 0, 1])
 
     ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5, np.inf])
     lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5, -np.inf])
 
-    Q = np.diag([50, 50, 20, 50, 0.1, 0.1, 0.1, 0.1])
+    Q = np.diag([100, 100, 20, 50, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
     R = np.diag([0.01, 0.01, 1e-5])
 
-    # path comp to avoid slipping
-    
     # Hand create least squares cost
     p_x_ref = ca.SX.sym('x_ref', n_x)
 
@@ -139,9 +136,9 @@ def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
         g_comp_path = ca.horzcat(ca.vertcat(v_tangent, -v_tangent), ca.vertcat(theta[1]+theta[2], theta[1]+theta[2]))
 
     model = ns.NosnocModel(x=ca.vertcat(x, t), f_x=[f_x], alpha=[alpha], c=c, x0=np.concatenate((x0, [0])),
-                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref, t_var=t,
+                           u=ca.vertcat(u, sot), p_time_var=p_x_ref, p_time_var_val=x_ref[1:, :], t_var=t,
                            z=z, z0=z0, g_z=g_z)
-    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx)
+    ocp = ns.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_q_T, g_path_comp=g_comp_path, lbx=lbx, ubx=ubx, u_guess=u_guess)
 
     v_tangent_fun = ca.Function('v_normal_fun', [x], [v_tangent])
     v_normal_fun = ca.Function('v_normal_fun', [x], [v_normal])
@@ -161,10 +158,10 @@ def get_default_options_step():
     opts.n_s = 2
     opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_MEAN
     opts.mpcc_mode = ns.MpccMode.SCHOLTES_INEQ
-    opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
+    #opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.print_level = 1
 
-    opts.opts_casadi_nlp['ipopt']['max_iter'] = 2000
+    opts.opts_casadi_nlp['ipopt']['max_iter'] = 4000
     opts.opts_casadi_nlp['ipopt']['acceptable_tol'] = 1e-6
 
     opts.time_freezing = True
@@ -178,16 +175,18 @@ def get_default_options_step():
 def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=1.0, ref_as_init=False, multijump=False):
     if opts is None:
         opts = get_default_options_step()
+        opts.terminal_time = 5.0
+        opts.N_stages = 50
 
     model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump)
+
+    solver = ns.NosnocSolver(opts, model, ocp)
 
     # Calculate time steps and initialize x to [xref, t]
     if ref_as_init:
         opts.initialization_strategy = ns.InitializationStrategy.EXTERNAL
-        t_steps = np.linspace(0, opts.terminal_time, opts.N_stages)
-        solver.set('x', np.c_[x_ref, t_steps])
-
-    solver = ns.NosnocSolver(opts, model, ocp)
+        t_steps = np.linspace(0, opts.terminal_time, opts.N_stages+1)
+        solver.set('x', np.c_[x_ref[1:, :], t_steps[1:]])
     results = solver.solve()
     if plot:
         plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal)
@@ -201,8 +200,10 @@ def init_func(htrail, ftrail):
 
     return htrail, ftrail
 
+frame_cnt = 0
 
 def animate_robot(state, head, foot, body, ftrail, htrail):
+    global frame_cnt
     x_head, y_head = state[0], state[1]
     x_foot, y_foot = state[0] - state[3]*np.sin(state[2]), state[1] - state[3]*np.cos(state[2])
     head.set_offsets([x_head, y_head])
@@ -211,6 +212,8 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
 
     ftrail.set_data(np.append(ftrail.get_xdata(orig=False), x_foot), np.append(ftrail.get_ydata(orig=False), y_foot))
     htrail.set_data(np.append(htrail.get_xdata(orig=False), x_head), np.append(htrail.get_ydata(orig=False), y_head))
+    plt.savefig(str(frame_cnt)+'.pdf')
+    frame_cnt += 1
     return head, foot, body, ftrail, htrail
 
 
@@ -218,8 +221,8 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     fig, ax = plt.subplots()
 
     ax.set_xlim(0, x_goal+0.1)
-    ax.set_ylim(-0.1, 1.1)
-    patch = patches.Rectangle((-0.1, -0.1), x_goal+0.1, 0.1, color='grey')
+    ax.set_ylim(-0.1, HEIGHT+0.5)
+    patch = patches.Rectangle((-0.1, -0.1), x_goal+10, 0.1, color='grey')
     ax.add_patch(patch)
     ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
     head = ax.scatter([0], [0], color='b', s=[100])
@@ -229,7 +232,7 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     htrail, = ax.plot([], [], color='b', alpha=0.5)
     ani = FuncAnimation(fig, partial(animate_robot, head=head, foot=foot, body=body, htrail=htrail, ftrail=ftrail),
                         init_func=partial(init_func, htrail=htrail, ftrail=ftrail),
-                        frames=results['x_traj'], blit=True)
+                        frames=results['x_traj'], blit=True, repeat=False)
     try:
         ani.save('hopper.gif', writer='imagemagick', fps=10)
     except Exception:
@@ -246,12 +249,15 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     plt.subplot(4, 1, 1)
     plt.plot(results['t_grid'], t)
     plt.subplot(4, 1, 2)
-    plt.plot(results['t_grid'], x)
-    plt.plot(results['t_grid'], y)
+    plt.plot(results['t_grid'], x, color='r')
+    plt.plot(results['t_grid'], y, color='b')
+    plt.plot(results['t_grid_u'], x_ref[:, 0], color='r', alpha=0.5, linestyle='--')
+    plt.plot(results['t_grid_u'], x_ref[:, 1], color='b', alpha=0.5, linestyle='--')
     plt.subplot(4, 1, 3)
-    plt.plot(results['t_grid'], theta)
+    plt.plot(results['t_grid'], theta, color='b')
     plt.subplot(4, 1, 4)
-    plt.plot(results['t_grid'], leg_len)
+    plt.plot(results['t_grid'], leg_len, color='b')
+    plt.plot(results['t_grid_u'], x_ref[:, 3], color='b', alpha=0.5, linestyle='--')
     plt.figure()
     plt.subplot(3, 1, 1)
     plt.plot(results['t_grid'], f_c_fun(x_traj[:, :-1].T).full().T)
@@ -278,4 +284,4 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
 
 
 if __name__ == '__main__':
-    solve_ocp_step()
+    solve_ocp_step(x_goal=5.0, multijump=True, ref_as_init=True, lift_algebraic=True)
