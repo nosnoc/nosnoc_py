@@ -5,19 +5,22 @@ import matplotlib.pyplot as plt
 import nosnoc
 
 
-def solve_example():
+def solve_example(N_stages=15, pss_mode=nosnoc.PssMode.STEWART):
     # opts
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.n_s = 2
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.pss_mode = pss_mode
 
     # opts.N_stages = 50  # MATLAB setting
-    opts.N_stages = 15  # number of control intervals
+    opts.N_stages = N_stages  # number of control intervals
     opts.N_finite_elements = 2  # number of finite element on every control intevral
     opts.terminal_time = 4.0  # Time horizon
-    opts.print_level = 1
+    opts.print_level = 0
+
+    opts.opts_casadi_nlp['ipopt']['max_iter'] = 4000
 
     ## Model defintion
     q = SX.sym('q', 2)
@@ -86,8 +89,9 @@ def solve_example():
     results = solver.solve()
     return results
 
-def main():
-    results = solve_example()
+def main(N_stages=15, pss_mode=nosnoc.PssMode.STEWART):
+    results = solve_example(N_stages, pss_mode)
+    breakpoint()
     plot_results(results)
 
 
@@ -121,4 +125,4 @@ def plot_results(results):
 
 
 if __name__ == "__main__":
-    main()
+    main(N_stages=55, pss_mode=nosnoc.PssMode.STEP)
