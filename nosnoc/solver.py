@@ -50,7 +50,7 @@ class NosnocSolverBase(ABC):
         dims = prob.model.dims
         if field == 'x0':
             prob.model.x0 = value
-        elif field == 'x':
+        elif field == 'x': # TODO: check other dimensions for useful error message
             if value.shape[0] == self.opts.N_stages:
                 # Shape is equal to the number of control stages
                 for i, sub_idx in enumerate(prob.ind_x):
@@ -207,7 +207,7 @@ class NosnocSolver(NosnocSolverBase):
         w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
-        n_iter_polish = opts.max_iter_homotopy + 1
+        n_iter_polish = opts.max_iter_homotopy + (1 if opts.do_polishing_step else 0)
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
@@ -268,14 +268,14 @@ class NosnocSolver(NosnocSolverBase):
                                                                    tau_val]), lambda00, x0))
 
             # solve NLP
-            t = time.time()
+            t = time.process_time()
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
                               lbx=lbw,
                               ubx=ubw,
                               p=p_val)
-            cpu_time_nlp[ii] = time.time() - t
+            cpu_time_nlp[ii] = time.process_time() - t
 
             # print and process solution
             solver_stats = self.solver.stats()

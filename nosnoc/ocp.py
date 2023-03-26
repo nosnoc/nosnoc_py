@@ -1,9 +1,11 @@
+from typing import Optional
+from warnings import warn
+
 import numpy as np
 import casadi as ca
 from nosnoc.utils import casadi_length
 from nosnoc.model import NosnocModel
 from nosnoc.dims import NosnocDims
-from warnings import warn
 
 class NosnocOcp:
     """
@@ -24,24 +26,26 @@ class NosnocOcp:
 
     def __init__(
             self,
-            lbu: np.ndarray = np.ones((0,)),
-            ubu: np.ndarray = np.ones((0,)),
-            lbx: np.ndarray = np.ones((0,)),
-            ubx: np.ndarray = np.ones((0,)),
+            lbu: Optional[np.ndarray] = None,
+            ubu: Optional[np.ndarray] = None,
+            u_guess: Optional[np.ndarray] = None,
+            lbx: Optional[np.ndarray] = None,
+            ubx: Optional[np.ndarray] = None,
             f_q: ca.SX = ca.SX.zeros(1),
             g_path: ca.SX = ca.SX.zeros(0),
-            lbg: np.ndarray = np.ones((0,)),
-            ubg: np.ndarray = np.ones((0,)),
+            lbg: Optional[np.ndarray] = None,
+            ubg: Optional[np.ndarray] = None,
             g_path_comp: ca.SX = ca.SX.zeros(0, 2),
             f_terminal: ca.SX = ca.SX.zeros(1),
             g_terminal: ca.SX = ca.SX.zeros(0),
-            lbv_global: np.ndarray = np.ones((0,)),
-            ubv_global: np.ndarray = np.ones((0,)),
-            v_global_guess: np.ndarray = np.ones((0,)),
+            lbv_global: Optional[np.ndarray] = None,
+            ubv_global: Optional[np.ndarray] = None,
+            v_global_guess: Optional[np.ndarray] = None,
     ):
-        # TODO: not providing lbu, ubu should work as well!
-        self.lbu: np.ndarray = lbu
-        self.ubu: np.ndarray = ubu
+        # TODO: Make everything more pythonic via optionals instead of empty arrays
+        self.lbu: Optional[np.ndarray] = lbu
+        self.ubu: Optional[np.ndarray] = ubu
+        self.u_guess: Optional[np.ndarray] = u_guess
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
         self.f_q: ca.SX = f_q
@@ -92,43 +96,57 @@ class NosnocOcp:
         self.g_global_comp_fun = ca.Function('g_global_comp_fun', [model.p_global, model.v_global], [self.g_global_comp])
         self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', [model.u, model.p, model.v_global], [self.g_ctrl_comp])
         self.g_rk_comp_fun = ca.Function('g_rk_comp_fun',
-                                            [model.x, model.u, model.z, model.p, model.v_global],
+                                            [model.x, model.u, model.z_all, model.p, model.v_global],
                                             [self.g_stage_comp])
 
         # path constraints
         n_g_path = casadi_length(self.g_path)
-        if len(self.lbg) == 0:
+        if self.lbg is None:
             self.lbg = np.zeros((n_g_path,))
         elif len(self.lbg) != n_g_path:
             raise ValueError("lbg and g_path have inconsistent shapes.")
-        if len(self.ubg) == 0:
+        if self.ubg is None:
             self.ubg = np.zeros((n_g_path,))
         elif len(self.ubg) != n_g_path:
             raise ValueError("ubg and g_path have inconsistent shapes")
 
         # box constraints
-        if len(self.lbx) == 0:
+        if self.lbx is None:
             self.lbx = -np.inf * np.ones((dims.n_x,))
         elif len(self.lbx) != dims.n_x:
             raise ValueError("lbx should be empty or of length n_x.")
-        if len(self.ubx) == 0:
+        if self.ubx is None:
             self.ubx = np.inf * np.ones((dims.n_x,))
         elif len(self.ubx) != dims.n_x:
             raise ValueError("ubx should be empty or of length n_x.")
 
+        # box constraints for u
+        if self.lbu is None:
+            self.lbu = -np.inf * np.ones((dims.n_u,))
+        elif len(self.lbu) != dims.n_u:
+            raise ValueError("lbu should be empty or of length n_u.")
+        if self.ubu is None:
+            self.ubu = np.inf * np.ones((dims.n_u,))
+        elif len(self.ubu) != dims.n_u:
+            raise ValueError("ubu should be empty or of length n_u.")
+        if self.u_guess is None:
+            self.u_guess = np.zeros((dims.n_u,))
+        elif len(self.u_guess) != dims.n_u:
+            raise ValueError("u_guess should be empty or of length n_u.")
+
         # global variables
         n_v_global = casadi_length(model.v_global)
-        if len(self.lbv_global) == 0:
+        if self.lbv_global is None:
             self.lbv_global = -np.inf * np.ones((n_v_global,))
         if self.lbv_global.shape != (n_v_global,):
             raise Exception("lbv_global and v_global have inconsistent shapes.")
 
-        if len(self.ubv_global) == 0:
-            self.ubv_global = -np.inf * np.ones((n_v_global,))
+        if self.ubv_global is None:
+            self.ubv_global = np.inf * np.ones((n_v_global,))
         if self.ubv_global.shape != (n_v_global,):
             raise Exception("ubv_global and v_global have inconsistent shapes.")
 
-        if len(self.v_global_guess) == 0:
-            self.v_global_guess = -np.inf * np.ones((n_v_global,))
+        if self.v_global_guess is None:
+            self.v_global_guess = np.zeros((n_v_global,))
         if self.v_global_guess.shape != (n_v_global,):
             raise Exception("v_global_guess and v_global have inconsistent shapes.")

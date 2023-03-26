@@ -471,7 +471,7 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         X_fe = self.X_fe()
         for j in range(opts.n_s):
-            z = self.w[self.ind_z[j]]
+            z = self.rk_stage_z(j)
             stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau)
@@ -545,8 +545,7 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_control_stage(self, ctrl_idx, prev_fe):
         # Create control vars
         Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
-        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu,
-                          np.zeros((self.model.dims.n_u,)))
+        self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
 
         # Create Finite elements in this control stage
         control_stage = []

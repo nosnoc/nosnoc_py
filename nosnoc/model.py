@@ -38,6 +38,8 @@ class NosnocModel:
     :param ubz: upper bounds on user algebraic variables
     :param g_z: user defined algebraic constraints
     :param alpha: optionally provided alpha variables for general inclusions
+    :param theta: optionally provided theta variables for stewart reformulation 
+                  provided only if some functions are dependent on them. NOTE: EXPERIMENTAL
     :param f_x: optionally provided rhs used for general inclusions
     :param p_time_var: time varying parameters
     :param p_global: global parameters
@@ -51,6 +53,7 @@ class NosnocModel:
 
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
+    # NOTE: theta is not meant to be used,  
     def __init__(self,
                  x: ca.SX,
                  x0: Optional[np.ndarray],
@@ -64,6 +67,7 @@ class NosnocModel:
                  lbz: Optional[np.ndarray] = None,
                  ubz: Optional[np.ndarray] = None,
                  alpha: Optional[List[ca.SX]] = None,
+                 theta: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
                  g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
                  p_time_var: ca.SX = ca.SX.sym('p_time_var_dummy', 0, 1),
@@ -75,6 +79,7 @@ class NosnocModel:
                  name: str = 'nosnoc'):
         self.x: ca.SX = x
         self.alpha: List[ca.SX] = alpha
+        self.theta: List[ca.SX] = theta
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
         self.g_z: ca.SX = g_z
@@ -226,6 +231,8 @@ class NosnocModel:
         theta, lam, mu, alpha, lambda_n, lambda_p = self.create_stage_vars(opts)
         if self.alpha is not None:
             alpha = self.alpha
+        if self.theta is not None:
+            theta = self.theta
 
         # setup upsilon
         upsilon = []
