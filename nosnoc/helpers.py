@@ -53,6 +53,7 @@ class NosnocSimLooper:
         self.status = []
         self.switch_times = []
 
+        self.nlp_iter = np.zeros((Nsim, solver.opts.max_iter_homotopy + (1 if solver.opts.do_polishing_step else 0)))
         self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + (1 if solver.opts.do_polishing_step else 0)))
 
     def run(self) -> None:
@@ -76,6 +77,7 @@ class NosnocSimLooper:
             self.X_sim += results["x_list"]
             self.xcurrent = self.X_sim[-1]
             self.cpu_nlp[i, :] = results["cpu_time_nlp"]
+            self.nlp_iter[i, :] = results["nlp_iter"]
             self.time_steps = np.concatenate((self.time_steps, results["time_steps"]))
             self.theta_sim.append(results["theta_list"])
             self.lambda_sim.append(results["lambda_list"])
@@ -102,5 +104,6 @@ class NosnocSimLooper:
             "cost_vals": self.cost_vals,
             "status": self.status,
             "switch_times": self.switch_times,
+            "nlp_iter": self.nlp_iter,
         }
         return results

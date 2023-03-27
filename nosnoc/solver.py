@@ -312,9 +312,6 @@ class NosnocSolver(NosnocSolverBase):
 
         sigma_k = opts.sigma_0
 
-        # lambda00 initialization
-        x0 = prob.model.x0
-
         if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
             lbw = prob.lbw.copy()
             ubw = prob.ubw.copy()
