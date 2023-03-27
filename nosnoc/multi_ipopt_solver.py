@@ -9,11 +9,10 @@ from .solver import NosnocSolverBase, get_results_from_primal_vector
 from .model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
 
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status
+from nosnoc.nosnoc_types import InitializationStrategy, PssMode, ConstraintHandling, Status
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
-from nosnoc.rk_utils import rk4_on_timegrid
-from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, flatten_outer_layers, check_ipopt_success
+from nosnoc.utils import flatten_layer, flatten, check_ipopt_success
 
 
 class NosnocMIpoptSolver(NosnocSolverBase):
@@ -57,8 +56,6 @@ class NosnocMIpoptSolver(NosnocSolverBase):
     def solve(self) -> dict:
         """
         Solves the NLP with the currently stored parameters.
-
-        :return: Returns a dictionary containing ... TODO document all fields
         """
         opts = self.opts
         prob = self.problem
@@ -79,9 +76,6 @@ class NosnocMIpoptSolver(NosnocSolverBase):
             print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
 
         sigma_k = opts.sigma_0
-
-        # lambda00 initialization
-        x0 = prob.model.x0
 
         if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
             lbw = prob.lbw.copy()
@@ -127,7 +121,6 @@ class NosnocMIpoptSolver(NosnocSolverBase):
             self.setup_p_val(sigma_k, tau_val)
 
             # solve NLP
-            t = time.time()
             if ii > 0:
                 sol = self.solvers[ii](x0=w0,
                                 lbg=prob.lbg,
@@ -144,14 +137,16 @@ class NosnocMIpoptSolver(NosnocSolverBase):
                     lbx=lbw,
                     ubx=ubw,
                     p=self.p_val,)
-            cpu_time_nlp[ii] = time.time() - t
 
-            # print and process solution
+            # statistics
             solver_stats = self.solvers[ii].stats()
+            cpu_time_nlp[ii] = solver_stats['t_proc_total']
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
             nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
+
+            # process iterate
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -210,6 +205,4 @@ class NosnocMIpoptSolver(NosnocSolverBase):
         else:
             results["status"] = Status.INFEASIBLE
 
-        # for i in range(len(w_opt)):
-        #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results

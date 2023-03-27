@@ -215,6 +215,8 @@ def plot_colored_line_3d(x, y, z, t, ax=None, label="Trajectory", label_4d="Time
         plt.colorbar(im, ax=ax)
 
     return ax
+
+
 def plot_matrix_and_qr(matrix):
     import matplotlib.pyplot as plt
     from nosnoc.plot_utils import latexify_plot

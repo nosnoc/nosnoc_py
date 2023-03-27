@@ -101,6 +101,7 @@ class NosnocOpts:
     opts_casadi_nlp['ipopt']['compl_inf_tol'] = None
     opts_casadi_nlp['ipopt']['mu_strategy'] = 'adaptive'
     opts_casadi_nlp['ipopt']['mu_oracle'] = 'quality-function'
+    opts_casadi_nlp["record_time"] = True
 
     time_freezing: bool = False
     time_freezing_tolerance: float = 1e-3

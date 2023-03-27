@@ -356,21 +356,22 @@ class NosnocSolver(NosnocSolverBase):
             self.setup_p_val(sigma_k, tau_val)
 
             # solve NLP
-            t = time.process_time()
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
                               lbx=lbw,
                               ubx=ubw,
                               p=self.p_val)
-            cpu_time_nlp[ii] = time.process_time() - t
 
-            # print and process solution
+            # statistics
             solver_stats = self.solver.stats()
+            cpu_time_nlp[ii] = solver_stats['t_proc_total']
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
             nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
+
+            # process iterate
             w_opt = sol['x'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
@@ -428,8 +429,6 @@ class NosnocSolver(NosnocSolverBase):
         else:
             results["status"] = Status.INFEASIBLE
 
-        # for i in range(len(w_opt)):
-        #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
 
