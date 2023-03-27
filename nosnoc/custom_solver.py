@@ -351,10 +351,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         w_current = np.concatenate((prob.w0, lamH0, slack0, mu_pd_0))
 
         w_all = [w_current.copy()]
-        n_max_iter_inc_polish = opts.max_iter_homotopy + 1
-        complementarity_stats = n_max_iter_inc_polish * [None]
-        cpu_time_nlp = n_max_iter_inc_polish * [None]
-        nlp_iter = n_max_iter_inc_polish * [None]
+        n_iter_polish = opts.max_iter_homotopy + (1 if opts.do_polishing_step else 0)
+        complementarity_stats = n_iter_polish * [None]
+        cpu_time_nlp = n_iter_polish * [None]
+        nlp_iter = n_iter_polish * [None]
 
         # TODO: make this options
         max_newton_iter = 100

@@ -53,7 +53,7 @@ class NosnocSimLooper:
         self.status = []
         self.switch_times = []
 
-        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + 1))
+        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + (1 if solver.opts.do_polishing_step else 0)))
 
     def run(self) -> None:
         """Run the simulation loop."""

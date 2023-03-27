@@ -68,10 +68,10 @@ class NosnocMIpoptSolver(NosnocSolverBase):
         w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
-        n_max_iter_inc_polish = opts.max_iter_homotopy + 1
-        complementarity_stats = n_max_iter_inc_polish * [None]
-        cpu_time_nlp = n_max_iter_inc_polish * [None]
-        nlp_iter = n_max_iter_inc_polish * [None]
+        n_iter_polish = opts.max_iter_homotopy + 1
+        complementarity_stats = n_iter_polish * [None]
+        cpu_time_nlp = n_iter_polish * [None]
+        nlp_iter = n_iter_polish * [None]
 
         if opts.print_level:
             print('-------------------------------------------')
@@ -174,7 +174,7 @@ class NosnocMIpoptSolver(NosnocSolverBase):
             sigma_k = self.homotopy_sigma_update(sigma_k)
 
         if opts.do_polishing_step:
-            w_opt, cpu_time_nlp[n_max_iter_inc_polish - 1], nlp_iter[n_max_iter_inc_polish - 1], status = \
+            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
                                             self.polish_solution(w_opt, self.lambda00, x0)
 
         # collect results
@@ -257,11 +257,12 @@ class NosnocMIpoptSolver(NosnocSolverBase):
 
             # solve NLP
             t = time.time()
-            sol = self.solvers[ii](x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
+            # TODO: create a new solver for the polishing step!
+            sol = self.solvers[-1](x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
             cpu_time_nlp = time.time() - t
 
             # print and process solution
-            solver_stats = self.solvers[ii].stats()
+            solver_stats = self.solvers[-1].stats()
             status = solver_stats['return_status']
             nlp_iter = solver_stats['iter_count']
             nlp_res = ca.norm_inf(sol['g']).full()[0][0]
