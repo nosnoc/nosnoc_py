@@ -192,6 +192,71 @@ class NosnocSolverBase(ABC):
         return
 
 
+    def polish_solution(self, casadi_ipopt_solver, w_guess):
+        opts = self.opts
+        prob = self.problem
+
+        eps_sigma = 1e1 * opts.comp_tol
+
+        ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
+                          prob.ind_theta + prob.ind_mu)
+        ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
+                               prob.ind_v + prob.ind_z)
+        # sanity check
+        ind_all = ind_set + ind_dont_set
+        for iw in range(len(w_guess)):
+            if iw not in ind_all:
+                raise Exception(f"w[{iw}] = {prob.w[iw]} not handled proprerly")
+
+        w_fix_zero = w_guess < eps_sigma
+        w_fix_zero[ind_dont_set] = False
+        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
+
+        w_fix_one = np.abs(w_guess - 1.0) < eps_sigma
+        w_fix_one[ind_dont_set] = False
+        ind_fix_one = np.where(w_fix_one)[0].tolist()
+
+        lbw = prob.lbw.copy()
+        ubw = prob.ubw.copy()
+        lbw[ind_fix_zero] = 0.0
+        ubw[ind_fix_zero] = 0.0
+        lbw[ind_fix_one] = 1.0
+        ubw[ind_fix_one] = 1.0
+
+        # fix some variables
+        if opts.print_level:
+            print(
+                f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0."
+            )
+        for i_ctrl in range(opts.N_stages):
+            for i_fe in range(opts.Nfe_list[i_ctrl]):
+                w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
+
+            sigma_k, tau_val = 0.0, 0.0
+            self.setup_p_val(sigma_k, tau_val)
+
+            # solve NLP
+            t = time.time()
+            sol = casadi_ipopt_solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
+            cpu_time_nlp = time.time() - t
+
+            # print and process solution
+            solver_stats = casadi_ipopt_solver.stats()
+            status = solver_stats['return_status']
+            nlp_iter = solver_stats['iter_count']
+            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            cost_val = ca.norm_inf(sol['f']).full()[0][0]
+            w_opt = sol['x'].full().flatten()
+
+            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
+            if opts.print_level:
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
+                                       cpu_time_nlp, nlp_iter, status)
+            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
+                print(f"Warning: IPOPT exited with status {status}")
+
+        return w_opt, cpu_time_nlp, nlp_iter, status
+
 class NosnocSolver(NosnocSolverBase):
     """
     Main solver class which solves the nonsmooth problem by applying a homotopy
@@ -333,7 +398,7 @@ class NosnocSolver(NosnocSolverBase):
 
         if opts.do_polishing_step:
             w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
-                                            self.polish_solution(w_opt, self.lambda00, x0)
+                                            self.polish_solution(self.solver, w_opt)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -369,71 +434,6 @@ class NosnocSolver(NosnocSolverBase):
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
-
-    def polish_solution(self, w_guess, lambda00, x0):
-        opts = self.opts
-        prob = self.problem
-
-        eps_sigma = 1e1 * opts.comp_tol
-
-        ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
-                          prob.ind_theta + prob.ind_mu)
-        ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v + prob.ind_z)
-        # sanity check
-        ind_all = ind_set + ind_dont_set
-        for iw in range(len(w_guess)):
-            if iw not in ind_all:
-                raise Exception(f"w[{iw}] = {prob.w[iw]} not handled proprerly")
-
-        w_fix_zero = w_guess < eps_sigma
-        w_fix_zero[ind_dont_set] = False
-        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
-
-        w_fix_one = np.abs(w_guess - 1.0) < eps_sigma
-        w_fix_one[ind_dont_set] = False
-        ind_fix_one = np.where(w_fix_one)[0].tolist()
-
-        lbw = prob.lbw.copy()
-        ubw = prob.ubw.copy()
-        lbw[ind_fix_zero] = 0.0
-        ubw[ind_fix_zero] = 0.0
-        lbw[ind_fix_one] = 1.0
-        ubw[ind_fix_one] = 1.0
-
-        # fix some variables
-        if opts.print_level:
-            print(
-                f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0."
-            )
-        for i_ctrl in range(opts.N_stages):
-            for i_fe in range(opts.Nfe_list[i_ctrl]):
-                w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
-
-            sigma_k, tau_val = 0.0, 0.0
-            self.setup_p_val(sigma_k, tau_val)
-
-            # solve NLP
-            t = time.time()
-            sol = self.solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
-            cpu_time_nlp = time.time() - t
-
-            # print and process solution
-            solver_stats = self.solver.stats()
-            status = solver_stats['return_status']
-            nlp_iter = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
-            cost_val = ca.norm_inf(sol['f']).full()[0][0]
-            w_opt = sol['x'].full().flatten()
-
-            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
-            if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp, nlp_iter, status)
-            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
-                print(f"Warning: IPOPT exited with status {status}")
-
-        return w_opt, cpu_time_nlp, nlp_iter, status
 
 
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:

@@ -590,7 +590,6 @@ class NosnocCustomSolver(NosnocSolverBase):
             # TODO: check:
             #  w_current[-(self.n_mu+self.n_comp):-self.n_mu]
 
-        # self.print_iterate(w_current)
         return results
 
     def plot_newton_matrix(self, matrix, title='', fig_filename=None):

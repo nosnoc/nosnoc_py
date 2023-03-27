@@ -1,5 +1,5 @@
 from .auto_model import NosnocAutoModel
-from .solver import NosnocSolver, get_results_from_primal_vector
+from .solver import NosnocSolver, NosnocSolverBase, get_results_from_primal_vector
 from .problem import NosnocProblem
 from .model import NosnocModel
 from .ocp import NosnocOcp

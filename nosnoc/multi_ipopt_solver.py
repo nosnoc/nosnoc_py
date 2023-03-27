@@ -18,8 +18,9 @@ from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, fla
 
 class NosnocMIpoptSolver(NosnocSolverBase):
     """
-    The nonsmooth problem is formulated internally based on the given options,
-    dynamic model, and (optionally) the ocp data.
+    An alternative to the NosnocSolver that uses multiple Ipopt solvers for different steps of the homotopy.
+
+    Each IPOPT solver has a fixed tolerance, and a fixed initial and target value for the barrier parameter.
     """
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
@@ -68,7 +69,7 @@ class NosnocMIpoptSolver(NosnocSolverBase):
         w0 = prob.w0.copy()
 
         w_all = [w0.copy()]
-        n_iter_polish = opts.max_iter_homotopy + 1
+        n_iter_polish = opts.max_iter_homotopy + (1 if opts.do_polishing_step else 0)
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
@@ -174,8 +175,9 @@ class NosnocMIpoptSolver(NosnocSolverBase):
             sigma_k = self.homotopy_sigma_update(sigma_k)
 
         if opts.do_polishing_step:
+            # TODO: create a new solver for the polishing step!
             w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
-                                            self.polish_solution(w_opt, self.lambda00, x0)
+                                            self.polish_solution(self.solvers[-1], w_opt)
 
         # collect results
         results = get_results_from_primal_vector(prob, w_opt)
@@ -211,69 +213,3 @@ class NosnocMIpoptSolver(NosnocSolverBase):
         # for i in range(len(w_opt)):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
-
-    def polish_solution(self, w_guess, lambda00, x0):
-        opts = self.opts
-        prob = self.problem
-
-        eps_sigma = 1e1 * opts.comp_tol
-
-        ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
-                          prob.ind_theta + prob.ind_mu)
-        ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v + prob.ind_z)
-        # sanity check
-        ind_all = ind_set + ind_dont_set
-        for iw in range(len(w_guess)):
-            if iw not in ind_all:
-                raise Exception(f"w[{iw}] = {prob.w[iw]} not handled proprerly")
-
-        w_fix_zero = w_guess < eps_sigma
-        w_fix_zero[ind_dont_set] = False
-        ind_fix_zero = np.where(w_fix_zero)[0].tolist()
-
-        w_fix_one = np.abs(w_guess - 1.0) < eps_sigma
-        w_fix_one[ind_dont_set] = False
-        ind_fix_one = np.where(w_fix_one)[0].tolist()
-
-        lbw = prob.lbw.copy()
-        ubw = prob.ubw.copy()
-        lbw[ind_fix_zero] = 0.0
-        ubw[ind_fix_zero] = 0.0
-        lbw[ind_fix_one] = 1.0
-        ubw[ind_fix_one] = 1.0
-
-        # fix some variables
-        if opts.print_level:
-            print(
-                f"polishing step: setting {len(ind_fix_zero)} variables to 0.0, {len(ind_fix_one)} to 1.0."
-            )
-        for i_ctrl in range(opts.N_stages):
-            for i_fe in range(opts.Nfe_list[i_ctrl]):
-                w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
-
-            sigma_k, tau_val = 0.0, 0.0
-            self.setup_p_val(sigma_k, tau_val)
-
-            # solve NLP
-            t = time.time()
-            # TODO: create a new solver for the polishing step!
-            sol = self.solvers[-1](x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
-            cpu_time_nlp = time.time() - t
-
-            # print and process solution
-            solver_stats = self.solvers[-1].stats()
-            status = solver_stats['return_status']
-            nlp_iter = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
-            cost_val = ca.norm_inf(sol['f']).full()[0][0]
-            w_opt = sol['x'].full().flatten()
-
-            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
-            if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp, nlp_iter, status)
-            if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
-                print(f"Warning: IPOPT exited with status {status}")
-
-        return w_opt, cpu_time_nlp, nlp_iter, status
