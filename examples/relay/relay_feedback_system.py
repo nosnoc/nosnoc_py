@@ -9,6 +9,8 @@ OMEGA = 25
 XI = 0.05
 SIGMA = 1
 NX = 3
+
+TSIM = 10
 # Initial value
 X0 = np.array([0, -0.001, -0.02])
 ## Info
@@ -50,12 +52,13 @@ def get_default_options() -> nosnoc.NosnocOpts:
     opts = nosnoc.NosnocOpts()
 
     opts.use_fesd = True
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    # opts.pss_mode = nosnoc.PssMode.STEP
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
+    # opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
     opts.comp_tol = 1e-6
     opts.print_level = 0
@@ -67,16 +70,18 @@ def get_default_options() -> nosnoc.NosnocOpts:
 
 
 def main():
-    Tsim = 10
-    Nsim = 200
-    Tstep = Tsim / Nsim
+    Nsim = 120
+    Tstep = TSIM / Nsim
 
     opts = get_default_options()
     opts.terminal_time = Tstep
 
     model = get_relay_feedback_system_model()
 
-    solver = nosnoc.NosnocSolver(opts, model)
+    opts.print_level = 1
+    # solver = nosnoc.NosnocSolver(opts, model)
+    # solver = nosnoc.NosnocMIpoptSolver(opts, model)
+    solver = nosnoc.NosnocCustomSolver(opts, model)
     n_exec = 1
     for i in range(n_exec):
         # simulation loop
@@ -100,7 +105,6 @@ def main():
     # plot_system_3d(results)
 
     # plot timings
-    filename = ""
     filename = f"relay_timings_{datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')}.pdf"
     plot_title = f"{opts.irk_representation.name.lower()} IRK, init {opts.initialization_strategy.name.lower()}"  # {opts.homotopy_update_rule.name}"
     nosnoc.plot_timings(results["cpu_nlp"], title=plot_title, figure_filename=filename)
@@ -110,9 +114,8 @@ def main():
 
 
 def main_least_squares():
-    Tsim = 10
     Nsim = 200
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
 
     opts = get_default_options()
     opts.terminal_time = Tstep
@@ -168,13 +171,12 @@ def main_rk4_simulation():
     opts.use_fesd = True
     opts.pss_mode = nosnoc.PssMode.STEWART
 
-    Tsim = 10
     Nsim = 200
     Nsim = 20000
 
-    # Tsim = 1
+    # TSIM = 1
     # Nsim = 20
-    Tstep = Tsim / Nsim
+    Tstep = TSIM / Nsim
     opts.terminal_time = Tstep
 
     model = get_relay_feedback_system_model()
@@ -183,7 +185,7 @@ def main_rk4_simulation():
     model.add_smooth_step_representation(smoothing_parameter=1e-4)
 
     # smooth dynamics based on STEP
-    X_sim, t_grid = nosnoc.rk4(model.f_x_smooth_fun, model.x0, Tsim, Nsim)
+    X_sim, t_grid = nosnoc.rk4(model.f_x_smooth_fun, model.x0, TSIM, Nsim)
 
     #
     plot_system_trajectory(X_sim, t_grid)
