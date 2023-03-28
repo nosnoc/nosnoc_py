@@ -112,6 +112,10 @@ def main():
     model = get_blocks_with_friction_model()
 
     # solver
+    opts.print_level = 1
+    # solver = nosnoc.NosnocCustomSolver(opts, model)
+
+    # opts.opts_casadi_nlp['ipopt']['print_level'] = 5
     solver = nosnoc.NosnocSolver(opts, model)
 
     n_exec = 1
@@ -135,8 +139,6 @@ def main():
 
     # plot trajectory
     plot_blocks(results["X_sim"], results["t_grid"])
-    import pdb
-    pdb.set_trace()
 
 
 def plot_blocks(X_sim, t_grid, latexify=True):
