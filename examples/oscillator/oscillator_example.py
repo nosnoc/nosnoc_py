@@ -74,7 +74,7 @@ def solve_oscillator(opts=None, use_g_Stewart=False, do_plot=True):
 
     if do_plot:
         plot_oscillator(results["X_sim"], results["t_grid"], switch_times=results["switch_times"])
-    nosnoc.plot_timings(results["cpu_nlp"])
+        nosnoc.plot_timings(results["cpu_nlp"])
 
     # store solution
     # import json
@@ -146,6 +146,7 @@ def main_custom_solver():
     # opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
     # opts.sigma_0 = 1e-2
 
+    opts.print_level = 1
     solver = nosnoc.NosnocCustomSolver(opts, model)
     # solver = nosnoc.NosnocSolver(opts, model)
     # solver.print_problem()
@@ -159,7 +160,7 @@ def main_custom_solver():
     error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
     print(f"error wrt exact solution {error:.2e}")
 
-    plot_oscilator(results["X_sim"], results["t_grid"])
+    plot_oscillator(results["X_sim"], results["t_grid"])
     timings = results["cpu_nlp"]
     mean_cpu = np.mean(np.sum(timings, axis=1))
     print(f"Mean CPU time: {mean_cpu:.3f} s")
@@ -225,6 +226,6 @@ def plot_oscillator(X_sim, t_grid, latexify=True, switch_times=None):
 
 if __name__ == "__main__":
     main_custom_solver()
-    solve_oscillator(use_g_Stewart=False, do_plot=True)
+    # solve_oscillator(use_g_Stewart=False, do_plot=True)
     # main_least_squares()
     # main_polishing()
