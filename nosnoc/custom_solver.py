@@ -377,7 +377,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         # TODO: initialize duals ala Waechter2006, Sec. 3.6
         # if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
         if opts.print_level == 1:
-            print(f"sigma\t\titer \tres \t\tmin_steps \tmin_mu \tmin G")
+            print(f"sigma\t\titer \tres \t\tmin_steps\tmin_mu\t\tmin G")
 
         w_candidate = w_current.copy()
         # homotopy loop
@@ -386,7 +386,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             self.setup_p_val(sigma_k, tau_val)
 
             if opts.print_level > 1:
-                print("alpha \talpha_mu \talpha_max\tstep norm \tkkt res \tmin mu \tmin G")
+                print("alpha\talpha_mu\talpha_max\tstep norm\tkkt res\t\tmin_mu\t\tmin G")
             t = time.time()
             self.alpha_min_counter = 0
 
@@ -534,7 +534,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     max_H_viol = np.max(np.abs(kkt_val[self.nw:self.nw+self.n_H]))
                     max_comp_viol = np.max(np.abs(kkt_val[:-self.n_mu]))
                     # min_lam_comp = np.min(self.get_lambda_comp(w_current))
-                    print(f"{alpha:.3f}\t{alpha_mu:.3f} \t\t{alpha_max:.3f} \t\t{step_norm:.2e} \t{nlp_res:.2e} \t{min_mu:.2e}\t{np.min(G_val):.2e}\t{max_slack_comp_viol:.2e}\t{max_H_viol:.2e}\t{max_comp_viol:.2e}")
+                    print(f"{alpha:.3f}\t{alpha_mu:.3f}\t\t{alpha_max:.3f}\t\t{step_norm:.2e}\t{nlp_res:.2e}\t{min_mu:.2e}\t{np.min(G_val):.2e}\t{max_slack_comp_viol:.2e}\t{max_H_viol:.2e}\t{max_comp_viol:.2e}")
 
             cpu_time_nlp[ii] = time.time() - t
 

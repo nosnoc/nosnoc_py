@@ -87,7 +87,7 @@ class NosnocSimLooper:
             self.cost_vals.append(results["cost_val"])
             self.status.append(results["status"])
             if self.print_level > 0:
-                print(f"Sim step {i + 1}/{self.Nsim}\t status: {results['status']}")
+                print(f"Sim step {i + 1}/{self.Nsim}\t{results['status']}")
 
     def get_results(self) -> dict:
         self.t_grid = np.concatenate((np.array([0.0]), np.cumsum(self.time_steps)))
