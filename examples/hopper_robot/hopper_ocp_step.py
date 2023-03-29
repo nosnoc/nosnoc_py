@@ -7,6 +7,7 @@ import nosnoc as ns
 import casadi as ca
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 from scipy.interpolate import CubicSpline
 from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
@@ -98,7 +99,7 @@ def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
     ubx = np.array([x_goal+0.1, 1.5, np.pi, 0.50, 10, 10, 5, 5, np.inf])
     lbx = np.array([0, 0, -np.pi, 0.1, -10, -10, -5, -5, -np.inf])
 
-    Q = np.diag([100, 100, 20, 50, 0.1, 0.1, 0.1, 0.1])
+    Q = np.diag([100, 100, 20, 20, 0.1, 0.1, 0.1, 0.1])
     Q_terminal = np.diag([300, 300, 300, 300, 0.1, 0.1, 0.1, 0.1])
     R = np.diag([0.01, 0.01, 1e-5])
 
@@ -202,7 +203,7 @@ def init_func(htrail, ftrail):
 
 frame_cnt = 0
 
-def animate_robot(state, head, foot, body, ftrail, htrail):
+def animate_robot(state, head, foot, body, ftrail, htrail, text):
     global frame_cnt
     x_head, y_head = state[0], state[1]
     x_foot, y_foot = state[0] - state[3]*np.sin(state[2]), state[1] - state[3]*np.cos(state[2])
@@ -210,18 +211,38 @@ def animate_robot(state, head, foot, body, ftrail, htrail):
     foot.set_offsets([x_foot, y_foot])
     body.set_data([x_foot, x_head], [y_foot, y_head])
 
+    text.set_text(f'T = {state[-1]:.2f} s')
+
     ftrail.set_data(np.append(ftrail.get_xdata(orig=False), x_foot), np.append(ftrail.get_ydata(orig=False), y_foot))
     htrail.set_data(np.append(htrail.get_xdata(orig=False), x_head), np.append(htrail.get_ydata(orig=False), y_head))
     plt.savefig(str(frame_cnt)+'.pdf')
     frame_cnt += 1
-    return head, foot, body, ftrail, htrail
+    return head, foot, body, ftrail, htrail, text
 
 
 def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal):
+    params = {
+        # "backend": "TkAgg",
+        "text.latex.preamble": r"\usepackage{gensymb} \usepackage{amsmath}",
+        "axes.labelsize": 40,
+        "axes.titlesize": 40,
+        "legend.fontsize": 40,
+        "xtick.labelsize": 40,
+        "ytick.labelsize": 40,
+        "text.usetex": True,
+        "font.family": "serif",
+    }
+
+    matplotlib.rcParams.update(params)
     fig, ax = plt.subplots()
 
+    max_height = max(np.array(results['x_traj'])[:, 1])
     ax.set_xlim(0, x_goal+0.1)
-    ax.set_ylim(-0.1, HEIGHT+0.5)
+    ax.set_ylim(-0.1, max_height+0.5)
+    ax.set_xlabel('$x$ [m]')
+    ax.set_ylabel('$y$ [m]')
+    plt.xticks([0,1,2,3,4,5])
+    plt.tight_layout()
     patch = patches.Rectangle((-0.1, -0.1), x_goal+10, 0.1, color='grey')
     ax.add_patch(patch)
     ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
@@ -230,7 +251,8 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     body, = ax.plot([], [], 'k')
     ftrail, = ax.plot([], [], color='r', alpha=0.5)
     htrail, = ax.plot([], [], color='b', alpha=0.5)
-    ani = FuncAnimation(fig, partial(animate_robot, head=head, foot=foot, body=body, htrail=htrail, ftrail=ftrail),
+    text = plt.text(0.1, max_height + .1, f'T = 0.00 s' , fontsize=40)
+    ani = FuncAnimation(fig, partial(animate_robot, head=head, foot=foot, body=body, htrail=htrail, ftrail=ftrail, text=text),
                         init_func=partial(init_func, htrail=htrail, ftrail=ftrail),
                         frames=results['x_traj'], blit=True, repeat=False)
     try:
