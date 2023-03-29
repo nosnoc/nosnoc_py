@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 from multiprocessing import Pool, cpu_count
 import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib.ticker import MaxNLocator
 from time import gmtime, strftime
 from hopper_ocp_step import solve_ocp_step, get_default_options_step
@@ -80,23 +81,37 @@ def plot_from_pickle(fname):
 
 
 def plot_for_paper(cpu_times_sparse, cpu_times_dense, nlp_iter_sparse, nlp_iter_dense, n_expr):
-    ns.latexify_plot()
+    params = {
+        # "backend": "TkAgg",
+        "text.latex.preamble": r"\usepackage{gensymb} \usepackage{amsmath}",
+        "axes.labelsize": 20,
+        "axes.titlesize": 20,
+        "legend.fontsize": 20,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+        "text.usetex": True,
+        "font.family": "serif",
+    }
+    matplotlib.rcParams.update(params)
     plt.figure()
     plt.plot(n_expr, np.array(cpu_times_sparse)/60, 'Xb-', label="Step")
     plt.plot(n_expr, np.array(cpu_times_dense)/60, 'Xr-', label="Stewart")
     plt.xlabel('$N$')
-    plt.ylabel('cpu time [m]')
+    plt.ylabel('cpu time [s]')
     plt.legend(loc='best')
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True, steps=[5]))
-
+    plt.grid()
+    plt.tight_layout()
+    
     plt.figure()
     plt.plot(n_expr, np.array(cpu_times_sparse)/np.array(nlp_iter_sparse), 'Xb-', label="Step")
     plt.plot(n_expr, np.array(cpu_times_dense)/np.array(nlp_iter_dense), 'Xr-', label="Stewart")
     plt.xlabel('$N$')
-    plt.ylabel(r'cpu time/iteration [$s$]')
+    plt.ylabel(r'cpu time per NLP iteration [s]')
     plt.legend(loc='best')
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True, steps=[5]))
-
+    plt.grid()
+    plt.tight_layout()
     plt.show()
 
 
