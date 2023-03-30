@@ -8,6 +8,11 @@ import casadi as ca
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import argparse
+import pathlib
+import sys
+import pickle
+from time import gmtime, strftime
 from scipy.interpolate import CubicSpline
 from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
@@ -192,7 +197,7 @@ def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=1.0, ref_a
     if plot:
         plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_goal)
 
-    return results
+    return results, x_ref, x_goal
 
 
 def init_func(htrail, ftrail):
@@ -304,6 +309,96 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
     plt.show()
 
+def plot_from_pickle(fname, indices_to_plot):
+    with open(fname, 'rb') as f:
+        experiment_results = pickle.load(f)
+        plot_for_paper(experiment_results['results'],
+                       experiment_results['x_ref'],
+                       experiment_results['x_goal'],
+                       indices_to_plot)
+
+def plot_for_paper(results, x_ref, x_goal, indices_to_plot, plot_trails=True, plot_all=True):
+    params = {
+        # "backend": "TkAgg",
+        "text.latex.preamble": r"\usepackage{gensymb} \usepackage{amsmath}",
+        "axes.labelsize": 30,
+        "axes.titlesize": 30,
+        "legend.fontsize": 30,
+        "xtick.labelsize": 30,
+        "ytick.labelsize": 30,
+        "text.usetex": True,
+        "font.family": "serif",
+    }
+
+    matplotlib.rcParams.update(params)
+    fig, ax = plt.subplots(figsize=(20,5))
+
+    x_traj = np.array(results['x_traj'])
+    t = x_traj[:, -1]
+    x = x_traj[:, 0]
+    y = x_traj[:, 1]
+    theta = x_traj[:, 2]
+    leg_len = x_traj[:, 3]
+
+    x_foot, y_foot = x - leg_len*np.sin(theta), y - leg_len*np.cos(theta)
+    
+    max_height = max(np.array(results['x_traj'])[:, 1])
+    ax.set_xlim(0, x_goal+0.1)
+    ax.set_ylim(-0.1, max_height+0.5)
+    ax.set_xlabel('$x$ [m]')
+    ax.set_ylabel('$y$ [m]')
+    plt.xticks([0,1,2,3,4,5])
+    patch = patches.Rectangle((-0.1, -0.1), x_goal+10, 0.1, color='grey')
+    ax.add_patch(patch)
+    ax.plot(x_ref[:, 0], x_ref[:, 1], color='lightgrey')
+
+    if plot_trails:
+        ax.plot(x, y, color='blue', alpha=0.5)
+        ax.plot(x_foot, y_foot, color='red', alpha=0.5)
+    
+
+    # Plot hopper parts
+    if plot_all:
+        x_plot = x
+        y_plot = y
+        x_foot_plot = x_foot
+        y_foot_plot = y_foot
+    else:
+        x_plot = x[indices_to_plot]
+        y_plot = y[indices_to_plot]
+        x_foot_plot = x_foot[indices_to_plot]
+        y_foot_plot = y_foot[indices_to_plot]
+    head = ax.scatter(x_plot, y_plot, color='b', s=[100])
+    foot = ax.scatter(x_foot_plot, y_foot_plot, color='r', s=[50])
+    for x, y, x_foot, y_foot in zip(x_plot, y_plot, x_foot_plot, y_foot_plot):
+        ax.plot([x,x_foot], [y, y_foot], 'k')
+
+    #ax.set_aspect(1.0)
+    plt.tight_layout()
+    plt.show()
+    
+
 
 if __name__ == '__main__':
-    solve_ocp_step(x_goal=5.0, multijump=True, ref_as_init=True, lift_algebraic=True)
+    if len(sys.argv) > 1:
+        CLI=argparse.ArgumentParser()
+        CLI.add_argument(
+            "-i",
+            "--indices",  
+            nargs="*",  # 0 or more values expected => creates a list
+            type=int,
+            default=[0, 30, 60, 90, 120, 150],  # default if nothing is provided
+        )
+        CLI.add_argument(
+            "pickle",
+            type=pathlib.Path
+        )
+        args = CLI.parse_args()
+        plot_from_pickle(args.pickle, args.indices)
+    else:
+        results, x_ref, x_goal = solve_ocp_step(x_goal=5.0, multijump=True, ref_as_init=True, lift_algebraic=True)
+        with open(strftime("%Y-%m-%d-%H-%M-%S-hopper-step.pkl", gmtime()), 'wb') as f:
+            experiment_results = {'results': results,
+                                  'x_goal': x_goal,
+                                  'x_ref': x_ref}
+            pickle.dump(experiment_results, f)
