@@ -6,6 +6,9 @@ class MpccMode(Enum):
     SCHOLTES_EQ = auto()
     FISCHER_BURMEISTER = auto()
     FISCHER_BURMEISTER_IP_AUG = auto()
+    ELASTIC_INEQ = auto()
+    ELASTIC_EQ = auto()
+    ELASTIC_TWO_SIDED = auto()
     # KANZOW_SCHWARTZ = auto()
     # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
     # NOTE: tested in simple_sim_tests

@@ -91,7 +91,7 @@ class NosnocFormulationObject(ABC):
 
         return
 
-    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX) -> None:
+    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic) -> None:
         """
         adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
@@ -109,6 +109,15 @@ class NosnocFormulationObject(ABC):
             g_comp = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y - sigma
             # NOTE: this line should be equivalent but yield different results
             # g_comp = casadi_sum_list([ca.diag(x_i) @ y for x_i in x]) - sigma
+        elif opts.mpcc_mode in [MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
+            g = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y
+            g_comp = g - s_elastic * np.ones((n, 1))
+        elif opts.mpcc_mode == MpccMode.ELASTIC_TWO_SIDED:
+            g = ca.diag(casadi_sum_list([x_i for x_i in x])) @ y
+            g_comp = ca.vertcat(
+                g - s_elastic * np.ones((n, 1)),
+                g + s_elastic * np.ones((n, 1))
+            )
         elif opts.mpcc_mode == MpccMode.FISCHER_BURMEISTER:
             g_comp = ca.SX.zeros(n, 1)
             for j in range(n):
@@ -133,15 +142,19 @@ class NosnocFormulationObject(ABC):
                     g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
 
         n_comp = casadi_length(g_comp)
-        if opts.mpcc_mode == MpccMode.SCHOLTES_INEQ:
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ]:
             lb_comp = -np.inf * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
+            ub_comp = np.zeros((n_comp,))
         elif opts.mpcc_mode in [
                 MpccMode.SCHOLTES_EQ, MpccMode.FISCHER_BURMEISTER,
-                MpccMode.FISCHER_BURMEISTER_IP_AUG
+                MpccMode.FISCHER_BURMEISTER_IP_AUG,
+                MpccMode.ELASTIC_EQ
         ]:
-            lb_comp = 0 * np.ones((n_comp,))
-            ub_comp = 0 * np.ones((n_comp,))
+            lb_comp = np.zeros((n_comp,))
+            ub_comp = np.zeros((n_comp,))
+        elif opts.mpcc_mode == MpccMode.ELASTIC_TWO_SIDED:
+            lb_comp = np.hstack((-ca.inf*np.ones((n,)), np.zeros((n,))))
+            ub_comp = np.hstack((np.zeros((n,)), ca.inf*np.ones((n,))))
 
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
@@ -248,7 +261,7 @@ class FiniteElement(FiniteElementBase):
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
 
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ]:
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_TWO_SIDED]:
             lb_dual = 0.0
         else:
             lb_dual = -np.inf
@@ -467,37 +480,37 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX) -> None:
+    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: Optional[ca.SX]) -> None:
         opts = self.opts
         X_fe = self.X_fe()
         for j in range(opts.n_s):
             z = self.rk_stage_z(j)
             stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
             a, b = ca.horzsplit(stage_comps)
-            self.create_complementarity([a], b, sigma_p, tau)
+            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
         if self.fe_idx == opts.N_finite_elements-1:
             ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
             a, b = ca.horzsplit(ctrl_comps)
-            self.create_complementarity([a], b, sigma_p, tau)
+            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
 
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau)
+                                            tau, Uk, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1),
-                                            sigma_p, tau)
+                                            sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
                     # within fe
                     self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj),
-                                                sigma_p, tau)
+                                                sigma_p, tau, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
                 # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
-                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau)
+                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau, s_elastic)
         return
 
     def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX) -> None:
@@ -621,12 +634,12 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_comp[ctrl_idx].append(increment_indices(fe.ind_comp, g_len))
         return
 
-    def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX) -> None:
+    def create_global_compl_constraints(self, sigma_p: ca.SX, tau: ca.SX, s_elastic: ca.SX) -> None:
         # TODO add other complementarity modes here.
         p_global = self.p[self.model.dims.n_p_time_var:self.model.dims.n_p_time_var + self.model.dims.n_p_glob]
         stage_comps = self.ocp.g_global_comp_fun(p_global, self.model.v_global)  # TODO maybe should include stage z
         a, b = ca.horzsplit(stage_comps)
-        self.create_complementarity([a], b, sigma_p, tau)
+        self.create_complementarity([a], b, sigma_p, tau, s_elastic)
         return
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
@@ -657,6 +670,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
         self.ind_z = create_empty_list_matrix((opts.N_stages,))
+        self.ind_elastic = []
 
         self.ind_u = []
         self.ind_h = []
@@ -667,6 +681,12 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
+        s_elastic = ca.SX.sym('s_elastic')  # Elasticity parameter
+        self.add_variable(s_elastic, self.ind_elastic,
+                          opts.s_elastic_min * np.ones(1),
+                          opts.s_elastic_max * np.ones(1),
+                          opts.s_elastic_0 * np.ones(1))
+        self.cost = 1 / sigma_p * s_elastic
         tau = ca.SX.sym('tau')  # homotopy parameter
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
@@ -686,7 +706,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.forward_simulation(ocp, Uk)
 
                 # 2) Complementarity Constraints
-                fe.create_complementarity_constraints(sigma_p, tau, Uk)
+                fe.create_complementarity_constraints(sigma_p, tau, Uk, s_elastic)
 
                 # 3) Step Equilibration
                 fe.step_equilibration(sigma_p, tau)
@@ -707,7 +727,7 @@ class NosnocProblem(NosnocFormulationObject):
                     [opts.time_freezing_tolerance])
 
         # Create global complementarities
-        self.create_global_compl_constraints(sigma_p, tau)
+        self.create_global_compl_constraints(sigma_p, tau, s_elastic)
 
         # Scalar-valued complementarity residual
         if opts.use_fesd:
