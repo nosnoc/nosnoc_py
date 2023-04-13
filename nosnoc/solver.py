@@ -298,8 +298,13 @@ class NosnocSolver(NosnocSolverBase):
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
-                print(f"Lower bound: {np.where(g_sol - self.problem.lbg < -1e-3)}")
-                print(f"Upper bound: {np.where(self.problem.ubg - g_sol < -1e-3)}")
+                if opts.print_level > 2:
+                    lower_bound_errors = np.where(g_sol - self.problem.lbg < -1e-3)[0]
+                    if len(lower_bound_errors) > 0:
+                        print(f"Lower bound: {lower_bound_errors}")
+                    lower_bound_errors = np.where(self.problem.ubg - g_sol < -1e-3)[0]
+                    if len(lower_bound_errors) > 0:
+                        print(f"Upper bound: {lower_bound_errors}")
 
             if complementarity_residual < opts.comp_tol:
                 break
@@ -374,7 +379,7 @@ class NosnocSolver(NosnocSolverBase):
         ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
                           prob.ind_theta + prob.ind_mu)
         ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v + prob.ind_z)
+                               prob.ind_v + prob.ind_z + prob.ind_elastic)
         # sanity check
         ind_all = ind_set + ind_dont_set
         for iw in range(len(w_guess)):
@@ -464,15 +469,15 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results = dict()
     results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
-    results["x_list"] = [w_opt[np.array(ind)] for ind in flatten_layer(prob.ind_x_cont)]
+    results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
 
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
-    results["u_list"] = [w_opt[np.array(ind)] for ind in prob.ind_u]
+    results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
 
-    results["theta_list"] = [w_opt[np.array(ind)] for ind in get_cont_algebraic_indices(prob.ind_theta)]
-    results["lambda_list"] = [w_opt[np.array(ind)] for ind in get_cont_algebraic_indices(prob.ind_lam)]
+    results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
+    results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
     # if opts.pss_mode == PssMode.STEP:
     results["alpha_list"] = [

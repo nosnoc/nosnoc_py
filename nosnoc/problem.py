@@ -496,7 +496,7 @@ class FiniteElement(FiniteElementBase):
         if not opts.use_fesd:
             for j in range(opts.n_s):
                 self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau, Uk, s_elastic)
+                                            tau, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -513,7 +513,7 @@ class FiniteElement(FiniteElementBase):
                 self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau, s_elastic)
         return
 
-    def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX) -> None:
+    def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX, s_elastic: Optional[ca.SX]) -> None:
         opts = self.opts
         # step equilibration only within control stages.
         if not opts.use_fesd:
@@ -545,9 +545,9 @@ class FiniteElement(FiniteElementBase):
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
             self.add_constraint(nu_k * delta_h_ki)
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT_COMPLEMENTARITY:
-            self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau)
+            self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau, s_elastic)
         elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA_H_COMP:
-            self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau)
+            self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau, s_elastic)
         # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
         #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
         return
@@ -681,12 +681,17 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
-        s_elastic = ca.SX.sym('s_elastic')  # Elasticity parameter
-        self.add_variable(s_elastic, self.ind_elastic,
-                          opts.s_elastic_min * np.ones(1),
-                          opts.s_elastic_max * np.ones(1),
-                          opts.s_elastic_0 * np.ones(1))
-        self.cost = 1 / sigma_p * s_elastic
+        if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
+            # Elasticity parameter
+            s_elastic = ca.SX.sym('s_elastic')
+            self.add_variable(s_elastic, self.ind_elastic,
+                              opts.s_elastic_min * np.ones(1),
+                              opts.s_elastic_max * np.ones(1),
+                              opts.s_elastic_0 * np.ones(1))
+            self.cost += 1 / sigma_p * s_elastic
+        else:
+            s_elastic = None
+
         tau = ca.SX.sym('tau')  # homotopy parameter
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
@@ -709,7 +714,7 @@ class NosnocProblem(NosnocFormulationObject):
                 fe.create_complementarity_constraints(sigma_p, tau, Uk, s_elastic)
 
                 # 3) Step Equilibration
-                fe.step_equilibration(sigma_p, tau)
+                fe.step_equilibration(sigma_p, tau, s_elastic)
 
                 # 4) add cost and constraints from FE to problem
                 self.cost += fe.cost
