@@ -91,7 +91,7 @@ class NosnocFormulationObject(ABC):
 
         return
 
-    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic) -> None:
+    def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic: ca.SX) -> None:
         """
         adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
 
@@ -480,7 +480,7 @@ class FiniteElement(FiniteElementBase):
 
         return
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: Optional[ca.SX]) -> None:
+    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: ca.SX) -> None:
         opts = self.opts
         X_fe = self.X_fe()
         for j in range(opts.n_s):
