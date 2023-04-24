@@ -42,19 +42,20 @@ class TestInitialization(unittest.TestCase):
         solver.set("u", u_guess)
         self.assertTrue(np.array_equal(solver.problem.w0[solver.problem.ind_u], u_guess))
 
-        print("Solve with explicit initialization")
+        print("Solve with good initialization")
         res_initialized = solver.solve()
 
-        print("Solve without explicit initialization")
+        print("Solve with bad initialization")
         solver2 = nosnoc.NosnocSolver(opts2, model2, ocp2)
-        res_uninitialized = solver2.solve()
+        solver2.set("u", -u_guess)
+        res_bad_init = solver2.solve()
         ipopt_iter_initialized = sum(res_initialized["nlp_iter"])
-        ipopt_iter_uninitialized = sum(res_uninitialized["nlp_iter"])
+        ipopt_iter_bad_init = sum(res_bad_init["nlp_iter"])
 
-        print(f"{ipopt_iter_initialized=} \t {ipopt_iter_uninitialized=}")
+        print(f"{ipopt_iter_initialized=} \t {ipopt_iter_bad_init=}")
 
         # If initialized, the iteration should be faster
-        self.assertLessEqual(ipopt_iter_initialized, ipopt_iter_uninitialized)
+        self.assertLessEqual(ipopt_iter_initialized, ipopt_iter_bad_init)
 
 
 if __name__ == "__main__":
