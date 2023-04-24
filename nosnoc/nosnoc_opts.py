@@ -77,6 +77,10 @@ class NosnocOpts:
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
 
+    s_elastic_0: float = 1.0
+    s_elastic_max: float = 1e1
+    s_elastic_min: float = 0.0
+
     # IPOPT opts
     opts_casadi_nlp = dict()
     opts_casadi_nlp['print_time'] = 0
@@ -182,10 +186,6 @@ class NosnocOpts:
 
     ## Options in matlab..
     # MPCC related, not implemented yet.
-    # s_elastic_0 = 1
-    # s_elastic_max = 1e1
-    # s_elastic_min = 0
-
     # Time-Setting # NOTE: all not needed (for now)
     # Time-Freezing
     # time_freezing_inelastic: bool = False

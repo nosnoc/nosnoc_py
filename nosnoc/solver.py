@@ -75,7 +75,9 @@ class NosnocSolverBase(ABC):
                     'initialization of x might be overwritten due to InitializationStrategy != EXTERNAL.'
                 )
         elif field == 'u':
-            prob.w0[prob.ind_u] = value
+            prob.w0[np.array(prob.ind_u)] = value
+        elif field == 'v_global':
+            prob.w0[np.array(prob.ind_v_global)] = value
         elif field == 'p_global':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, dims.n_p_time_var:] = value
@@ -104,7 +106,7 @@ class NosnocSolverBase(ABC):
                 InitializationStrategy.ALL_XCURRENT_WOPT_PREV
         ]:
             for ind in prob.ind_x:
-                prob.w0[ind] = x0
+                prob.w0[np.array(ind)] = x0
         elif opts.initialization_strategy == InitializationStrategy.EXTERNAL:
             pass
         # This is experimental
@@ -284,6 +286,7 @@ class NosnocSolver(NosnocSolverBase):
             nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
+            g_sol = sol['g'].full().flatten()
             w0 = w_opt
             w_all.append(w_opt)
 
@@ -295,12 +298,23 @@ class NosnocSolver(NosnocSolverBase):
                                        cpu_time_nlp[ii], nlp_iter[ii], status)
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
+                if opts.print_level > 2:
+                    lower_bound_errors = np.where(g_sol - self.problem.lbg < -1e-3)[0]
+                    if len(lower_bound_errors) > 0:
+                        print(f"Lower bound: {lower_bound_errors}")
+                    lower_bound_errors = np.where(self.problem.ubg - g_sol < -1e-3)[0]
+                    if len(lower_bound_errors) > 0:
+                        print(f"Upper bound: {lower_bound_errors}")
 
             if complementarity_residual < opts.comp_tol:
                 break
 
             if sigma_k <= opts.sigma_N:
                 break
+
+            w_opt = self.callback(
+                prob=prob, w_opt=w_opt, lambda0=lambda00, x0=x0, iteration=ii
+            )
 
             # Update the homotopy parameter.
             if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
@@ -340,6 +354,8 @@ class NosnocSolver(NosnocSolverBase):
         results["w_all"] = w_all
         results["w_sol"] = w_opt
         results["cost_val"] = cost_val
+        results["status"] = status
+        results['g_sol'] = g_sol
 
         if check_ipopt_success(status):
             results["status"] = Status.SUCCESS
@@ -350,6 +366,10 @@ class NosnocSolver(NosnocSolverBase):
         #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
         return results
 
+    def callback(self, prob=None, w_opt=None, lambda0=0, x0=0, iteration=0):
+        """Callback function."""
+        return w_opt
+
     def polish_solution(self, w_guess, lambda00, x0):
         opts = self.opts
         prob = self.problem
@@ -359,7 +379,7 @@ class NosnocSolver(NosnocSolverBase):
         ind_set = flatten(prob.ind_lam + prob.ind_lambda_n + prob.ind_lambda_p + prob.ind_alpha +
                           prob.ind_theta + prob.ind_mu)
         ind_dont_set = flatten(prob.ind_h + prob.ind_u + prob.ind_x + prob.ind_v_global +
-                               prob.ind_v + prob.ind_z)
+                               prob.ind_v + prob.ind_z + prob.ind_elastic)
         # sanity check
         ind_all = ind_set + ind_dont_set
         for iw in range(len(w_guess)):
@@ -417,6 +437,31 @@ class NosnocSolver(NosnocSolverBase):
 
         return w_opt, cpu_time_nlp, nlp_iter, status
 
+    def create_function_calculate_vector_field(self, sigma, p=[], v=[]):
+        """Create a function to calculate the vector field."""
+        if self.opts.pss_mode != PssMode.STEWART:
+            raise NotImplementedError()
+
+        shape = self.model.g_Stewart_fun.size_out(0)
+        g = ca.SX.sym('g', shape[0])
+        mu = ca.SX.sym('mu', 1)
+        theta = ca.SX.sym('theta', shape[0])
+        lam = g - mu * np.ones(shape)
+        theta_fun = ca.rootfinder("lambda_fun", "newton", dict(
+            x=ca.vertcat(theta, mu), p=g,
+            g=ca.vertcat(
+                ca.sqrt(lam * lam - theta*theta + sigma*sigma) - (lam + theta),
+                ca.sum1(theta)-1
+            )
+        ))
+        def fun(x, u):
+            g  = self.model.g_Stewart_fun(x, p)
+            theta = theta_fun(0, g)[:-1]
+            F = self.model.F_fun(x, u, p, v)
+            return np.dot(F, theta)
+
+        return fun
+
 
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
     opts = prob.opts
@@ -428,7 +473,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
-    results["x_all_list"] = [x0] + [w_opt[ind] for ind in ind_x_all]
+    results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
 
     results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]

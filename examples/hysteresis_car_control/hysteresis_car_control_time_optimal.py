@@ -14,7 +14,6 @@ It is extended to follow a trajectory in addition to going to one end-position.
 import nosnoc
 import casadi as ca
 import numpy as np
-from math import ceil, log
 import matplotlib.pyplot as plt
 
 # Hystheresis parameters
@@ -51,8 +50,6 @@ def create_options():
     # decrease rate
     opts.homotopy_update_slope = 0.1
     # number of steps
-    opts.N_homotopy = ceil(abs(
-        log(opts.sigma_N / opts.sigma_0) / log(opts.homotopy_update_slope))) + 1
     opts.comp_tol = 1e-14
 
     # IPOPT Settings
@@ -62,6 +59,7 @@ def create_options():
     opts.initial_theta = 0.5
     opts.time_freezing = False
     opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.mpcc_mode = nosnoc.MpccMode.ELASTIC_TWO_SIDED
     return opts
 
 
@@ -246,4 +244,4 @@ def control():
 
 
 if __name__ == "__main__":
-    simulation()
+    control()
