@@ -137,11 +137,7 @@ class NosnocOpts:
             # TODO: Extend checks
 
         if self.max_iter_homotopy == 0:
-            self.max_iter_homotopy = int(
-                np.ceil(
-                    np.abs(
-                        np.log(self.comp_tol / self.sigma_0) /
-                        np.log(self.homotopy_update_slope)))) + 1
+            self.max_iter_homotopy = int(np.round(np.abs(np.log(self.comp_tol / self.sigma_0) / np.log(self.homotopy_update_slope)))) + 1
 
         if len(self.Nfe_list) == 0:
             self.Nfe_list = self.N_stages * [self.N_finite_elements]
