@@ -763,7 +763,7 @@ class NosnocProblem(NosnocFormulationObject):
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
         # CasADi Functions
-        self.cost_fun = ca.Function('cost_fun', [self.w], [self.cost])
+        self.cost_fun = ca.Function('cost_fun', [self.w, self.p], [self.cost])
         self.comp_res = ca.Function('comp_res', [self.w, self.p], [J_comp])
         self.g_fun = ca.Function('g_fun', [self.w, self.p], [self.g])
 
