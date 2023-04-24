@@ -135,13 +135,14 @@ def plot_voronoi_2d(Z, show=True, annotate=False, ax=None):
     if not isinstance(Z, np.ndarray):
         Z = np.array(Z)
     vor = Voronoi(Z)
-    fig = voronoi_plot_2d(vor, ax=ax)
+    fig = voronoi_plot_2d(vor, ax=ax, show_vertices=False)
     if ax is None:
         ax = fig.axes[0]
 
     if annotate:
         for i in range(Z.shape[0]):
             ax.text(Z[i, 0], Z[i, 1], f"p{i+1}")
+    plt.grid(visible=True)
 
     if show:
         plt.show()

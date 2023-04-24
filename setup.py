@@ -17,9 +17,9 @@ setup(name='nosnoc',
    py_modules=[],
    setup_requires=['setuptools_scm'],
    install_requires=[
-      'numpy',
+      'numpy>=1.20.0,<2.0.0',
       'scipy',
-      'casadi',
+      'casadi<=3.6',
       'matplotlib',
    ]
 )

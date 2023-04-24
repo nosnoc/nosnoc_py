@@ -11,19 +11,20 @@ import pickle
 import nosnoc
 import casadi as ca
 import numpy as np
+from math import ceil, log
 import matplotlib.pyplot as plt
 from enum import Enum
 from nosnoc.plot_utils import plot_voronoi_2d, plot_colored_line_3d
 
 # Hystheresis parameters
-v1 = 5
-v2 = 10
+v1 = 10
+v2 = 14
 
 # Model parameters
-q_goal = 300
+q_goal = 150
 v_goal = 0
-v_max = 30
-u_max = 3
+v_max = 25
+u_max = 5
 
 # fuel costs:
 C = [1, 1.8, 2.5, 3.2]
@@ -36,12 +37,12 @@ def calc_dist(a, b):
     print(np.norm_2(a - b))
 
 
-class Stages(Enum):
+class ZMode(Enum):
     """Z Mode."""
 
     TYPE_1_0 = 1
     TYPE_2_0 = 2
-    TYPE_PAPER = 3
+    PAPER_TYPE_2 = 3
 
 
 def create_options():
@@ -49,7 +50,7 @@ def create_options():
     opts = nosnoc.NosnocOpts()
     opts.print_level = 2
     # Degree of interpolating polynomial
-    opts.n_s = 2
+    opts.n_s = 3
     # === MPCC settings ===
     # upper bound for elastic variables
     opts.s_elastic_max = 1e1
@@ -57,33 +58,34 @@ def create_options():
     opts.objective_scaling_direct = 0
     # === Penalty/Relaxation paraemetr ===
     # initial smoothing parameter
-    opts.sigma_0 = 1e0
+    opts.sigma_0 = 1.0
     # end smoothing parameter
-    opts.sigma_N = 1e-6  # 1e-10
+    opts.sigma_N = 1e-2  # 1e-10
     # decrease rate
     opts.homotopy_update_slope = 0.1
-    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
-    opts.comp_tol = 1e-6
+    # number of steps
+    opts.N_homotopy = ceil(abs(
+        log(opts.sigma_N / opts.sigma_0) / log(opts.homotopy_update_slope))) + 1
+    opts.comp_tol = 1e-14
 
     # IPOPT Settings
-    opts.nlp_max_iter = 1500
+    opts.nlp_max_iter = 5000
 
-    opts.initial_theta = 0.5
-    opts.time_freezing = False
+    # New setting: time freezing settings
     opts.pss_mode = nosnoc.PssMode.STEWART
-    opts.mpcc_mode = nosnoc.MpccMode.ELASTIC_TWO_SIDED
+    opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
     return opts
 
 
 def push_equation(a_push, psi, zero_point):
     """Eval push equation."""
     multip = 1
-    return a_push * multip * (psi - zero_point) ** 2 / (1 + multip * (psi - zero_point)**2)
+    return a_push * multip * (psi - zero_point) ** 2 / (1 + multip * (psi - zero_point)**2) + 1e-6
 
 
 def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
                            use_traject=False, use_traject_constraint=True,
-                           shift=0.5, mode=Stages.TYPE_PAPER):
+                           shift=0.5, mode=ZMode.PAPER_TYPE_2):
     """Create a gearbox."""
     if not use_traject and q_goal is None:
         raise Exception("You should provide a traject or a q_goal")
@@ -97,7 +99,7 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
     t = ca.SX.sym('t')  # Time variable
     X = ca.vertcat(q, v, L, w1, w2, t)
     X0 = np.array([0, 0, 0, 0, 0, 0]).T
-    lbx = np.array([0, -v_max, -ca.inf, 0, 0, 0]).T
+    lbx = np.array([0, 0, -ca.inf, 0, 0, 0]).T
     ubx = np.array([ca.inf, v_max, ca.inf, 2, 2, ca.inf]).T
 
     if use_traject:
@@ -124,14 +126,14 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
     z = ca.vertcat(psi, w1, w2)
     a = 1/4
     b = 1/4
-    if mode == Stages.TYPE_1_0:
+    if mode == ZMode.TYPE_1_0:
         Z = [
             np.array([b, -a, 0]),
             np.array([b,  a, 0]),
             np.array([1-b, 1-a, 0]),
             np.array([1-b, 1+a, 0])
         ]
-    elif mode == Stages.TYPE_2_0:
+    elif mode == ZMode.TYPE_2_0:
         Z = [
             np.array([b,  -a, 0]),
             np.array([b,   a, 0]),
@@ -143,7 +145,7 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
             np.array([1-b + shift, 1, 1-a]),
             np.array([1-b + shift, 1, 1+a])
         ]
-    elif mode == Stages.TYPE_PAPER:
+    elif mode == ZMode.PAPER_TYPE_2:
         # Shift can be 0.5 or 2
         Z = [
             np.array([b,  -a, 0]),
@@ -161,7 +163,6 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
             np.array([1 - b + 2 * shift, 2-a, 1]),
             np.array([1 - b + 2 * shift, 2+a, 1])
         ]
-    print(f"{mode=} {shift=}")
 
     g_ind = [ca.vertcat(*[
         ca.norm_2(z - zi)**2 for zi in Z
@@ -205,14 +206,14 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
     f_push_down_w1 = ca.vertcat(0, 0, 0, push_down_eq, 0, 0)
     f_push_up_w1 = ca.vertcat(0, 0, 0, push_up_eq, 0, 0)
 
-    if mode == Stages.TYPE_1_0:
+    if mode == ZMode.TYPE_1_0:
         f_1 = [
             s * (2 * f_A - f_push_down_w1),
             s * (f_push_down_w1),
             s * (f_push_up_w1),
             s * (2 * f_B - f_push_up_w1)
         ]
-    elif mode == Stages.TYPE_2_0:
+    elif mode == ZMode.TYPE_2_0:
         push_down_eq = push_equation(-a_push, psi, 1 + shift)
         push_up_eq = push_equation(a_push, psi, 0 + shift)
         f_push_down_w2 = ca.vertcat(0, 0, 0, 0, push_down_eq, 0)
@@ -227,7 +228,7 @@ def create_gearbox_voronoi(use_simulation=False, q_goal=None, traject=None,
             s * (f_push_up_w2),
             s * (2 * f_C - f_push_up_w2),
         ]
-    elif mode == Stages.TYPE_PAPER:
+    elif mode == ZMode.PAPER_TYPE_2:
         push_down_eq = push_equation(-a_push, psi, 1 + shift)
         push_up_eq = push_equation(a_push, psi, 0 + shift)
         f_push_down_w2 = ca.vertcat(0, 0, 0, 0, push_down_eq, 0)
@@ -310,7 +311,7 @@ def plot(x_list, t_grid, u_list, t_grid_u, Z):
     plt.show()
 
 
-def simulation(Tsim=6, Nsim=30, with_plot=True, shift=0.5, mode=Stages.TYPE_PAPER):
+def simulation(Tsim=6, Nsim=30, with_plot=True, shift=0.5, mode=ZMode.PAPER_TYPE_2):
     """Simulate the temperature control system with a fixed input."""
     opts = create_options()
     model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal, Z = create_gearbox_voronoi(
@@ -339,7 +340,7 @@ def simulation(Tsim=6, Nsim=30, with_plot=True, shift=0.5, mode=Stages.TYPE_PAPE
 
 def custom_callback(prob, w_opt, lambda0, x0, iteration):
     """Make feasible."""
-    if iteration < 3:
+    if iteration < 1:
         return w_opt
 
     ind_x_all = nosnoc.utils.flatten_outer_layers(prob.ind_x, 2)
@@ -361,14 +362,16 @@ def custom_callback(prob, w_opt, lambda0, x0, iteration):
     return w_opt
 
 
-def control(shift=1.5, mode=Stages.TYPE_PAPER):
+def control(shift=0.5, mode=ZMode.PAPER_TYPE_2):
     """Execute one Control step."""
-    N = 15
+    N = 10
+    # traject = np.array([[q_goal * (i + 1) / N for i in range(N)]]).T
     model, lbx, ubx, lbu, ubu, f_q, f_terminal, g_path, g_terminal, Z = create_gearbox_voronoi(
         q_goal=q_goal, shift=shift, mode=mode
     )
     opts = create_options()
-    opts.N_finite_elements = 6
+    opts.N_finite_elements = 3
+    opts.n_s = 2
     opts.N_stages = N
     opts.terminal_time = 10
     opts.initialization_strategy = nosnoc.InitializationStrategy.EXTERNAL
@@ -405,9 +408,9 @@ if __name__ == "__main__":
     from sys import argv
     if len(argv) == 2:
         print("TYPE 2")
-        control(shift=float(argv[1]), mode=Stages.TYPE_2_0)
+        control(shift=float(argv[1]), mode=ZMode.TYPE_2_0)
     elif len(argv) > 2:
         print("TYPE 3")
-        control(shift=float(argv[1]), mode=Stages.TYPE_PAPER)
+        control(shift=float(argv[1]), mode=ZMode.PAPER_TYPE_2)
     else:
         control()

@@ -79,6 +79,10 @@ class NosnocOpts:
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
 
+    s_elastic_0: float = 1.0
+    s_elastic_max: float = 1e1
+    s_elastic_min: float = 0.0
+
     # IPOPT opts
     opts_casadi_nlp = dict()
     opts_casadi_nlp['print_time'] = 0
@@ -136,11 +140,7 @@ class NosnocOpts:
             # TODO: Extend checks
 
         if self.max_iter_homotopy == 0:
-            self.max_iter_homotopy = int(
-                np.ceil(
-                    np.abs(
-                        np.log(self.comp_tol / self.sigma_0) /
-                        np.log(self.homotopy_update_slope)))) + 1
+            self.max_iter_homotopy = int(np.round(np.abs(np.log(self.comp_tol / self.sigma_0) / np.log(self.homotopy_update_slope)))) + 1
 
         if len(self.Nfe_list) == 0:
             self.Nfe_list = self.N_stages * [self.N_finite_elements]
@@ -185,10 +185,6 @@ class NosnocOpts:
 
     ## Options in matlab..
     # MPCC related, not implemented yet.
-    # s_elastic_0 = 1
-    # s_elastic_max = 1e1
-    # s_elastic_min = 0
-
     # Time-Setting # NOTE: all not needed (for now)
     # Time-Freezing
     # time_freezing_inelastic: bool = False
