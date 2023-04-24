@@ -37,10 +37,18 @@ class TestInitialization(unittest.TestCase):
         solver.set("u", u)
         self.assertTrue(np.array_equal(solver.problem.w0[solver.problem.ind_u], u))
 
+        print("Solve with explicit initialization")
         res_initialized = solver.solve()
+
+        print("Solve without explicit initialization")
         res_uninitialized = solver2.solve()
+        ipopt_iter_initialized = sum(res_initialized["nlp_iter"])
+        ipopt_iter_uninitialized = sum(res_uninitialized["nlp_iter"])
+
+        print(f"{ipopt_iter_initialized=} \t {ipopt_iter_uninitialized=}")
+
         # If initialized, the iteration should be faster
-        self.assertLessEqual(res_initialized["nlp_iter"][0], res_uninitialized["nlp_iter"][0])
+        self.assertLessEqual(ipopt_iter_initialized, ipopt_iter_uninitialized)
 
 
 if __name__ == "__main__":
