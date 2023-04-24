@@ -1,6 +1,8 @@
 __pycache__
 env
 .vscode
+.coverage
+
 *.egg-info
 
 *.pdf
