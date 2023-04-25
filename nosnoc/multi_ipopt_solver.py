@@ -40,8 +40,19 @@ class NosnocMIpoptSolver(NosnocSolverBase):
                     'p': self.problem.p
                 }
                 opts.tol_ipopt = sigma * 1e-1
+
+                # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
                 opts.opts_casadi_nlp['ipopt']['mu_init'] = sigma * 1e-1
                 opts.opts_casadi_nlp['ipopt']['mu_target'] = sigma * 1e-1
+                opts.opts_casadi_nlp['ipopt']['warm_start_init_point'] = 'yes'
+                opts.opts_casadi_nlp['ipopt']['warm_start_bound_push'] = 1e-4 * sigma
+                opts.opts_casadi_nlp['ipopt']['warm_start_mult_bound_push'] = 1e-4 * sigma
+                opts.opts_casadi_nlp['ipopt']['bound_relax_factor'] = 1e-2 * sigma ** 2
+                opts.opts_casadi_nlp['ipopt']['mu_strategy'] = 'monotone'
+
+                # NOTE: this would only work after first call
+                # opts.opts_casadi_nlp['ipopt']['warm_start_same_structure'] = 'yes'
+
                 self.solvers.append(ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp))
             except Exception as err:
                 self.print_problem()
