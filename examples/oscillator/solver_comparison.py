@@ -90,7 +90,7 @@ def count_failures(results):
     return len([x for x in status_list if x != nosnoc.Status.SUCCESS])
 
 
-def compare_plot():
+def compare_plot(metric = 'cpu_nlp'):
     nosnoc.latexify_plot()
 
     plot_sim_index = 18
@@ -102,8 +102,8 @@ def compare_plot():
 
     metric_list = n_cmp * [None]
 
+    # metric = 'cpu_nlp'
     # metric = 'nlp_iter'
-    metric = 'cpu_nlp'
 
     # load data
     for i, SolverClass in enumerate(SOLVER_CLASSES):
@@ -153,4 +153,5 @@ if __name__ == "__main__":
     run_benchmark()
 
     # evalute
-    compare_plot()
+    compare_plot('nlp_iter')
+    compare_plot('cpu_nlp')

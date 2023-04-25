@@ -124,7 +124,7 @@ def evaluate_reference_solution():
     print(f"Reference solution got {n_fail} failing subproblems")
 
 
-def compare_plot():
+def compare_plot(metric='cpu_nlp'):
     nosnoc.latexify_plot()
 
     n_s = NS_VALUES[0]
@@ -137,8 +137,6 @@ def compare_plot():
     fig, ax = plt.subplots()
 
     metric_per_step = n_cmp * [None]
-    metric = 'cpu_nlp'
-    # metric = 'nlp_iter'
 
     # load data
     x_ref = get_reference_solution()['X_sim'][-1]
@@ -179,4 +177,5 @@ if __name__ == "__main__":
 
     # evalute
     # evaluate_reference_solution()
-    compare_plot()
+    compare_plot(metric='cpu_nlp')
+    compare_plot(metric='nlp_iter')
