@@ -2,7 +2,6 @@ from typing import Optional
 
 import casadi as ca
 import numpy as np
-import time
 
 
 from .solver import NosnocSolverBase, get_results_from_primal_vector
@@ -29,6 +28,7 @@ class NosnocMIpoptSolver(NosnocSolverBase):
 
         sigma = opts.sigma_0
         self.solvers = []
+        i = 0
         while True:
 
             # create NLP Solver
@@ -44,11 +44,13 @@ class NosnocMIpoptSolver(NosnocSolverBase):
                 # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
                 opts.opts_casadi_nlp['ipopt']['mu_init'] = sigma * 1e-1
                 opts.opts_casadi_nlp['ipopt']['mu_target'] = sigma * 1e-1
-                opts.opts_casadi_nlp['ipopt']['warm_start_init_point'] = 'yes'
-                opts.opts_casadi_nlp['ipopt']['warm_start_bound_push'] = 1e-4 * sigma
-                opts.opts_casadi_nlp['ipopt']['warm_start_mult_bound_push'] = 1e-4 * sigma
                 opts.opts_casadi_nlp['ipopt']['bound_relax_factor'] = 1e-2 * sigma ** 2
                 opts.opts_casadi_nlp['ipopt']['mu_strategy'] = 'monotone'
+                opts.opts_casadi_nlp['ipopt']['print_level'] = 5
+                if i > 0:
+                    opts.opts_casadi_nlp['ipopt']['warm_start_init_point'] = 'yes'
+                    opts.opts_casadi_nlp['ipopt']['warm_start_bound_push'] = 1e-4 * sigma
+                    opts.opts_casadi_nlp['ipopt']['warm_start_mult_bound_push'] = 1e-4 * sigma
 
                 # NOTE: this would only work after first call
                 # opts.opts_casadi_nlp['ipopt']['warm_start_same_structure'] = 'yes'
@@ -63,6 +65,7 @@ class NosnocMIpoptSolver(NosnocSolverBase):
             if sigma <= opts.sigma_N:
                 break
             sigma = self.homotopy_sigma_update(sigma)
+            i += 1
 
     def solve(self) -> dict:
         """
