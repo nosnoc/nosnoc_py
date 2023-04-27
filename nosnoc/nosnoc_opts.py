@@ -36,6 +36,8 @@ class NosnocOpts:
     constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 
     pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
+
+    use_upper_bound_h: bool = True
     gamma_h: float = 1.0
 
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation
@@ -47,7 +49,7 @@ class NosnocOpts:
     init_lambda: float = 1.0
     init_mu: float = 1.0
     # initialization - Step
-    init_alpha: float = 1.0  # for step only
+    init_alpha: float = 0.5  # for step only
     init_beta: float = 1.0
 
     N_finite_elements: int = 2  #
@@ -103,6 +105,9 @@ class NosnocOpts:
     opts_casadi_nlp['ipopt']['compl_inf_tol'] = None
     opts_casadi_nlp['ipopt']['mu_strategy'] = 'adaptive'
     opts_casadi_nlp['ipopt']['mu_oracle'] = 'quality-function'
+    opts_casadi_nlp["record_time"] = True
+    # opts_casadi_nlp['ipopt']['linear_solver'] = 'ma27'
+    # opts_casadi_nlp['ipopt']['linear_solver'] = 'ma57'
 
     time_freezing: bool = False
     time_freezing_tolerance: float = 1e-3
