@@ -789,11 +789,11 @@ class NosnocProblem(NosnocFormulationObject):
     def print(self):
         errors = 0
         # constraints
-        print("lbg\t\t ubg\t\t g_expr")
+        print("i\tlbg\t\t ubg\t\t g_expr")
         for i in range(len(self.lbg)):
             print(f"{i}: {self.lbg[i]:7} \t {self.ubg[i]:7} \t {self.g[i]}")
         # variables and bounds
-        print("\nw \t\t\t w0 \t\t lbw \t\t ubw:")
+        print("\nw \t\t\t w0 \t\t lbw \t\t ubw")
         for i in range(len(self.lbw)):
             extra_info = ""
             if self.lbw[i] > self.ubw[i]:
