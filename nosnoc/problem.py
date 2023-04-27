@@ -515,19 +515,22 @@ class FiniteElement(FiniteElementBase):
 
     def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX, s_elastic: Optional[ca.SX]) -> None:
         opts = self.opts
-        # step equilibration only within control stages.
+
         if not opts.use_fesd:
             return
-        if not self.fe_idx > 0:
-            return
 
-        prev_fe: FiniteElement = self.prev_fe
-        delta_h_ki = self.h() - prev_fe.h()
+        # only step equilibration mode that does not require previous finite element
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
             self.cost += opts.rho_h * (self.h() - h_fe)**2
             return
-        elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
+        elif not self.fe_idx > 0:
+            return
+
+        prev_fe: FiniteElement = self.prev_fe
+        delta_h_ki = self.h() - prev_fe.h()
+
+        if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self.cost += opts.rho_h * delta_h_ki**2
             return
 
