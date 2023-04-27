@@ -93,13 +93,16 @@ class NosnocSolverBase(ABC):
         else:
             raise NotImplementedError()
 
-    def print_problem(self):
+    def print_problem(self) -> None:
         self.problem.print()
+        return
 
-    def initialize(self):
+    def initialize(self) -> None:
         opts = self.opts
         prob = self.problem
         x0 = prob.model.x0
+
+        self.compute_lambda00()
 
         if opts.initialization_strategy in [
                 InitializationStrategy.ALL_XCURRENT_W0_START,
@@ -134,7 +137,8 @@ class NosnocSolverBase(ABC):
                     # -> infeasible. Possibly another smooth min fun could be used.
                     # However, this would be inconsistent with mu.
                     p_0 = self.model.p_val_ctrl_stages[0]
-                    lam_ki = self.model.lambda00_fun(x_ki, p_0)
+                    # NOTE: z not supported!
+                    lam_ki = self.model.lambda00_fun(x_ki, [], p_0)
                     mu_ki = self.model.mu_smooth_fun(x_ki, p_0)
                     theta_ki = self.model.theta_smooth_fun(x_ki, p_0)
                     # print(f"{x_ki=}")
@@ -161,6 +165,7 @@ class NosnocSolverBase(ABC):
             # print(prob.w0)
             missing_indices = sorted(set(range(len(prob.w0))) - set(db_updated_indices))
             # print(f"{missing_indices=}")
+        return
 
     def _print_iter_stats(self, sigma_k, complementarity_residual, nlp_res, cost_val, cpu_time_nlp,
                           nlp_iter, status):
@@ -168,209 +173,28 @@ class NosnocSolverBase(ABC):
               f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
 
 
-class NosnocSolver(NosnocSolverBase):
-    """
-    Main solver class which solves the nonsmooth problem by applying a homotopy
-    and solving the NLP subproblems using IPOPT.
-
-    The nonsmooth problem is formulated internally based on the given options,
-    dynamic model, and (optionally) the ocp data.
-    """
-
-    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
-        """Constructor.
-        """
-        super().__init__(opts, model, ocp)
-
-        # create NLP Solver
-        try:
-            casadi_nlp = {
-                'f': self.problem.cost,
-                'x': self.problem.w,
-                'g': self.problem.g,
-                'p': self.problem.p
-            }
-            self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
-        except Exception as err:
-            self.print_problem()
-            print(f"{opts=}")
-            print("\nerror creating solver for problem above.")
-            raise err
-
-    def solve(self) -> dict:
-        """
-        Solves the NLP with the currently stored parameters.
-
-        :return: Returns a dictionary containing ... TODO document all fields
-        """
-        self.initialize()
+    def homotopy_sigma_update(self, sigma_k):
         opts = self.opts
-        prob = self.problem
-        w0 = prob.w0.copy()
+        if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
+            return opts.homotopy_update_slope * sigma_k
+        elif opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
+            return max(opts.sigma_N,
+                min(opts.homotopy_update_slope * sigma_k,
+                    sigma_k**opts.homotopy_update_exponent))
 
-        w_all = [w0.copy()]
-        n_iter_polish = opts.max_iter_homotopy + (1 if opts.do_polishing_step else 0)
-        complementarity_stats = n_iter_polish * [None]
-        cpu_time_nlp = n_iter_polish * [None]
-        nlp_iter = n_iter_polish * [None]
+    def compute_lambda00(self) -> None:
+        self.lambda00 = self.problem.model.compute_lambda00(self.opts)
+        return
 
-        if opts.print_level:
-            print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+    def setup_p_val(self, sigma, tau) -> None:
+        model: NosnocModel = self.problem.model
+        self.p_val = np.concatenate(
+                (model.p_val_ctrl_stages.flatten(),
+                 np.array([sigma, tau]), self.lambda00, model.x0))
+        return
 
-        sigma_k = opts.sigma_0
 
-        # lambda00 initialization
-        x0 = prob.model.x0
-        lambda00 = prob.model.get_lambda00(opts)
-
-        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
-            lbw = prob.lbw.copy()
-            ubw = prob.ubw.copy()
-
-            # lambda00 != 0.0 -> corresponding thetas on first fe are zero
-            I_active_lam = np.where(lambda00 > 1e1*opts.comp_tol)[0].tolist()
-            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2)  # flatten sys
-            w_zero_indices = []
-            for i in range(opts.n_s):
-                tmp = flatten(ind_theta_fe1[i])
-                try:
-                    w_zero_indices += [tmp[i] for i in I_active_lam]
-                except:
-                    breakpoint()
-
-            # if all but one lambda are zero: this theta can be fixed to 1.0, all other thetas are 0.0
-            w_one_indices = []
-            # I_lam_zero = set(range(len(lambda00))).difference( I_active_lam )
-            # n_lam = sum(prob.model.dims.n_f_sys)
-            # if len(I_active_lam) == n_lam - 1:
-            #     for i in range(opts.n_s):
-            #         tmp = flatten(ind_theta_fe1[i])
-            #         w_one_indices += [tmp[i] for i in I_lam_zero]
-            if opts.print_level > 1:
-                print(f"fixing {prob.w[w_one_indices]} = 1. and {prob.w[w_zero_indices]} = 0.")
-                print(f"Since lambda00 = {lambda00}")
-            w0[w_zero_indices] = 0.0
-            lbw[w_zero_indices] = 0.0
-            ubw[w_zero_indices] = 0.0
-            w0[w_one_indices] = 1.0
-            lbw[w_one_indices] = 1.0
-            ubw[w_one_indices] = 1.0
-
-        else:
-            lbw = prob.lbw
-            ubw = prob.ubw
-
-        # homotopy loop
-        for ii in range(opts.max_iter_homotopy):
-            tau_val = min(sigma_k ** 1.5, sigma_k)
-            # tau_val = sigma_k**1.5*1e3
-            p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k,
-                                                                   tau_val]), lambda00, x0))
-
-            # solve NLP
-            t = time.process_time()
-            sol = self.solver(x0=w0,
-                              lbg=prob.lbg,
-                              ubg=prob.ubg,
-                              lbx=lbw,
-                              ubx=ubw,
-                              p=p_val)
-            cpu_time_nlp[ii] = time.process_time() - t
-
-            # print and process solution
-            solver_stats = self.solver.stats()
-            status = solver_stats['return_status']
-            nlp_iter[ii] = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
-            cost_val = ca.norm_inf(sol['f']).full()[0][0]
-            w_opt = sol['x'].full().flatten()
-            g_sol = sol['g'].full().flatten()
-            w0 = w_opt
-            w_all.append(w_opt)
-
-            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
-            complementarity_stats[ii] = complementarity_residual
-
-            if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp[ii], nlp_iter[ii], status)
-            if not check_ipopt_success(status):
-                print(f"Warning: IPOPT exited with status {status}")
-                if opts.print_level > 2:
-                    lower_bound_errors = np.where(g_sol - self.problem.lbg < -1e-3)[0]
-                    if len(lower_bound_errors) > 0:
-                        print(f"Lower bound: {lower_bound_errors}")
-                    lower_bound_errors = np.where(self.problem.ubg - g_sol < -1e-3)[0]
-                    if len(lower_bound_errors) > 0:
-                        print(f"Upper bound: {lower_bound_errors}")
-
-            if complementarity_residual < opts.comp_tol:
-                break
-
-            if sigma_k <= opts.sigma_N:
-                break
-
-            w_opt = self.callback(
-                prob=prob, w_opt=w_opt, lambda0=lambda00, x0=x0, iteration=ii
-            )
-
-            # Update the homotopy parameter.
-            if opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
-                sigma_k = opts.homotopy_update_slope * sigma_k
-            elif opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
-                sigma_k = max(
-                    opts.sigma_N,
-                    min(opts.homotopy_update_slope * sigma_k,
-                        sigma_k**opts.homotopy_update_exponent))
-
-        if opts.do_polishing_step:
-            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
-                                            self.polish_solution(w_opt, lambda00, x0)
-
-        # collect results
-        results = get_results_from_primal_vector(prob, w_opt)
-
-        # print constraint violation
-        if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
-            threshold = np.max([np.sqrt(cost_val) / 100, opts.comp_tol * 1e2, 1e-5])
-            g_val = prob.g_fun(w_opt, p_val).full().flatten()
-            if max(abs(g_val)) > threshold:
-                print("\nconstraint violations:")
-                for ii in range(len(g_val)):
-                    if abs(g_val[ii]) > threshold:
-                        print(f"|g_val[{ii}]| = {abs(g_val[ii]):.2e} expr: {prob.g_lsq[ii]}")
-                print(f"h values: {w_opt[prob.ind_h]}")
-                # print(f"theta values: {w_opt[prob.ind_theta]}")
-                # print(f"lambda values: {w_opt[prob.ind_lam]}")
-                # print_casadi_vector(prob.g_lsq)
-
-        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
-            prob.w0[:] = w_opt[:]
-        # stats
-        results["cpu_time_nlp"] = cpu_time_nlp
-        results["nlp_iter"] = nlp_iter
-        results["w_all"] = w_all
-        results["w_sol"] = w_opt
-        results["cost_val"] = cost_val
-        results["status"] = status
-        results['g_sol'] = g_sol
-
-        if check_ipopt_success(status):
-            results["status"] = Status.SUCCESS
-        else:
-            results["status"] = Status.INFEASIBLE
-
-        # for i in range(len(w_opt)):
-        #     print(f"w{i}: {prob.w[i]} = {w_opt[i]}")
-        return results
-
-    def callback(self, prob=None, w_opt=None, lambda0=0, x0=0, iteration=0):
-        """Callback function."""
-        return w_opt
-
-    def polish_solution(self, w_guess, lambda00, x0):
+    def polish_solution(self, casadi_ipopt_solver, w_guess):
         opts = self.opts
         prob = self.problem
 
@@ -411,24 +235,22 @@ class NosnocSolver(NosnocSolverBase):
                 w_guess[prob.ind_theta[i_ctrl][i_fe][:]]
 
             sigma_k, tau_val = 0.0, 0.0
-            p_val = np.concatenate(
-                (prob.model.p_val_ctrl_stages.flatten(), np.array([sigma_k,
-                                                                   tau_val]), lambda00, x0))
+            self.setup_p_val(sigma_k, tau_val)
 
             # solve NLP
             t = time.time()
-            sol = self.solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=p_val)
+            sol = casadi_ipopt_solver(x0=w_guess, lbg=prob.lbg, ubg=prob.ubg, lbx=lbw, ubx=ubw, p=self.p_val)
             cpu_time_nlp = time.time() - t
 
             # print and process solution
-            solver_stats = self.solver.stats()
+            solver_stats = casadi_ipopt_solver.stats()
             status = solver_stats['return_status']
             nlp_iter = solver_stats['iter_count']
             nlp_res = ca.norm_inf(sol['g']).full()[0][0]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
 
-            complementarity_residual = prob.comp_res(w_opt, p_val).full()[0][0]
+            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
             if opts.print_level:
                 self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
                                        cpu_time_nlp, nlp_iter, status)
@@ -461,6 +283,181 @@ class NosnocSolver(NosnocSolverBase):
             return np.dot(F, theta)
 
         return fun
+
+
+class NosnocSolver(NosnocSolverBase):
+    """
+    Main solver class which solves the nonsmooth problem by applying a homotopy
+    and solving the NLP subproblems using IPOPT.
+
+    The nonsmooth problem is formulated internally based on the given options,
+    dynamic model, and (optionally) the ocp data.
+    """
+
+    def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
+        """Constructor.
+        """
+        super().__init__(opts, model, ocp)
+
+        # create NLP Solver
+        try:
+            casadi_nlp = {
+                'f': self.problem.cost,
+                'x': self.problem.w,
+                'g': self.problem.g,
+                'p': self.problem.p
+            }
+            self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
+        except Exception as err:
+            self.print_problem()
+            print(f"{opts=}")
+            print("\nerror creating solver for problem above.")
+            raise err
+
+    def solve(self) -> dict:
+        """
+        Solves the NLP with the currently stored parameters.
+
+        :return: Returns a dictionary containing ... TODO document all fields
+        """
+        opts = self.opts
+        prob = self.problem
+
+        # initialize
+        self.initialize()
+
+        w0 = prob.w0.copy()
+
+        w_all = [w0.copy()]
+        n_iter_polish = opts.max_iter_homotopy + (1 if opts.do_polishing_step else 0)
+        complementarity_stats = n_iter_polish * [None]
+        cpu_time_nlp = n_iter_polish * [None]
+        nlp_iter = n_iter_polish * [None]
+
+        if opts.print_level:
+            print('-------------------------------------------')
+            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+
+        sigma_k = opts.sigma_0
+
+        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
+            lbw = prob.lbw.copy()
+            ubw = prob.ubw.copy()
+
+            # lambda00 != 0.0 -> corresponding thetas on first fe are zero
+            I_active_lam = np.where(self.lambda00 > 1e1*opts.comp_tol)[0].tolist()
+            ind_theta_fe1 = flatten_layer(prob.ind_theta[0][0], 2)  # flatten sys
+            w_zero_indices = []
+            for i in range(opts.n_s):
+                tmp = flatten(ind_theta_fe1[i])
+                try:
+                    w_zero_indices += [tmp[i] for i in I_active_lam]
+                except:
+                    breakpoint()
+
+            # if all but one lambda are zero: this theta can be fixed to 1.0, all other thetas are 0.0
+            w_one_indices = []
+            # I_lam_zero = set(range(len(self.lambda00))).difference( I_active_lam )
+            # n_lam = sum(prob.model.dims.n_f_sys)
+            # if len(I_active_lam) == n_lam - 1:
+            #     for i in range(opts.n_s):
+            #         tmp = flatten(ind_theta_fe1[i])
+            #         w_one_indices += [tmp[i] for i in I_lam_zero]
+            if opts.print_level > 1:
+                print(f"fixing {prob.w[w_one_indices]} = 1. and {prob.w[w_zero_indices]} = 0.")
+                print(f"Since self.lambda00 = {self.lambda00}")
+            w0[w_zero_indices] = 0.0
+            lbw[w_zero_indices] = 0.0
+            ubw[w_zero_indices] = 0.0
+            w0[w_one_indices] = 1.0
+            lbw[w_one_indices] = 1.0
+            ubw[w_one_indices] = 1.0
+
+        else:
+            lbw = prob.lbw
+            ubw = prob.ubw
+
+        # homotopy loop
+        for ii in range(opts.max_iter_homotopy):
+            tau_val = min(sigma_k ** 1.5, sigma_k)
+            # tau_val = sigma_k**1.5*1e3
+            self.setup_p_val(sigma_k, tau_val)
+
+            # solve NLP
+            sol = self.solver(x0=w0,
+                              lbg=prob.lbg,
+                              ubg=prob.ubg,
+                              lbx=lbw,
+                              ubx=ubw,
+                              p=self.p_val)
+
+            # statistics
+            solver_stats = self.solver.stats()
+            cpu_time_nlp[ii] = solver_stats['t_proc_total']
+            status = solver_stats['return_status']
+            nlp_iter[ii] = solver_stats['iter_count']
+            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            cost_val = ca.norm_inf(sol['f']).full()[0][0]
+
+            # process iterate
+            w_opt = sol['x'].full().flatten()
+            w0 = w_opt
+            w_all.append(w_opt)
+
+            complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
+            complementarity_stats[ii] = complementarity_residual
+
+            if opts.print_level:
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
+                                       cpu_time_nlp[ii], nlp_iter[ii], status)
+            if not check_ipopt_success(status):
+                print(f"Warning: IPOPT exited with status {status}")
+
+            if complementarity_residual < opts.comp_tol:
+                break
+
+            if sigma_k <= opts.sigma_N:
+                break
+
+            # Update the homotopy parameter.
+            sigma_k = self.homotopy_sigma_update(sigma_k)
+
+        if opts.do_polishing_step:
+            w_opt, cpu_time_nlp[n_iter_polish - 1], nlp_iter[n_iter_polish - 1], status = \
+                                            self.polish_solution(self.solver, w_opt)
+
+        # collect results
+        results = get_results_from_primal_vector(prob, w_opt)
+
+        # print constraint violation
+        if opts.print_level > 1 and opts.constraint_handling == ConstraintHandling.LEAST_SQUARES:
+            threshold = np.max([np.sqrt(cost_val) / 100, opts.comp_tol * 1e2, 1e-5])
+            g_val = prob.g_fun(w_opt, self.p_val).full().flatten()
+            if max(abs(g_val)) > threshold:
+                print("\nconstraint violations:")
+                for ii in range(len(g_val)):
+                    if abs(g_val[ii]) > threshold:
+                        print(f"|g_val[{ii}]| = {abs(g_val[ii]):.2e} expr: {prob.g_lsq[ii]}")
+                print(f"h values: {w_opt[prob.ind_h]}")
+                # print(f"theta values: {w_opt[prob.ind_theta]}")
+                # print(f"lambda values: {w_opt[prob.ind_lam]}")
+                # print_casadi_vector(prob.g_lsq)
+
+        if opts.initialization_strategy == InitializationStrategy.ALL_XCURRENT_WOPT_PREV:
+            prob.w0[:] = w_opt[:]
+        # stats
+        results["cpu_time_nlp"] = cpu_time_nlp
+        results["nlp_iter"] = nlp_iter
+        results["w_all"] = w_all
+        results["w_sol"] = w_opt
+        results["cost_val"] = cost_val
+
+        if check_ipopt_success(status):
+            results["status"] = Status.SUCCESS
+        else:
+            results["status"] = Status.INFEASIBLE
+
+        return results
 
 
 def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> dict:
