@@ -11,7 +11,7 @@ def solve_paramteric_example(with_global_var=False):
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.n_s = 2
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
     opts.equidistant_control_grid = True
 
     opts.N_stages = 50  # number of control intervals

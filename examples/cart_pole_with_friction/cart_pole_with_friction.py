@@ -11,7 +11,7 @@ def solve_example():
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.n_s = 2
     opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
 
     # opts.N_stages = 50  # MATLAB setting
     opts.N_stages = 15  # number of control intervals
