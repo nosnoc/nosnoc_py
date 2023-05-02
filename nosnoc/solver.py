@@ -167,10 +167,14 @@ class NosnocSolverBase(ABC):
             # print(f"{missing_indices=}")
         return
 
-    def _print_iter_stats(self, sigma_k, complementarity_residual, nlp_res, cost_val, cpu_time_nlp,
-                          nlp_iter, status):
-        print(f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e}' +
-              f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
+    def _print_iter_stats_header(self):
+        print('-------------------------------------------')
+        print('sigma \t\t compl_res \t inf_pr\t\tinf_du\t\tcost_val \t CPU time \t iter \t status')
+
+    def _print_iter_stats(self, sigma_k, complementarity_residual, res_prim, res_dual,
+                            cost_val, cpu_time_nlp, nlp_iter, status):
+        print(f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {res_prim:.2e}' +
+              f'\t{res_dual:.2e}\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')
 
 
     def homotopy_sigma_update(self, sigma_k):
@@ -246,13 +250,14 @@ class NosnocSolverBase(ABC):
             solver_stats = casadi_ipopt_solver.stats()
             status = solver_stats['return_status']
             nlp_iter = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            inf_pr = solver_stats['iterations']['inf_pr'][-1]
+            inf_du = solver_stats['iterations']['inf_du'][-1]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
             w_opt = sol['x'].full().flatten()
 
             complementarity_residual = prob.comp_res(w_opt, self.p_val).full()[0][0]
             if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
+                self._print_iter_stats(sigma_k, complementarity_residual, inf_pr, inf_du, cost_val,
                                        cpu_time_nlp, nlp_iter, status)
             if status not in ['Solve_Succeeded', 'Solved_To_Acceptable_Level']:
                 print(f"Warning: IPOPT exited with status {status}")
@@ -335,8 +340,7 @@ class NosnocSolver(NosnocSolverBase):
         nlp_iter = n_iter_polish * [None]
 
         if opts.print_level:
-            print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+            self._print_iter_stats_header()
 
         sigma_k = opts.sigma_0
 
@@ -396,7 +400,8 @@ class NosnocSolver(NosnocSolverBase):
             cpu_time_nlp[ii] = solver_stats['t_proc_total']
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            nlp_res_prim = solver_stats['iterations']['inf_pr'][-1]
+            nlp_res_dual = solver_stats['iterations']['inf_du'][-1]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
 
             # process iterate
@@ -408,8 +413,8 @@ class NosnocSolver(NosnocSolverBase):
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp[ii], nlp_iter[ii], status)
+                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res_prim,
+                            nlp_res_dual, cost_val, cpu_time_nlp[ii], nlp_iter[ii], status)
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
 

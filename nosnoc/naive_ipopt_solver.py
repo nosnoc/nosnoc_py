@@ -66,8 +66,7 @@ class NaiveIpoptSolver(NosnocSolverBase):
         nlp_iter = n_iter_polish * [None]
 
         if opts.print_level:
-            print('-------------------------------------------')
-            print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+            self._print_iter_stats_header()
 
         sigma_k = opts.sigma_0
 
@@ -99,7 +98,8 @@ class NaiveIpoptSolver(NosnocSolverBase):
             cpu_time_nlp[ii] = solver_stats['t_proc_total']
             status = solver_stats['return_status']
             nlp_iter[ii] = solver_stats['iter_count']
-            nlp_res = ca.norm_inf(sol['g']).full()[0][0]
+            inf_pr = solver_stats['iterations']['inf_pr'][-1]
+            inf_du = solver_stats['iterations']['inf_du'][-1]
             cost_val = ca.norm_inf(sol['f']).full()[0][0]
 
             # process iterate
@@ -111,8 +111,8 @@ class NaiveIpoptSolver(NosnocSolverBase):
             complementarity_stats[ii] = complementarity_residual
 
             if opts.print_level:
-                self._print_iter_stats(sigma_k, complementarity_residual, nlp_res, cost_val,
-                                       cpu_time_nlp[ii], nlp_iter[ii], status)
+                self._print_iter_stats(sigma_k, complementarity_residual, inf_pr, inf_du, cost_val,
+                                       cpu_time_nlp, nlp_iter, status)
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
 
