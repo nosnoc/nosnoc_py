@@ -39,7 +39,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
     ml = 0.1    # link
     Ib = 0.25   # body
     Il = 0.025  # link
-    mu = 0.45   # friction coeficient
+    mu = 0.45   # friction coefficient
     g = 9.81
 
     # inertia matrix
