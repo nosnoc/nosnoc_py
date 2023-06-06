@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -45,8 +45,8 @@ class NosnocOpts:
     fix_active_set_fe0: bool = False
 
     # initialization - Stewart
-    init_theta: float = 1.0
-    init_lambda: float = 1.0
+    # init_theta: Optional[float] = None
+    # init_lambda: Optional[float] = None
     init_mu: float = 1.0
     # initialization - Step
     init_alpha: float = 0.5  # for step only
