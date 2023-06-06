@@ -358,7 +358,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # TODO: make this options
         max_newton_iter = 100
-        kappa_res_sigma = 0.5 # break loop if nlp_res < kappa_res_sigma * sigma
+        kappa_res_sigma = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
@@ -382,6 +382,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         w_candidate = w_current.copy()
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
+            # setting tau = sigma seems to be a good choice, also reported in IPOPT-C paper.
             tau_val = sigma_k
             self.setup_p_val(sigma_k, tau_val)
 
@@ -418,8 +419,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                 t_la += time.time() - t0_la
 
                 step_norm = np.max(np.abs(step))
-                if step_norm < sigma_k / 10:
-                    break
 
                 t0_ls = time.time()
                 theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
@@ -576,7 +575,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
-        if nlp_res < kappa_res_sigma * sigma_k or step_norm < sigma_k:
+        if nlp_res < kappa_res_sigma * sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
