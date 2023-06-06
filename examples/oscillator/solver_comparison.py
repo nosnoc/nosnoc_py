@@ -73,6 +73,9 @@ def run_benchmark():
 
         model = get_oscillator_model()
         opts = get_opts(n_s)
+
+        if SolverClass == nosnoc.NosnocCustomSolver:
+            opts.print_level = 1
         solver: nosnoc.NosnocSolverBase = SolverClass(opts, model)
 
         # loop
@@ -94,6 +97,7 @@ def compare_plot(metric = 'cpu_nlp'):
     nosnoc.latexify_plot()
 
     plot_sim_index = 18
+    plot_sim_index = None
     n_s = NS_VALUES[0]
 
     n_cmp = len(SOLVER_CLASSES)
@@ -115,15 +119,25 @@ def compare_plot(metric = 'cpu_nlp'):
         error = np.max(np.abs(x_end - X_SOL))
         print(f"{SolverClass.__name__} failed {failures} times, error wrt exact solution: {error:.2e}")
 
-        metric_list[i] = results[metric][plot_sim_index]
+        if plot_sim_index is not None:
+            metric_list[i] = results[metric][plot_sim_index]
+        else:
+            # breakpoint()
+            metric_list[i] = np.mean(results[metric], 0)
+
 
     hom_iter = metric_list[-1].shape[0]
 
     print(f"metric_list = {metric_list}")
-    alpha_sim = results['alpha_sim'][plot_sim_index]
-    if np.max(np.abs(alpha_sim[0] - alpha_sim[-1])) > .1:
-        print("got problem with switch")
 
+    problem_has_switch = False
+    if plot_sim_index is not None:
+        alpha_sim = results['alpha_sim'][plot_sim_index]
+        theta_sim = results["theta_sim"][plot_sim_index]
+        if len(alpha_sim[0]) > 0 and np.max(np.abs(alpha_sim[0] - alpha_sim[-1])) > .5:
+            problem_has_switch = True
+        elif len(theta_sim[0]) > 0 and np.max(np.abs(theta_sim[0] - theta_sim[-1])) > .5:
+            problem_has_switch = True
 
     # plot
     x = range(n_cmp)
@@ -141,6 +155,15 @@ def compare_plot(metric = 'cpu_nlp'):
         ax.set_ylabel('NLP iterations')
     elif metric == 'cpu_nlp':
         ax.set_ylabel('CPU time [s]')
+
+    if plot_sim_index is None:
+        ax.set_title("mean over simulation steps")
+    else:
+        title = f"instance {plot_sim_index}"
+        if problem_has_switch:
+            title += " with switch"
+        ax.set_title(title)
+
     ax.legend()
     fig_filename = f'oscillator_solver_comparison_{metric}_ns_{n_s}.pdf'
     plt.savefig(fig_filename, bbox_inches='tight')
