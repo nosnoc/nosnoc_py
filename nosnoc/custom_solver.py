@@ -14,27 +14,26 @@ from nosnoc.plot_utils import plot_matrix_and_qr, spy_magnitude_plot, spy_magnit
 
 DEBUG = False
 
-
-def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray, offset: Optional[np.ndarray]=None):
-    """
-    Get fraction to boundary.
-    :param tau: fraction that should be kept from boundary
-    :param current: current value
-    :param delta: derivative value
-    :param offset: offset for affine function
-    """
-    if offset is not None:
-        delta = delta - offset
-    ix = np.where(delta<0)
-    if len(ix[0]) == 0:
-        return 1.0
-    else:
-        # argmin = np.argmin(-tau *current[ix]/delta[ix])
-        # og_idx = ix[0][argmin]
-        # print(f"fraction_to_boundary, tau = {tau:.2e} idx {og_idx}, min {min(np.min(-tau *current[ix]/delta[ix]), 1.0)}")
-        return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
-
 class NosnocCustomSolver(NosnocSolverBase):
+    def get_fraction_to_boundary(self, tau: float, current: np.ndarray, delta: np.ndarray, offset: Optional[np.ndarray]=None):
+        """
+        Get fraction to boundary.
+        :param tau: fraction that should be kept from boundary
+        :param current: current value
+        :param delta: derivative value
+        :param offset: offset for affine function
+        """
+        if offset is not None:
+            delta = delta - offset
+        ix = np.where(delta<0)
+        if len(ix[0]) == 0:
+            return 1.0
+        else:
+            # argmin = np.argmin(-tau *current[ix]/delta[ix])
+            # og_idx = ix[0][argmin]
+            # print(f"fraction_to_boundary, tau = {tau:.5e} idx {og_idx}, {self.G[og_idx]} min {min(np.min(-tau *current[ix]/delta[ix]), 1.0)}")
+            return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
+
     def _setup_G(self) -> ca.SX:
         prob = self.problem
         G_list = []
@@ -395,6 +394,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             self.alpha_min_counter = 0
 
             theta_0 = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+            G_val = self.G_fun(w_current).full().flatten()
 
             for newton_iter in range(max_newton_iter):
 
@@ -442,8 +442,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # fraction to boundary G, s > 0
                 G_val = self.G_fun(w_current).full().flatten()
                 G_delta_val = self.G_fun(step).full().flatten()
-                alpha_max = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                # alpha_max_slack = get_fraction_to_boundary(tau_j, self.get_slack(w_current), self.get_slack(step))
+                alpha_max = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
 
                 if any(G_val < 0):
                     print("G_val < 0 should never happen")
@@ -453,6 +452,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # line search:
                 alpha = alpha_max
                 soc_iter = 0
+                alpha_max_no_soc = None
                 theta_min = theta_min_fact * max(1, theta_0)
                 ls_iter = 0
                 while True:
@@ -495,27 +495,32 @@ class NosnocCustomSolver(NosnocSolverBase):
                     # NOTE: to get multiple SOC: we need that theta is decreasing within SOC, but not "too much" in the kappa_soc sense.
 
                     if do_soc:
+                        step_no_soc = step.copy()
+                        alpha_max_no_soc = alpha_max
                         step = self.get_second_order_correction(w_current, w_candidate, alpha, soc_iter)
                         soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
-                        alpha = get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                        alpha = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                        alpha_max = alpha
                     else:
                         alpha *= rho
                     if alpha < alpha_min:
                         self.alpha_min_counter += 1
-                        # condA = np.linalg.cond(self.mat.toarray())
-                        # print(f"got min step at {ii} {newton_iter}, with alpha = {alpha:.2e}, {alpha_max_slack:.2e} kkt res: {nlp_res:.2e} cond: {condA:.2e}")
-                        # breakpoint()
+                        # TODO: make restoration phase?!
+                        print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                        breakpoint()
+                        self.print_iterates([w_current, step_no_soc, step])
+                        breakpoint()
                         break
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e}. theta {theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} theta {theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                     if theta_step_no_SOC < theta_step:
                         print("SOC Warning: violation did not decrease")
 
                 # compute alpha_mu_k
-                alpha_mu = get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
+                alpha_mu = self.get_fraction_to_boundary(tau_j, w_current[-n_mu:], step[-n_mu:], offset=None)
                 w_candidate[-n_mu:] = w_current[-n_mu:] + alpha_mu * step[-n_mu:]
 
                 # do step
