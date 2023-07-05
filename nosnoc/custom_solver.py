@@ -29,6 +29,9 @@ def get_fraction_to_boundary(tau: float, current: np.ndarray, delta: np.ndarray,
     if len(ix[0]) == 0:
         return 1.0
     else:
+        # argmin = np.argmin(-tau *current[ix]/delta[ix])
+        # og_idx = ix[0][argmin]
+        # print(f"fraction_to_boundary, tau = {tau:.2e} idx {og_idx}, min {min(np.min(-tau *current[ix]/delta[ix]), 1.0)}")
         return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
 
 class NosnocCustomSolver(NosnocSolverBase):
@@ -155,10 +158,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 - ca.jacobian(self.G, prob.w).T @ mu_pd
 
             mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w_no_H, prob.w) + \
-                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
+                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack) @ nabla_w_compl.T
         else:
             mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + \
-                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s/ slack) @ nabla_w_compl.T
+                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack) @ nabla_w_compl.T
         mat_elim_mus[:self.nw, self.nw:] = nabla_w_H
         mat_elim_mus[self.nw:, :self.nw] = nabla_w_H.T
 
@@ -192,7 +195,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         for ii in range(self.nw_pd):
             line = f"{ii}\t{self.w_pd[ii].name():17}"
             for it in iterate_list:
-                line += f'\t{it[ii]:.2e}'
+                line += f'\t{it[ii]:.4e}'
             print(line)
 
     def print_G_val(self, G_val):
