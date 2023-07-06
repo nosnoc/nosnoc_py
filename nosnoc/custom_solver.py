@@ -253,9 +253,12 @@ class NosnocCustomSolver(NosnocSolverBase):
         slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
 
         # expand
+        # breakpoint()
+        slack_current_mod = slack_current + self.eta_k * (-r_comp)
+        G_val_mod = G_val + self.eta_k * mu_G
         delta_slack = r_comp - nabla_w_compl.T.full() @ step_w_lam[:self.nw]
-        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
-        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
+        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val_mod
+        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current_mod
 
         step = np.concatenate((step_w_lam, delta_slack, delta_mu_G, delta_mu_s))
         return step
@@ -293,10 +296,13 @@ class NosnocCustomSolver(NosnocSolverBase):
         G_val = self.G_no_slack_fun(w_current).full().flatten()
         slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
 
+        slack_current_mod = slack_current + self.eta_k * r_comp_cand
+        G_val_mod = G_val + self.eta_k * mu_G
+
         r_G = -kkt_val[-self.n_mu:-self.n_comp]
         r_s = -kkt_val[-self.n_comp:]
-        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
-        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
+        delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val_mod
+        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current_mod
 
         step = np.concatenate((step_w_lam, delta_slack, delta_mu_G, delta_mu_s))
 
@@ -357,10 +363,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
+        sigma_values = n_iter_polish * [None]
 
         # TODO: make this options
         max_newton_iter = 100
-        kappa_res_sigma = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
+        kappa_res_sigma = 1. # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
         # line search
         tau_min = .99 # .99 is IPOPT default
         rho = 0.9 # factor to shrink alpha in line search
@@ -369,6 +376,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         theta_min_fact = 0.0001 # IPOPT 0.0001
         max_soc = 4 # IPOPT 4
         kappa_soc = 0.99 # IPOPT: 0.99
+        tau_tresh = 5 * 1e-6 # IPOPT-C mu_thresh, default 5*1e-6
 
         # timers
         t_la = 0.0
@@ -409,6 +417,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if nlp_res < kappa_res_sigma * sigma_k:
                     break
 
+                theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+
+                # IPOPT-C eta computation
+                self.eta_k = 0.0
+                if tau_val < tau_tresh and ii > 0:
+                    self.eta_k = 0.1 * (sigma_values[ii-1] / (1+ np.max(np.abs(self.get_mu(w_current)))))
+                    # (3.8)(ii) in IPOPT-C paper: z_i_tilde = z_i + eta_k * lambda_zi
                 # simple sparse
                 # newton_matrix = jac_kkt_val.sparse()
                 # rhs = - kkt_val.full().flatten()
@@ -424,7 +439,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                 step_norm = np.max(np.abs(step))
 
                 t0_ls = time.time()
-                theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
 
                 # log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
                 log_merit, dlog_merit_x = self.log_merit_fun_jac(w_candidate, self.p_val)
@@ -547,6 +561,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
             # print and process solution
             nlp_iter[ii] = newton_iter
+            sigma_values[ii] = sigma_k
             w_all.append(w_current)
 
             if opts.print_level > 1:
