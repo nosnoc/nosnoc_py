@@ -193,8 +193,7 @@ class NosnocSolverBase(ABC):
     def setup_p_val(self, sigma, tau) -> None:
         model: NosnocModel = self.problem.model
         self.p_val = np.concatenate(
-                (model.p_val_ctrl_stages.flatten(),
-                 np.array([sigma, tau]), self.lambda00, model.x0))
+                (model.p_val_ctrl_stages.flatten(), model.x0, self.lambda00, np.array([sigma, tau])))
         return
 
 

@@ -596,12 +596,9 @@ class NosnocProblem(NosnocFormulationObject):
     def __create_primal_variables(self):
         # Initial
         self.fe0 = FiniteElementZero(self.opts, self.model)
-        x0 = self.fe0.w[self.fe0.ind_x[0]]
-        lambda00 = self.fe0.Lambda()
-
-        # lambda00 is parameter
-        self.p = ca.vertcat(self.p, lambda00)
-        self.p = ca.vertcat(self.p, x0)
+        # parameters
+        self._x0_sym = self.fe0.w[self.fe0.ind_x[0]]
+        self._lambda00_sym = self.fe0.Lambda()
 
         # v_global
         self.add_variable(self.model.v_global, self.ind_v_global, self.ocp.lbv_global,
@@ -714,12 +711,12 @@ class NosnocProblem(NosnocFormulationObject):
             s_elastic = None
 
         tau = ca.SX.sym('tau')  # homotopy parameter
-        self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
-        self.sigma = sigma_p
-        self.tau = tau
 
         # Generate all the variables we need
         self.__create_primal_variables()
+        self.sigma = sigma_p
+        self.tau = tau
+        self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), self._x0_sym, self._lambda00_sym, sigma_p, tau)
 
         fe: FiniteElement
         stage: List[FiniteElement]
