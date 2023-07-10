@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Optional, List
 import time
 import scipy
@@ -36,7 +37,22 @@ class NosnocFilter():
                 return False
         return True
 
-
+@dataclass
+class NosnocCustomSolverOpts:
+    max_newton_iter: int = 100
+    kappa_res_sigma: float = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
+    # line search
+    tau_min: float = .99 # .99 is IPOPT default
+    rho: float = 0.9 # factor to shrink alpha in line search
+    alpha_min: float = 0.01
+    kappaSigma: float = 1e10 # 1e10 is IPOPT default
+    theta_min_fact: float = 0.0001 # IPOPT 0.0001
+    max_soc: int = 4 # IPOPT 4
+    kappa_soc: float = 0.99 # IPOPT: 0.99
+    gamma_theta: float = 1e-5 # IPOPT gamma_theta 1e-5
+    gamma_phi: float = 1e-8 # IPOPT: 1e-8
+    eta_phi: float = 1e-8
+    rho_resto = 1e3 # IPOPT: 1e3
 
 class NosnocCustomSolver(NosnocSolverBase):
     def get_fraction_to_boundary(self, tau: float, current: np.ndarray, delta: np.ndarray, offset: Optional[np.ndarray]=None):
@@ -72,6 +88,9 @@ class NosnocCustomSolver(NosnocSolverBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None):
         super().__init__(opts, model, ocp)
         prob = self.problem
+
+        # options
+        self.solver_opts: NosnocCustomSolverOpts = NosnocCustomSolverOpts()
 
         # complements
         G1 = casadi_vertcat_list([casadi_sum_list(x[0]) for x in prob.comp_list])
@@ -207,6 +226,26 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         print(f"created primal dual problem with {casadi_length(w_pd)} variables and {casadi_length(kkt_eq)} equations, {n_comp=}, {self.nw=}, {n_H=}")
 
+        ## restoration stuff
+        resto_c = ca.vertcat(self.H, slacked_complementarity)
+        n_c = casadi_length(resto_c)
+        nx_resto = self.nw + n_comp # w and slack
+
+        # parameter of resto problem
+        resto_weights = ca.SX.sym('D_R', nx_resto)
+        resto_x_R = ca.SX.sym('resto_x_R', nx_resto)
+        zeta = ca.SX.sym('zeta')
+        resto_rho = ca.SX.sym('rho')
+
+        # variables
+        resto_p = ca.SX.sym('resto_p', n_c)
+        resto_n = ca.SX.sym('resto_n', n_c)
+        resto_x = ca.SX.sym('resto_x', nx_resto)
+        diff_x = resto_x - resto_x_R
+        cost_resto = resto_p + resto_n + .5 * zeta * diff_x.T @ ca.diag(resto_weights) @ diff_x # Waechter (30)
+
+        constraints_resto = resto_c - resto_p + resto_n
+
         return
 
     def print_iterate_threshold(self, iterate, threshold=1.0):
@@ -327,32 +366,28 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
 
-    def check_Waechter20(self, step_log_merit, eta_phi, step, alpha, dir_der_log_merit) -> bool:
-        return (step_log_merit < self.log_merit + eta_phi * alpha * dir_der_log_merit)
+    def check_Waechter20(self, step_log_merit, step, alpha, dir_der_log_merit) -> bool:
+        return (step_log_merit < self.log_merit + self.solver_opts.eta_phi * alpha * dir_der_log_merit)
 
-
-    def check_Waechter19(self, step, alpha, theta_current, dir_der_log_merit) -> bool:
+    def check_Waechter19(self, step, alpha, dir_der_log_merit) -> bool:
         s_phi = 2.3 # IPOPT: 2.3
         s_theta = 1.1 # IPOPT: 1.1
         delta = 1.0 # IPOPT: 1.0
 
         if dir_der_log_merit >= 0.0:
             return False
-        if alpha * (-dir_der_log_merit)**s_phi > delta * theta_current**s_theta:
+        if alpha * (-dir_der_log_merit)**s_phi > delta * self.theta_current**s_theta:
             return True
         else:
             return False
 
-    def check_Waechter18(self, theta_step, theta_current, step_log_merit):
-        gamma_phi = 1e-8 # IPOPT: 1e-8
-        gamma_theta = 1e-5 # IPOPT gamma_theta 1e-5
-        if theta_step < (1-gamma_theta) * theta_current:
+    def check_Waechter18(self, theta_step, step_log_merit):
+        if theta_step < (1-self.solver_opts.gamma_theta) * self.theta_current:
             return True
-        elif step_log_merit < self.log_merit - gamma_phi*theta_current:
+        elif step_log_merit < self.log_merit - self.solver_opts.gamma_phi * self.theta_current:
             return True
         else:
             return False
-
 
 
     def solve(self) -> dict:
@@ -360,6 +395,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         Solves the NLP with the currently stored parameters.
         """
         opts = self.opts
+        solver_opts = self.solver_opts
         prob = self.problem
 
         # initialize
@@ -381,20 +417,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
-
-        # TODO: make this options
-        max_newton_iter = 100
-        kappa_res_sigma = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
-        # line search
-        tau_min = .99 # .99 is IPOPT default
-        rho = 0.9 # factor to shrink alpha in line search
-        alpha_min = 0.01
-        kappaSigma = 1e10 # 1e10 is IPOPT default
-        theta_min_fact = 0.0001 # IPOPT 0.0001
-        max_soc = 4 # IPOPT 4
-        kappa_soc = 0.99 # IPOPT: 0.99
-        gamma_theta = 1e-5 # IPOPT gamma_theta 1e-5
-
 
         # timers
         t_la = 0.0
@@ -423,13 +445,13 @@ class NosnocCustomSolver(NosnocSolverBase):
 
             # TODO: should this be evaluated every homotopy iteration?
             theta_0 = self.max_violation_fun(w_current, self.p_val).full()[0][0]
-            theta_min = theta_min_fact * max(1, theta_0)
+            theta_min = self.solver_opts.theta_min_fact * max(1, theta_0)
             theta_max = 1e4 * max(1, theta_0)
 
             # initialize filter
-            self.filter = NosnocFilter(theta_max=theta_max, gamma_theta=gamma_theta)
+            self.filter = NosnocFilter(theta_max=theta_max, gamma_theta=solver_opts.gamma_theta)
 
-            for newton_iter in range(max_newton_iter):
+            for newton_iter in range(solver_opts.max_newton_iter):
 
                 t0_ca = time.time()
                 # kkt_val, jac_kkt_val = self.kkt_eq_jac_fun(w_current, self.p_val)
@@ -439,7 +461,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 t_ca += time.time() - t0_ca
 
                 nlp_res = ca.norm_inf(kkt_val).full()[0][0]
-                if nlp_res < kappa_res_sigma * sigma_k:
+                if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
                     break
 
                 # simple sparse
@@ -457,7 +479,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 step_norm = np.max(np.abs(step))
 
                 t0_ls = time.time()
-                theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+                self.theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
 
                 # log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
                 log_merit, dlog_merit_x = self.log_merit_fun_jac(w_candidate, self.p_val)
@@ -465,7 +487,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 self.dlog_merit_x = dlog_merit_x.full()
 
                 ## LINE SEARCH + fraction to boundary
-                tau_j = max(tau_min, 1-tau_val)
+                tau_j = max(solver_opts.tau_min, 1-tau_val)
 
                 # compute new nlp residual after mu step
                 # NOTE: not really necessary, maybe make optional
@@ -480,13 +502,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if any(G_val < 0):
                     print("G_val < 0 should never happen")
                     breakpoint()
-                eta_phi = 1e-8
 
                 # line search:
                 alpha = alpha_max
                 soc_iter = 0
                 alpha_max_no_soc = 0. # None
                 ls_iter = 0
+
                 while True:
                     w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
@@ -499,22 +521,22 @@ class NosnocCustomSolver(NosnocSolverBase):
                     if self.filter.is_acceptable((theta_step, step_log_merit)):
                         # if already in SOC -> reduce step (A 5.7)
                         # A-5.4 check sufficient decrease
-                        if not self.check_Waechter19(step, alpha, theta_current, dir_der_log_merit):
+                        if not self.check_Waechter19(step, alpha, dir_der_log_merit):
                             # Waechter case 2: check sufficient progress wrt either goal
-                            if self.check_Waechter18(theta_step, theta_current, step_log_merit):
+                            if self.check_Waechter18(theta_step, step_log_merit):
                                 break
-                        elif theta_current < theta_min:
+                        elif self.theta_current < theta_min:
                             # Waechter case 1: log barrier descent
-                            if self.check_Waechter20(step_log_merit, eta_phi, step, alpha, dir_der_log_merit):
+                            if self.check_Waechter20(step_log_merit, step, alpha, dir_der_log_merit):
                                 break
                         else:
                             # Waechter case 2: check sufficient progress wrt either goal
-                            if self.check_Waechter18(theta_step, theta_current, step_log_merit):
+                            if self.check_Waechter18(theta_step, step_log_merit):
                                 break
                     elif soc_iter > 0:
                         # reduce step
-                        alpha *= rho
-                        if alpha < alpha_min:
+                        alpha *= solver_opts.rho
+                        if alpha < solver_opts.alpha_min:
                             self.alpha_min_counter += 1
                             break
                         continue
@@ -522,16 +544,16 @@ class NosnocCustomSolver(NosnocSolverBase):
                     # A-5.5 Initialize SOC
                     if (ls_iter > 0):
                         do_soc = False
-                    elif (theta_step < theta_current):
+                    elif (theta_step < self.theta_current):
                         do_soc = False
                     else:
                         do_soc = True
-                        theta_old_soc = theta_current
+                        theta_old_soc = self.theta_current
                         theta_step_no_SOC = theta_step
 
                     # A-5.9. Next SOC
                     if soc_iter > 0:
-                        if soc_iter == max_soc or theta_step > kappa_soc * theta_old_soc:
+                        if soc_iter == solver_opts.max_soc or theta_step > solver_opts.kappa_soc * theta_old_soc:
                             # abort SOC: continue with current one.
                             do_soc = False
                         else:
@@ -548,21 +570,21 @@ class NosnocCustomSolver(NosnocSolverBase):
                         alpha_max = alpha
                     else:
                         # A-5.10 reduce step
-                        alpha *= rho
-                        if alpha < alpha_min:
+                        alpha *= solver_opts.rho
+                        if alpha < solver_opts.alpha_min:
                             self.alpha_min_counter += 1
                             # TODO: make restoration phase!
-                            breakpoint()
-                            print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                            print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                             breakpoint()
                             self.print_iterates([w_current, step_no_soc, step])
                             breakpoint()
+                            # TODO: call restoration
                             break
                     #
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} theta {theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                     if theta_step_no_SOC < theta_step:
                         print("SOC Warning: violation did not decrease")
 
@@ -575,7 +597,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # Waechter2006 eq (16): "Primal-dual barrier term Hessian should not deviate arbitrarily much from primal Hessian"
                 G_val = self.G_fun(w_current).full().flatten()
                 for i in range(n_mu):
-                    new = max(min(w_current[-n_mu+i], kappaSigma * tau_val / G_val[i]), tau_val/(kappaSigma * G_val[i]))
+                    new = max(min(w_current[-n_mu+i], solver_opts.kappaSigma * tau_val / G_val[i]), tau_val/(solver_opts.kappaSigma * G_val[i]))
                     # if new != w_current[-n_mu+i]:
                     #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
                     w_current[-n_mu+i] = new
@@ -583,11 +605,11 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # augment filter if Waechter_19 or Waechter_20 do NOT hold.
                 # TODO: avoid reevalution of functions and conditions
-                theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+                self.theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
                 log_merit_current = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
-                if (not self.check_Waechter19(step, alpha, theta_current, dir_der_log_merit)) or \
-                   (not self.check_Waechter20(step_log_merit, eta_phi, step, alpha, dir_der_log_merit)):
-                    self.filter.add((theta_current, log_merit_current))
+                if (not self.check_Waechter19(step, alpha, dir_der_log_merit)) or \
+                   (not self.check_Waechter20(step_log_merit, step, alpha, dir_der_log_merit)):
+                    self.filter.add((self.theta_current, log_merit_current))
 
                 if opts.print_level > 1:
                     min_mu = np.min(self.get_mu(w_current))
@@ -638,7 +660,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
-        if nlp_res < kappa_res_sigma * sigma_k:
+        if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
@@ -653,6 +675,56 @@ class NosnocCustomSolver(NosnocSolverBase):
             #  w_current[-(self.n_mu+self.n_comp):-self.n_mu]
 
         return results
+
+    def restoration_phase(self, w_current: np.ndarray, tau_val: float):
+        solver_opts = self.solver_opts
+
+        ## initialize
+        sigma_val = sigma_val # keep fixed in restoration
+        tau_val = max(tau_val, theta_val)
+        x_current = w_current[:self.nw]
+        x_ref = w_current[:self.nw]
+        # lambda0 = np.zeros()
+        # z0 = min(rho_resto, z_k) # z_k from outside
+
+        # TODO: setup parameter!
+
+        # initialize p, n
+        # eval constraint_violation
+        slacked_comp_violation = slack_val - self.slack0_fun(x_current, p_val).full().flatten()
+        H_val = self.H_fun(w_current, p_val).full().flatten()
+
+        constraint_violation = np.concatenate(slacked_comp_violation, H_val)
+
+        n_val, p_val = self.restoration_get_np_values(constraint_violation, tau_val, rho_resto)
+
+        # duals for n, p
+        z_n_val = tau_val * (1/n_val)
+        z_p_val = tau_val * (1/p_val)
+
+        ## apply "normal" IP algorithm
+        for newton_iter in range(solver_opts.max_newton_iter):
+
+            # check termination
+
+            # setup linear system
+
+            # solve
+
+            # line search
+            pass
+
+    def restoration_get_np_values(self, c_val, tau: float):
+        n_c = len(c_val)
+        rho_resto = self.solver_opts.rho_resto
+
+        n_val = np.array((n_c,))
+        p_val = np.array((n_c,))
+        n_val = np.array([(tau - rho_resto * c_val[ii]) / (2*rho_resto) + \
+                np.sqrt( ((tau - rho_resto * c_val[ii]) / (2*rho_resto))**2 + (tau * c_val[ii])/(2*rho_resto) )] for ii in range(n_c))
+        p_val = c_val + n_val
+
+        return n_val, p_val
 
     def plot_newton_matrix(self, matrix, title='', fig_filename=None):
         import matplotlib.pyplot as plt
