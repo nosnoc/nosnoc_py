@@ -52,7 +52,9 @@ class NosnocCustomSolverOpts:
     gamma_theta: float = 1e-5 # IPOPT gamma_theta 1e-5
     gamma_phi: float = 1e-8 # IPOPT: 1e-8
     eta_phi: float = 1e-8
+    # restoration phase
     rho_resto = 1e3 # IPOPT: 1e3
+    kappa_resto = 0.9 # IPOPT: 0.9
 
 class NosnocCustomSolver(NosnocSolverBase):
     def get_fraction_to_boundary(self, tau: float, current: np.ndarray, delta: np.ndarray, offset: Optional[np.ndarray]=None):
@@ -228,23 +230,58 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         ## restoration stuff
         resto_c = ca.vertcat(self.H, slacked_complementarity)
+        resto_x = ca.vertcat(prob.w, slack)
         n_c = casadi_length(resto_c)
-        nx_resto = self.nw + n_comp # w and slack
+        nx_resto = casadi_length(resto_x)
 
         # parameter of resto problem
         resto_weights = ca.SX.sym('D_R', nx_resto)
         resto_x_R = ca.SX.sym('resto_x_R', nx_resto)
         zeta = ca.SX.sym('zeta')
         resto_rho = ca.SX.sym('rho')
+        resto_param = ca.vertcat(prob.p, zeta, resto_rho, resto_x_R, resto_weights)
+
+        dG_dx_fun = ca.Function('dG_dx_fun', [dummy], [ca.jacobian(self.G, resto_x)])
+        self.dG_dx = dG_dx_fun(1).full()
 
         # variables
         resto_p = ca.SX.sym('resto_p', n_c)
         resto_n = ca.SX.sym('resto_n', n_c)
-        resto_x = ca.SX.sym('resto_x', nx_resto)
+        resto_np = ca.vertcat(resto_n, resto_p)
         diff_x = resto_x - resto_x_R
         cost_resto = resto_p + resto_n + .5 * zeta * diff_x.T @ ca.diag(resto_weights) @ diff_x # Waechter (30)
 
         constraints_resto = resto_c - resto_p + resto_n
+        # duals:
+        lambda_resto = ca.vertcat(lam_H, mu_s)
+        z_resto = ca.vertcat(mu_G, mu_s)
+        z_n = ca.SX.sym('z_n', n_c)
+        z_p = ca.SX.sym('z_p', n_c)
+        resto_duals = ca.vertcat(lam_H, z_resto, z_n, z_p)
+
+        # linear system
+        mat_resto = ca.SX.zeros(nx_resto, nx_resto)
+        weighted_constraint_sum = casadi_sum_list([lambda_resto[i] * resto_c[i] for i in range(n_c)])
+        W, _ = ca.hessian( weighted_constraint_sum, resto_x)
+        Sigma = ca.jacobian(self.G, resto_x).T @ ca.diag(self.G / z_resto) @ ca.jacobian(self.G, resto_x)
+        top_left = W + zeta * ca.diag(resto_weights) + Sigma
+
+        nabla_c = ca.jacobian(resto_c, resto_x).T
+        Sigma_p = ca.diag(z_p / resto_p)
+        Sigma_n = ca.diag(z_n / resto_n)
+        Sigma_p_inv = ca.diag(resto_p / z_p)
+        Sigma_n_inv = ca.diag(resto_n / z_n)
+        mat_resto = ca.blockcat(top_left, nabla_c, nabla_c.T, -Sigma_p_inv-Sigma_n_inv)
+
+        rhs_resto_1 = zeta * ca.diag(resto_weights * resto_weights) @ (resto_x - resto_x_R)
+        rhs_resto_1 += nabla_c @ lambda_resto - tau * ca.jacobian(self.G, resto_x).T @ (1/self.G)
+
+        rhs_resto_2 = resto_c - resto_p - resto_n + resto_rho * ((tau-resto_p)/z_p) - resto_rho * ((tau-resto_n)/z_n)
+
+        rhs_resto = - ca.vertcat(rhs_resto_1, rhs_resto_2)
+        self.ls_resto_fun = ca.Function('ls_resto_fun', [resto_x, resto_np, resto_duals, resto_param], [mat_resto, rhs_resto, self.G])
+
+        self.resto_c_fun = ca.Function('resto_c_fun', [resto_x, resto_param], [resto_c])
 
         return
 
@@ -513,7 +550,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                     w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
                     theta_step = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
-
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                     dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
 
@@ -575,10 +611,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                             self.alpha_min_counter += 1
                             # TODO: make restoration phase!
                             print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
-                            breakpoint()
-                            self.print_iterates([w_current, step_no_soc, step])
-                            breakpoint()
-                            # TODO: call restoration
+                            # breakpoint()
+                            # self.print_iterates([w_current, step_no_soc, step])
+                            # breakpoint()
+                            self.restoration_phase(w_current, tau_val)
                             break
                     #
                     ls_iter += 1
@@ -677,41 +713,84 @@ class NosnocCustomSolver(NosnocSolverBase):
         return results
 
     def restoration_phase(self, w_current: np.ndarray, tau_val: float):
+
+        print("in restoration phase")
         solver_opts = self.solver_opts
 
         ## initialize
-        sigma_val = sigma_val # keep fixed in restoration
-        tau_val = max(tau_val, theta_val)
-        x_current = w_current[:self.nw]
-        x_ref = w_current[:self.nw]
-        # lambda0 = np.zeros()
-        # z0 = min(rho_resto, z_k) # z_k from outside
 
-        # TODO: setup parameter!
+        x_resto_current = np.concatenate((w_current[:self.nw], self.get_slack(w_current)))
+        x_resto_ref = x_resto_current.copy()
+        nx_resto = len(x_resto_ref)
+        rho_resto = 1e3
+
+        # setup parameter! keep sigma fixed
+        tau_val = max(tau_val, self.theta_current)
+        zeta_val = np.sqrt(tau_val)
+        D_resto = np.array([max(1, 1/np.abs(x_resto_ref[i])) for i in range(nx_resto)])
+        resto_param_val = np.concatenate((self.p_val[:-1].copy(), np.array([tau_val, zeta_val, rho_resto]), x_resto_ref, D_resto))
 
         # initialize p, n
         # eval constraint_violation
-        slacked_comp_violation = slack_val - self.slack0_fun(x_current, p_val).full().flatten()
-        H_val = self.H_fun(w_current, p_val).full().flatten()
+        constraint_violation = self.resto_c_fun(x_resto_current, resto_param_val).full().flatten()
 
-        constraint_violation = np.concatenate(slacked_comp_violation, H_val)
-
-        n_val, p_val = self.restoration_get_np_values(constraint_violation, tau_val, rho_resto)
+        n_val, p_val = self.restoration_get_np_values(constraint_violation, tau_val)
 
         # duals for n, p
         z_n_val = tau_val * (1/n_val)
         z_p_val = tau_val * (1/p_val)
+        lambda0 = np.zeros(self.n_H+self.n_comp) # lambda_H; lambda_slacked_comp (= mu_s)
+        mu_outside = self.get_mu(w_current)
+        # TODO: mu_s is somehow here twice, initialize as z or lambda?
+        mu_G = mu_outside[:self.nG]
+        mu_s = mu_outside[self.nG:]
+        # lambda_0 from outside would be: w_current[self.nw:self.nw+self.n_H]
+
+        z_val_G = np.array([min(rho_resto, mu_G[i]) for i in range(self.nG)]) # z_k from outside # multipliers of G
+        z_val_s = np.array([min(rho_resto, mu_s[i]) for i in range(self.n_comp)])
+
+        resto_duals = np.concatenate((lambda0[:self.n_H], z_val_G, z_val_s, z_n_val, z_p_val))
+
+        w_candidate = w_current.copy()
 
         ## apply "normal" IP algorithm
         for newton_iter in range(solver_opts.max_newton_iter):
 
-            # check termination
+            ## check termination
+            # update w_candidate (x, slack)
+            w_candidate[:self.nw] = x_resto_current[:self.nw]
+            w_candidate[self.nw+self.n_H:self.nw+self.n_H+self.n_comp] = x_resto_current[self.nw:]
+            # i) is acceptible to (outside) filter
+            theta_step = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+            step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
+            if self.filter.is_acceptable((theta_step, step_log_merit)):
+                # ii) if sufficient decrease in violation
+                print("filter accepts, lets check sufficient decrease in violation")
+                if theta_step < self.theta_current * solver_opts.kappa_resto:
+                    print("restoration success")
+                    breakpoint()
 
             # setup linear system
+            mat, rhs, G_val = self.ls_resto_fun(x_resto_current, np.concatenate((n_val, p_val)), resto_duals, resto_param_val)
+            G_val = G_val.full().flatten()
 
             # solve
+            lu_fact_resto = scipy.sparse.linalg.factorized(mat.sparse())
+            sol = lu_fact_resto(rhs.full().flatten())
+            dx = sol[:nx_resto]
+            d_lambda = sol[nx_resto:]
+
+            # expand
+            # dp = (tau + diag()
+            dp = (tau_val + p_val * (lambda0 + d_lambda) - rho_resto * p_val) / z_p_val
+            dn = (tau_val + n_val * (lambda0 + d_lambda) - rho_resto * n_val) / z_n_val
+            dzp = tau_val / p_val - z_p_val - z_p_val / p_val * dp
+            dzn = tau_val / n_val - z_n_val - z_n_val / n_val * dn
+            z_by_G = np.concatenate((z_val_G, z_val_s)) / G_val
+            dz = tau_val / G_val - G_val - (z_by_G * (self.dG_dx @ dx))
 
             # line search
+            breakpoint()
             pass
 
     def restoration_get_np_values(self, c_val, tau: float):
@@ -721,7 +800,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         n_val = np.array((n_c,))
         p_val = np.array((n_c,))
         n_val = np.array([(tau - rho_resto * c_val[ii]) / (2*rho_resto) + \
-                np.sqrt( ((tau - rho_resto * c_val[ii]) / (2*rho_resto))**2 + (tau * c_val[ii])/(2*rho_resto) )] for ii in range(n_c))
+                np.sqrt( ((tau - rho_resto * c_val[ii]) / (2*rho_resto))**2 + (tau * c_val[ii])/(2*rho_resto) ) for ii in range(n_c)])
         p_val = c_val + n_val
 
         return n_val, p_val
