@@ -260,23 +260,25 @@ class NosnocCustomSolver(NosnocSolverBase):
         resto_duals = ca.vertcat(lam_H, z_resto, z_n, z_p)
 
         # linear system
-        mat_resto = ca.SX.zeros(nx_resto, nx_resto)
         weighted_constraint_sum = casadi_sum_list([lambda_resto[i] * resto_c[i] for i in range(n_c)])
+
+        D_R_squared = ca.diag(resto_weights * resto_weights)
         W, _ = ca.hessian( weighted_constraint_sum, resto_x)
         Sigma = ca.jacobian(self.G, resto_x).T @ ca.diag(self.G / z_resto) @ ca.jacobian(self.G, resto_x)
-        top_left = W + zeta * ca.diag(resto_weights) + Sigma
+        top_left = W + zeta * D_R_squared + Sigma
 
         nabla_c = ca.jacobian(resto_c, resto_x).T
         Sigma_p = ca.diag(z_p / resto_p)
         Sigma_n = ca.diag(z_n / resto_n)
         Sigma_p_inv = ca.diag(resto_p / z_p)
         Sigma_n_inv = ca.diag(resto_n / z_n)
+
         mat_resto = ca.blockcat(top_left, nabla_c, nabla_c.T, -Sigma_p_inv-Sigma_n_inv)
 
-        rhs_resto_1 = zeta * ca.diag(resto_weights * resto_weights) @ (resto_x - resto_x_R)
-        rhs_resto_1 += nabla_c @ lambda_resto - tau * ca.jacobian(self.G, resto_x).T @ (1/self.G)
+        rhs_resto_1 = zeta * D_R_squared @ diff_x + \
+                    nabla_c @ lambda_resto - tau * ca.jacobian(self.G, resto_x).T @ (1/self.G)
 
-        rhs_resto_2 = resto_c - resto_p - resto_n + resto_rho * ((tau-resto_p)/z_p) - resto_rho * ((tau-resto_n)/z_n)
+        rhs_resto_2 = resto_c - resto_p + resto_n + resto_rho * ((tau-resto_p)/z_p) + resto_rho * ((tau-resto_n)/z_n)
 
         rhs_resto = - ca.vertcat(rhs_resto_1, rhs_resto_2)
         self.ls_resto_fun = ca.Function('ls_resto_fun', [resto_x, resto_np, resto_duals, resto_param], [mat_resto, rhs_resto, self.G])
@@ -612,7 +614,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                             # TODO: make restoration phase!
                             print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                             # breakpoint()
-                            # self.print_iterates([w_current, step_no_soc, step])
+                            self.print_iterates([w_current, step_no_soc, step])
+                            # self.print_iterates([w_current, step])
                             # breakpoint()
                             self.restoration_phase(w_current, tau_val)
                             break
@@ -712,8 +715,14 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         return results
 
-    def restoration_phase(self, w_current: np.ndarray, tau_val: float):
+    def print_iterates_w(self, iterate_list: list):
+        for ii in range(self.nw):
+            line = f"{ii}\t{self.w_pd[ii].name():17}"
+            for it in iterate_list:
+                line += f'\t{it[ii]:.4e}'
+            print(line)
 
+    def restoration_phase(self, w_current: np.ndarray, tau_val: float):
         print("in restoration phase")
         solver_opts = self.solver_opts
 
@@ -741,7 +750,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         z_p_val = tau_val * (1/p_val)
         lambda0 = np.zeros(self.n_H+self.n_comp) # lambda_H; lambda_slacked_comp (= mu_s)
         mu_outside = self.get_mu(w_current)
-        # TODO: mu_s is somehow here twice, initialize as z or lambda?
+        # TODO: mu_s is used here twice, multiplier for G_s and slacked_complementarity; initialize as z or lambda?
         mu_G = mu_outside[:self.nG]
         mu_s = mu_outside[self.nG:]
         # lambda_0 from outside would be: w_current[self.nw:self.nw+self.n_H]
@@ -752,6 +761,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         resto_duals = np.concatenate((lambda0[:self.n_H], z_val_G, z_val_s, z_n_val, z_p_val))
 
         w_candidate = w_current.copy()
+        # TODO: be careful with w_current!
+
+        # initialize filter
+        theta_max = 1e4 * max(1, self.theta_current)
+        self.resto_filter = NosnocFilter(theta_max=theta_max, gamma_theta=solver_opts.gamma_theta)
 
         ## apply "normal" IP algorithm
         for newton_iter in range(solver_opts.max_newton_iter):
@@ -790,7 +804,37 @@ class NosnocCustomSolver(NosnocSolverBase):
             dz = tau_val / G_val - G_val - (z_by_G * (self.dG_dx @ dx))
 
             # line search
+            ## LINE SEARCH + fraction to boundary
+            tau_j = max(solver_opts.tau_min, 1-tau_val)
+            w_candidate = w_current.copy()
+            w_candidate[:self.nw] += dx[:self.nw]
+            # update slack
+            w_candidate[self.nw+self.n_H: self.nw+self.n_H+self.n_comp] += dx[self.nw:]
+
+            # fraction to boundary G, s, n, p > 0
+            G_val = self.G_fun(w_current).full().flatten()
+            G_delta_val = self.G_fun(w_candidate).full().flatten()
+            alpha_max = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+            alpha_max_np = self.get_fraction_to_boundary(tau_j, np.concatenate((n_val, p_val)), np.concatenate((dn, dp)))
+            print(f"{alpha_max=}, {alpha_max_np=}")
+
+            self.print_iterates_w([w_current, dx])
+
+            if any(G_val < 0):
+                print("G_val < 0 should never happen")
+
             breakpoint()
+
+            # line search:
+            alpha = alpha_max
+            soc_iter = 0
+            alpha_max_no_soc = 0. # None
+            ls_iter = 0
+
+            # while True:
+
+            # do step
+
             pass
 
     def restoration_get_np_values(self, c_val, tau: float):
