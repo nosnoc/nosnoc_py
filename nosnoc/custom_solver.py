@@ -42,16 +42,20 @@ class NosnocCustomSolverOpts:
     max_newton_iter: int = 100
     kappa_res_sigma: float = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
     # line search
-    tau_min: float = .99 # .99 is IPOPT default
-    rho: float = 0.9 # factor to shrink alpha in line search
-    alpha_min: float = 0.01
+    tau_min: float = .95 # .99 is IPOPT default
+    rho: float = 0.5 # factor to shrink alpha in line search # IPOPT: 0.5
     kappaSigma: float = 1e10 # 1e10 is IPOPT default
     theta_min_fact: float = 0.0001 # IPOPT 0.0001
     max_soc: int = 4 # IPOPT 4
     kappa_soc: float = 0.99 # IPOPT: 0.99
     gamma_theta: float = 1e-5 # IPOPT gamma_theta 1e-5
     gamma_phi: float = 1e-8 # IPOPT: 1e-8
+    gamma_alpha: float = 0.05 # IPOPT: 0.05
+    s_phi: float = 2.3 # IPOPT: 2.3
+    s_theta = 1.1 # IPOPT: 1.1
     eta_phi: float = 1e-8
+    delta = 1.0 # IPOPT: 1.0
+
     # restoration phase
     rho_resto = 1e3 # IPOPT: 1e3
     kappa_resto = 0.9 # IPOPT: 0.9
@@ -194,6 +198,9 @@ class NosnocCustomSolver(NosnocSolverBase):
         nabla_w_H = ca.jacobian(self.H, prob.w).T
         mat_elim_mus = ca.SX.zeros((self.nw+n_H, self.nw+n_H))
 
+        delta_w = ca.SX.sym('delta_w')
+        delta_c = ca.SX.sym('delta_c')
+
         GGN_style_hess = False
         if GGN_style_hess:
             stationarity_w_no_H = ca.jacobian(prob.cost, prob.w).T \
@@ -209,12 +216,16 @@ class NosnocCustomSolver(NosnocSolverBase):
         mat_elim_mus[:self.nw, self.nw:] = nabla_w_H
         mat_elim_mus[self.nw:, :self.nw] = nabla_w_H.T
 
+        #
+        mat_elim_mus[:self.nw, :self.nw] += delta_w * ca.diag(np.ones(self.nw))
+        mat_elim_mus[self.nw:, self.nw:] += - delta_c * ca.diag(np.ones(n_H))
+
         r_lw_dtilde = stationarity_w \
                     + nabla_w_G @ ca.diag(1/self.G_no_slack) @ kkt_comp[:nG] \
                     - nabla_w_compl @ ca.diag(1/slack) @ kkt_comp[nG:] \
                     + nabla_w_compl @ ca.diag(mu_s / slack) @ slacked_complementarity
 
-        self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p], [mat_elim_mus, r_lw_dtilde, nabla_w_compl])
+        self.dense_ls_fun = ca.Function('dense_ls_fun', [w_pd, prob.p, delta_w, delta_c], [mat_elim_mus, r_lw_dtilde, nabla_w_compl])
         self.nabla_w_compl_fun = ca.Function('nabla_w_compl_fun', [w_pd, prob.p], [nabla_w_compl])
         self.slacked_compl_fun = ca.Function('slacked_compl_fun', [w_pd, prob.p], [slacked_complementarity])
 
@@ -315,7 +326,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         return step
 
     def compute_step_elim_mu_s(self, w_current):
-        mat, r_lw_tilde, nabla_w_compl = self.dense_ls_fun(w_current, self.p_val)
+
+        delta_w = 0.0
+        delta_c = 0.0
+        mat, r_lw_tilde, nabla_w_compl = self.dense_ls_fun(w_current, self.p_val, delta_w, delta_c)
         mu_G = w_current[-self.n_mu:-self.n_comp]
 
         r_G = -self.kkt_val[-self.n_mu:-self.n_comp]
@@ -338,6 +352,58 @@ class NosnocCustomSolver(NosnocSolverBase):
         if SPARSE:
             self.mat = mat.sparse()
             # step_w_lam = scipy.sparse.linalg.spsolve(mat, rhs_elim)
+
+            cond = np.linalg.cond(self.mat.toarray())
+            eigen_np = np.linalg.eigvals(self.mat.toarray()).tolist()
+
+            print(f"cond = {cond:e}")
+            # inertia correction
+            kappa_w_minus = 1/3
+            kappa_w_plus = 8
+            kappa_w_plus_bar = 100
+            delta_w_min = 1e-20
+            kappa_c = 1/4
+            delta_c_bar = 1e-8 # IPOPT: 1e-8
+            delta_w_max = 1e40
+            delta_w_0 = 1e-4
+
+            ic_iter = 0
+            while any(np.iscomplex(eigen_np)): #cond > 1e13:
+                # update delta_w
+                if ic_iter == 0:
+                    if self.delta_w_last == 0.0:
+                        delta_w = delta_w_0
+                    else:
+                        delta_w = max(delta_w_min, kappa_w_minus * self.delta_w_last)
+                    delta_c = delta_c_bar * self.tau_val**kappa_c
+                else:
+                    if self.delta_w_last == 0.0:
+                        delta_w = kappa_w_plus_bar * delta_w
+                    else:
+                        delta_w = kappa_w_plus * delta_w
+
+                mat, r_lw_tilde, nabla_w_compl = self.dense_ls_fun(w_current, self.p_val, delta_w, delta_c)
+
+                self.mat = mat.sparse()
+                cond = np.linalg.cond(self.mat.toarray())
+                eigen_np = np.linalg.eigvals(self.mat.toarray()).tolist()
+                print(f"inertia control cond = {cond:e}, delta_w {delta_w:e}, delta_c {delta_c:e}")
+
+                if delta_w > delta_w_max:
+                    # TODO: restoration
+                    breakpoint()
+
+                if ic_iter > 100:
+                    breakpoint()
+
+                if not any(np.iscomplex(eigen_np)):
+                    eigen_list = sorted(eigen_np)
+                    eps_eig = 1e-5
+                    neg_eig = [x for x in eigen_list if x < -eps_eig]
+                    pos_eig = [x for x in eigen_list if x > eps_eig]
+                    print(f"eigenvalues pos: {len(pos_eig)}, neg: {len(neg_eig)}")
+                ic_iter += 1
+
             self.lu_factor = scipy.sparse.linalg.factorized(self.mat)
             step_w_lam = self.lu_factor(rhs_elim)
 
@@ -409,13 +475,11 @@ class NosnocCustomSolver(NosnocSolverBase):
         return (step_log_merit < self.log_merit + self.solver_opts.eta_phi * alpha * dir_der_log_merit)
 
     def check_Waechter19(self, step, alpha, dir_der_log_merit) -> bool:
-        s_phi = 2.3 # IPOPT: 2.3
-        s_theta = 1.1 # IPOPT: 1.1
-        delta = 1.0 # IPOPT: 1.0
+        solver_opts = self.solver_opts
 
         if dir_der_log_merit >= 0.0:
             return False
-        if alpha * (-dir_der_log_merit)**s_phi > delta * self.theta_current**s_theta:
+        if alpha * (-dir_der_log_merit)**solver_opts.s_phi > solver_opts.delta * self.theta_current**solver_opts.s_theta:
             return True
         else:
             return False
@@ -440,10 +504,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         # initialize
         self.initialize()
 
-        tau_val = opts.sigma_0
+        self.tau_val = opts.sigma_0
         sigma_k = opts.sigma_0
 
-        self.setup_p_val(sigma_k, tau_val)
+        self.setup_p_val(sigma_k, self.tau_val)
 
         lamH0 = 1.0 * np.ones((self.n_H,))
         mu_pd_0 = np.ones((self.n_mu,))
@@ -456,6 +520,8 @@ class NosnocCustomSolver(NosnocSolverBase):
         complementarity_stats = n_iter_polish * [None]
         cpu_time_nlp = n_iter_polish * [None]
         nlp_iter = n_iter_polish * [None]
+
+        self.delta_w_last = 0.0 # inertia correction
 
         # timers
         t_la = 0.0
@@ -472,8 +538,8 @@ class NosnocCustomSolver(NosnocSolverBase):
         # homotopy loop
         for ii in range(opts.max_iter_homotopy):
             # setting tau = sigma seems to be a good choice, also reported in IPOPT-C paper.
-            tau_val = sigma_k
-            self.setup_p_val(sigma_k, tau_val)
+            self.tau_val = sigma_k
+            self.setup_p_val(sigma_k, self.tau_val)
 
             if opts.print_level > 1:
                 print("alpha\talpha_mu\talpha_max\tstep norm\tkkt res\t\tmin_mu\t\tmin G")
@@ -526,7 +592,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 self.dlog_merit_x = dlog_merit_x.full()
 
                 ## LINE SEARCH + fraction to boundary
-                tau_j = max(solver_opts.tau_min, 1-tau_val)
+                tau_j = max(solver_opts.tau_min, 1-self.tau_val) # idea: put min(..., 0.999) around?
 
                 # compute new nlp residual after mu step
                 # NOTE: not really necessary, maybe make optional
@@ -541,6 +607,20 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if any(G_val < 0):
                     print("G_val < 0 should never happen")
                     breakpoint()
+
+                # compute minimal step size
+                alpha_k_min = solver_opts.gamma_alpha * solver_opts.gamma_theta
+                delta_log_merit = (self.dlog_merit_x @ step[:self.nw])[0]
+                if delta_log_merit < 0 and self.theta_current <= theta_min:
+                    alpha_k_min = min(alpha_k_min,
+                            solver_opts.gamma_alpha * solver_opts.gamma_phi * self.theta_current / (-delta_log_merit),
+                            solver_opts.gamma_alpha * solver_opts.delta * self.theta_current ** solver_opts.s_theta / (-delta_log_merit) ** solver_opts.s_phi
+                            )
+                elif delta_log_merit < 0 and self.theta_current > theta_min:
+                    alpha_k_min = min(alpha_k_min,
+                                solver_opts.gamma_alpha * solver_opts.gamma_phi * self.theta_current / (-delta_log_merit)
+                                )
+                print(f"alpha_k_min {alpha_k_min:e}")
 
                 # line search:
                 alpha = alpha_max
@@ -574,7 +654,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     elif soc_iter > 0:
                         # reduce step
                         alpha *= solver_opts.rho
-                        if alpha < solver_opts.alpha_min:
+                        if alpha < alpha_k_min:
                             self.alpha_min_counter += 1
                             break
                         continue
@@ -605,11 +685,13 @@ class NosnocCustomSolver(NosnocSolverBase):
                         soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
+                        if alpha < 0.05:
+                            breakpoint()
                         alpha_max = alpha
                     else:
                         # A-5.10 reduce step
                         alpha *= solver_opts.rho
-                        if alpha < solver_opts.alpha_min:
+                        if alpha < alpha_k_min:
                             self.alpha_min_counter += 1
                             # TODO: make restoration phase!
                             print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
@@ -617,7 +699,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                             self.print_iterates([w_current, step_no_soc, step])
                             # self.print_iterates([w_current, step])
                             # breakpoint()
-                            self.restoration_phase(w_current, tau_val)
+                            self.restoration_phase(w_current)
                             break
                     #
                     ls_iter += 1
@@ -636,9 +718,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 # Waechter2006 eq (16): "Primal-dual barrier term Hessian should not deviate arbitrarily much from primal Hessian"
                 G_val = self.G_fun(w_current).full().flatten()
                 for i in range(n_mu):
-                    new = max(min(w_current[-n_mu+i], solver_opts.kappaSigma * tau_val / G_val[i]), tau_val/(solver_opts.kappaSigma * G_val[i]))
-                    # if new != w_current[-n_mu+i]:
-                    #     print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
+                    new = max(min(w_current[-n_mu+i], solver_opts.kappaSigma * self.tau_val / G_val[i]),
+                                                      self.tau_val / (solver_opts.kappaSigma * G_val[i]))
+                    if new != w_current[-n_mu+i]:
+                        print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
@@ -722,7 +805,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 line += f'\t{it[ii]:.4e}'
             print(line)
 
-    def restoration_phase(self, w_current: np.ndarray, tau_val: float):
+    def restoration_phase(self, w_current: np.ndarray):
         print("in restoration phase")
         solver_opts = self.solver_opts
 
@@ -734,7 +817,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         rho_resto = 1e3
 
         # setup parameter! keep sigma fixed
-        tau_val = max(tau_val, self.theta_current)
+        tau_val = max(self.tau_val, self.theta_current)
         zeta_val = np.sqrt(tau_val)
         D_resto = np.array([max(1, 1/np.abs(x_resto_ref[i])) for i in range(nx_resto)])
         resto_param_val = np.concatenate((self.p_val[:-1].copy(), np.array([tau_val, zeta_val, rho_resto]), x_resto_ref, D_resto))
