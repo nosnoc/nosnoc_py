@@ -117,8 +117,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         slack = ca.SX.sym('slack', n_comp)
 
         lam_H = ca.SX.sym('lam_H', n_H)
-        # lam_comp = ca.SX.sym('lam_comp', n_comp)
-        # lam_pd = ca.vertcat(lam_H, lam_comp)
         lam_pd = ca.vertcat(lam_H)
         self.lam_pd_0 = np.zeros((casadi_length(lam_pd),))
 
@@ -620,8 +618,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                     alpha_k_min = min(alpha_k_min,
                                 solver_opts.gamma_alpha * solver_opts.gamma_phi * self.theta_current / (-delta_log_merit)
                                 )
-                print(f"alpha_k_min {alpha_k_min:e}")
-
                 # line search:
                 alpha = alpha_max
                 soc_iter = 0
@@ -656,7 +652,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                         alpha *= solver_opts.rho
                         if alpha < alpha_k_min:
                             self.alpha_min_counter += 1
-                            break
+                            self.restoration_phase(w_current)
                         continue
 
                     # A-5.5 Initialize SOC
@@ -685,21 +681,19 @@ class NosnocCustomSolver(NosnocSolverBase):
                         soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                        if alpha < 0.05:
-                            breakpoint()
+                        # if alpha < 0.05:
+                        #     breakpoint()
                         alpha_max = alpha
                     else:
                         # A-5.10 reduce step
                         alpha *= solver_opts.rho
                         if alpha < alpha_k_min:
+                            breakpoint()
                             self.alpha_min_counter += 1
-                            # TODO: make restoration phase!
                             print(f"minimum step at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
-                            # breakpoint()
                             self.print_iterates([w_current, step_no_soc, step])
-                            # self.print_iterates([w_current, step])
-                            # breakpoint()
                             self.restoration_phase(w_current)
+                            # self.print_iterates([w_current, step])
                             break
                     #
                     ls_iter += 1
@@ -818,15 +812,15 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         # setup parameter! keep sigma fixed
         tau_val = max(self.tau_val, self.theta_current)
-        zeta_val = np.sqrt(tau_val)
+        zeta_val = np.sqrt(tau_val) # TODO: update / eliminate?
         D_resto = np.array([max(1, 1/np.abs(x_resto_ref[i])) for i in range(nx_resto)])
         resto_param_val = np.concatenate((self.p_val[:-1].copy(), np.array([tau_val, zeta_val, rho_resto]), x_resto_ref, D_resto))
 
         # initialize p, n
         # eval constraint_violation
-        constraint_violation = self.resto_c_fun(x_resto_current, resto_param_val).full().flatten()
+        c_val = self.resto_c_fun(x_resto_current, resto_param_val).full().flatten()
 
-        n_val, p_val = self.restoration_get_np_values(constraint_violation, tau_val)
+        n_val, p_val = self.restoration_get_np_values(c_val, tau_val)
 
         # duals for n, p
         z_n_val = tau_val * (1/n_val)
@@ -906,7 +900,11 @@ class NosnocCustomSolver(NosnocSolverBase):
             if any(G_val < 0):
                 print("G_val < 0 should never happen")
 
+            self.resto_print_np(c_val, p_val, dp, n_val, dn)
             breakpoint()
+
+            if alpha_max_np < 0.1:
+                print()
 
             # line search:
             alpha = alpha_max
@@ -919,6 +917,12 @@ class NosnocCustomSolver(NosnocSolverBase):
             # do step
 
             pass
+
+    def resto_print_np(self, c_val, p_val, dp, n_val, dn):
+        print("\nconstraint c, n, p values")
+        print("c\t\tp\t\tdp\t\tn\t\tdn")
+        for i in range(len(c_val)):
+            print(f"{c_val[i]:.2e}\t{p_val[i]:.2e}\t{dp[i]:.2e}\t{n_val[i]:.2e}\t{dn[i]:.2e}")
 
     def restoration_get_np_values(self, c_val, tau: float):
         n_c = len(c_val)
