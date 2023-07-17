@@ -75,9 +75,10 @@ class NosnocCustomSolver(NosnocSolverBase):
         if len(ix[0]) == 0:
             return 1.0
         else:
-            # argmin = np.argmin(-tau *current[ix]/delta[ix])
-            # og_idx = ix[0][argmin]
-            # print(f"fraction_to_boundary, tau = {tau:.5e} idx {og_idx}, {self.G[og_idx]} min {min(np.min(-tau *current[ix]/delta[ix]), 1.0)}")
+            # if len(current) == self.nG:
+            #     argmin = np.argmin(-tau *current[ix]/delta[ix])
+            #     og_idx = ix[0][argmin]
+            #     print(f"fraction_to_boundary, tau = {tau:.5e} idx {og_idx}, {self.G[og_idx]} min {min(np.min(-tau *current[ix]/delta[ix]), 1.0)}")
             return min(np.min(-tau *current[ix]/delta[ix]), 1.0)
 
     def _setup_G(self) -> ca.SX:
@@ -434,6 +435,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
     def get_second_order_correction(self, w_current, w_candidate, alpha, soc_iter):
         mu_G = w_current[-self.n_mu:-self.n_comp]
+        mu_s = w_current[-self.n_comp:]
 
         # setup rhs
         r_eq_candidate = self.H_fun(w_candidate, self.p_val).full().flatten()
@@ -457,12 +459,12 @@ class NosnocCustomSolver(NosnocSolverBase):
         # expand mu
         kkt_val = self.kkt_eq_fun(w_candidate, self.p_val).full().flatten()
         G_val = self.G_no_slack_fun(w_current).full().flatten()
-        slack_current = w_current[self.nw+self.n_H: self.nw+self.n_H+self.n_comp]
+        slack_current = self.get_slack(w_current)
 
         r_G = -kkt_val[-self.n_mu:-self.n_comp]
         r_s = -kkt_val[-self.n_comp:]
         delta_mu_G = (r_G - mu_G * (self.nabla_w_G.T @ step_w_lam[:self.nw])) / G_val
-        delta_mu_s = (r_s - delta_slack * w_current[-self.n_comp:]) / slack_current
+        delta_mu_s = (r_s - delta_slack * mu_s) / slack_current
 
         step = np.concatenate((step_w_lam, delta_slack, delta_mu_G, delta_mu_s))
 
@@ -652,6 +654,9 @@ class NosnocCustomSolver(NosnocSolverBase):
                         alpha *= solver_opts.rho
                         if alpha < alpha_k_min:
                             self.alpha_min_counter += 1
+                            print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                            self.print_iterates([w_current, step_no_soc, step])
+                            breakpoint()
                             self.restoration_phase(w_current)
                         continue
 
@@ -699,7 +704,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     ls_iter += 1
 
                 if soc_iter:
-                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
+                    print(f"SOC {soc_iter} at it {ii} {newton_iter} alpha {alpha:.2e} alpha_max {alpha_max:.2e} alpha_max_no_soc {alpha_max_no_soc:.2e} theta {self.theta_current:.4e} Dtheta {theta_step:.4e} Del_theta_no_soc {theta_step_no_SOC:.4e} delta_phi {step_log_merit:.2e} phi {self.log_merit:.2e}")
                     if theta_step_no_SOC < theta_step:
                         print("SOC Warning: violation did not decrease")
 
@@ -715,7 +720,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                     new = max(min(w_current[-n_mu+i], solver_opts.kappaSigma * self.tau_val / G_val[i]),
                                                       self.tau_val / (solver_opts.kappaSigma * G_val[i]))
                     if new != w_current[-n_mu+i]:
-                        print(f"mu[{i}] = {w_current[-n_mu+i]} -> {new}")
+                        print(f"mu[{i}] = {w_current[-n_mu+i]:e} -> {new:e}")
                     w_current[-n_mu+i] = new
                 t_ls += time.time() - t0_ls
 
