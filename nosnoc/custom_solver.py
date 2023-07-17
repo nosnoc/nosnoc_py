@@ -627,6 +627,15 @@ class NosnocCustomSolver(NosnocSolverBase):
                 alpha_max_no_soc = 0. # None
                 ls_iter = 0
 
+                # IPOPT: Handling Very Small Search Directions
+                eps_mach = 1e-16
+                smallness_w = np.max((np.abs(step[:self.nw])) / 1+np.abs(w_current[:self.nw]))
+                smallness_s = np.max((np.abs(self.get_slack(step))) / 1+np.abs( self.get_slack(w_current)))
+                smallness = max(smallness_w, smallness_s)
+                if smallness < 10 * eps_mach:
+                    # TODO: apply alpha_k_max
+                    breakpoint()
+
                 while True:
                     w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
