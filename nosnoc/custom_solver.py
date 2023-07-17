@@ -263,11 +263,12 @@ class NosnocCustomSolver(NosnocSolverBase):
 
         constraints_resto = resto_c - resto_p + resto_n
         # duals:
-        lambda_resto = ca.vertcat(lam_H, mu_s)
+        lam_comp = ca.SX.sym('lam_comp', n_comp)
+        lambda_resto = ca.vertcat(lam_H, lam_comp)
         z_resto = ca.vertcat(mu_G, mu_s)
         z_n = ca.SX.sym('z_n', n_c)
         z_p = ca.SX.sym('z_p', n_c)
-        resto_duals = ca.vertcat(lam_H, z_resto, z_n, z_p)
+        resto_duals = ca.vertcat(lam_H, lam_comp, z_resto, z_n, z_p)
 
         # linear system
         weighted_constraint_sum = casadi_sum_list([lambda_resto[i] * resto_c[i] for i in range(n_c)])
@@ -840,7 +841,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         z_val_G = np.array([min(rho_resto, mu_G[i]) for i in range(self.nG)]) # z_k from outside # multipliers of G
         z_val_s = np.array([min(rho_resto, mu_s[i]) for i in range(self.n_comp)])
 
-        resto_duals = np.concatenate((lambda0[:self.n_H], z_val_G, z_val_s, z_n_val, z_p_val))
+        resto_duals = np.concatenate((lambda0, z_val_G, z_val_s, z_n_val, z_p_val))
 
         w_candidate = w_current.copy()
         # TODO: be careful with w_current!
