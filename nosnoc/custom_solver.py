@@ -570,6 +570,21 @@ class NosnocCustomSolver(NosnocSolverBase):
                 if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
                     break
 
+                # eq (5) Waechter
+                s_max = 100
+                lam_max = np.max(np.abs(w_current[self.nw:self.nw+self.n_H]))
+                mu_max = np.max(self.get_mu(w_current))
+                s_d = max(s_max, (lam_max + mu_max) / (self.nw+self.n_H+self.n_comp)) / s_max
+                s_c = max(s_max, mu_max/self.nw) / s_max
+
+                scaled_stat = ca.norm_inf(kkt_val[:self.nw]).full()[0][0] / s_d
+                scaled_comp = ca.norm_inf(kkt_val[-self.nG-self.n_comp:]).full()[0][0] / s_c
+                eq_res = ca.norm_inf(kkt_val[self.nw:self.nw+self.n_H]).full()[0][0]
+                print(f"scaled residuals: {scaled_stat:e}, {eq_res:e}, {scaled_comp:e}")
+
+                if max(scaled_stat, scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
+                    break
+
                 # simple sparse
                 # newton_matrix = jac_kkt_val.sparse()
                 # rhs = - kkt_val.full().flatten()
