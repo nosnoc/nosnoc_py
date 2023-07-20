@@ -17,10 +17,11 @@ DEBUG = False
 
 class NosnocFilter():
     # theta, phi
-    def __init__(self, theta_max: float, gamma_theta: float) -> None:
+    def __init__(self, theta_max: float, gamma_theta: float, m_max: int = 0) -> None:
         self.theta_max = theta_max
         self.gamma_theta = gamma_theta
         self.filter_points = set()
+        self.m_max = m_max
         return
 
     def add(self, point: tuple) -> None:
@@ -31,16 +32,20 @@ class NosnocFilter():
         theta, phi = point
         if theta > self.theta_max:
             return False
+        #
+        count = 0
         for filter_point in self.filter_points:
             theta_k, phi_k = filter_point
             if theta >= (1-self.gamma_theta) * theta_k and phi >= phi_k - self.gamma_theta * theta_k:
-                return False
+                count += 1
+                if count > self.m_max:
+                    return False
         return True
 
 @dataclass
 class NosnocCustomSolverOpts:
     max_newton_iter: int = 100
-    kappa_res_sigma: float = 5 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
+    kappa_res_sigma: float = 5.0 # break loop if nlp_res < kappa_res_sigma * sigma, IPOPT-C: \delta_\mu -- default 5.0
     # line search
     tau_min: float = .95 # .99 is IPOPT default
     rho: float = 0.5 # factor to shrink alpha in line search # IPOPT: 0.5
