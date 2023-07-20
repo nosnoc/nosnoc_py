@@ -86,8 +86,9 @@ class NosnocSimLooper:
             self.w_all += [results["w_all"]]
             self.cost_vals.append(results["cost_val"])
             self.status.append(results["status"])
+
             if self.print_level > 0:
-                print(f"Sim step {i + 1}/{self.Nsim}\t{results['status']}")
+                print(f"Sim step {i + 1}/{self.Nsim}\t{results['status']}\n")
 
             if (stop_on_failure and results["status"] == "Infeasible_Problem_Detected"):
                 return False

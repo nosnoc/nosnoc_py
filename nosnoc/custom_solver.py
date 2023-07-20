@@ -206,6 +206,15 @@ class NosnocCustomSolver(NosnocSolverBase):
         delta_c = ca.SX.sym('delta_c')
 
         GGN_style_hess = False
+
+        eps_reg = 1e-15
+        # slack_tilde = ca.fmax(slack, eps_reg)
+        # G_tilde = ca.fmax(self.G_no_slack, eps_reg)
+
+        slack_tilde = slack
+        G_tilde = self.G_no_slack
+        # TODO: try diag(mu/G) =: W to bound [1e-8, 1e8]
+
         if GGN_style_hess:
             stationarity_w_no_H = ca.jacobian(prob.cost, prob.w).T \
                 + ca.jacobian(self.H, prob.w).T @ lam_H \
@@ -213,10 +222,10 @@ class NosnocCustomSolver(NosnocSolverBase):
                 - ca.jacobian(self.G, prob.w).T @ mu_pd
 
             mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w_no_H, prob.w) + \
-                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack) @ nabla_w_compl.T
+                nabla_w_G @ ca.diag(mu_G/ G_tilde) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack_tilde) @ nabla_w_compl.T
         else:
             mat_elim_mus[:self.nw, :self.nw] = ca.jacobian(stationarity_w, prob.w) + \
-                nabla_w_G @ ca.diag(mu_G/self.G_no_slack) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack) @ nabla_w_compl.T
+                nabla_w_G @ ca.diag(mu_G/ G_tilde) @ nabla_w_G.T + nabla_w_compl @ ca.diag(mu_s / slack_tilde) @ nabla_w_compl.T
         mat_elim_mus[:self.nw, self.nw:] = nabla_w_H
         mat_elim_mus[self.nw:, :self.nw] = nabla_w_H.T
 
