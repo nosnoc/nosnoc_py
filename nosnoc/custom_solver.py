@@ -499,15 +499,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         else:
             return False
 
-    def check_Waechter18(self, theta_step, step_log_merit):
-        if theta_step < (1-self.solver_opts.gamma_theta) * self.theta_current:
-            return True
-        elif step_log_merit < self.log_merit - self.solver_opts.gamma_phi * self.theta_current:
-            return True
-        else:
-            return False
-
-
     def solve(self) -> dict:
         """
         Solves the NLP with the currently stored parameters.
@@ -674,23 +665,17 @@ class NosnocCustomSolver(NosnocSolverBase):
                     dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
 
                     # check acceptibility to filter
-                    if self.filter.is_acceptable((theta_step, step_log_merit)):
-                        # if already in SOC -> reduce step (A 5.7)
+                    filter_acceptable = self.filter.is_acceptable((theta_step, step_log_merit))
+                    if filter_acceptable:
                         # A-5.4 check sufficient decrease
-                        if not self.check_Waechter19(step, alpha, dir_der_log_merit):
-                            # Waechter case 2: check sufficient progress wrt either goal
-                            if self.check_Waechter18(theta_step, step_log_merit):
-                                break
-                        elif self.theta_current < theta_min:
-                            # Waechter case 1: log barrier descent
+                        if self.theta_current <= theta_min and self.check_Waechter19(step, alpha, dir_der_log_merit):
                             if self.check_Waechter20(step_log_merit, step, alpha, dir_der_log_merit):
-                                break
-                        else:
-                            # Waechter case 2: check sufficient progress wrt either goal
-                            if self.check_Waechter18(theta_step, step_log_merit):
-                                break
+                                break # accept
+                        elif filter_acceptable:
+                            break
+
                     elif soc_iter > 0:
-                        # reduce step
+                        # if not accaptable and already in SOC -> reduce step (A 5.7)
                         alpha *= solver_opts.rho
                         if alpha < alpha_k_min:
                             self.alpha_min_counter += 1
@@ -701,17 +686,17 @@ class NosnocCustomSolver(NosnocSolverBase):
                         continue
 
                     # A-5.5 Initialize SOC
-                    if (ls_iter > 0):
-                        do_soc = False
-                    elif (theta_step < self.theta_current):
-                        do_soc = False
+                    if soc_iter == 0:
+                        if (ls_iter > 0):
+                            do_soc = False
+                        elif (theta_step < self.theta_current):
+                            do_soc = False
+                        else:
+                            do_soc = True
+                            theta_old_soc = self.theta_current
+                            theta_step_no_SOC = theta_step
                     else:
-                        do_soc = True
-                        theta_old_soc = self.theta_current
-                        theta_step_no_SOC = theta_step
-
-                    # A-5.9. Next SOC
-                    if soc_iter > 0:
+                        # A-5.9. Next SOC
                         if soc_iter == solver_opts.max_soc or theta_step > solver_opts.kappa_soc * theta_old_soc:
                             # abort SOC: continue with current one.
                             do_soc = False
@@ -719,6 +704,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                             do_soc = True
                     # NOTE: to get multiple SOC: we need that theta is decreasing within SOC, but not "too much" in the kappa_soc sense.
 
+                    # A-5.6 / A-5.9 Perform SOC iter
                     if do_soc:
                         step_no_soc = step.copy()
                         alpha_max_no_soc = alpha_max
