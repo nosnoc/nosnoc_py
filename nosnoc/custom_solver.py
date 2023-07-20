@@ -596,7 +596,8 @@ class NosnocCustomSolver(NosnocSolverBase):
                 eq_res = ca.norm_inf(kkt_val[self.nw:self.nw+self.n_H]).full()[0][0]
                 print(f"scaled residuals: {scaled_stat:e}, {eq_res:e}, {scaled_comp:e}")
 
-                if max(scaled_stat, scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
+                if max(scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
+                # if max(scaled_stat, scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
                     break
 
                 # simple sparse
@@ -725,8 +726,6 @@ class NosnocCustomSolver(NosnocSolverBase):
                         soc_iter += 1
                         G_delta_val = self.G_fun(step).full().flatten()
                         alpha = self.get_fraction_to_boundary(tau_j, G_val, G_delta_val, offset=self.G_offset)
-                        # if alpha < 0.05:
-                        #     breakpoint()
                         alpha_max = alpha
                     else:
                         # A-5.10 reduce step
@@ -820,12 +819,23 @@ class NosnocCustomSolver(NosnocSolverBase):
         total_time = sum([i for i in cpu_time_nlp if i is not None])
         print(f"total iterations {sum_iter}, CPU time {total_time:.3f}: LA: {t_la:.3f} line search: {t_ls:.3f} casadi: {t_ca:.3f} subtimers {t_la+t_ls+t_ca:.3f}")
 
-        if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
+        lam_max = np.max(np.abs(w_current[self.nw:self.nw+self.n_H]))
+        mu_max = np.max(self.get_mu(w_current))
+        s_d = max(s_max, (lam_max + mu_max) / (self.nw+self.n_H+self.n_comp)) / s_max
+        s_c = max(s_max, mu_max/self.nw) / s_max
+
+        scaled_stat = ca.norm_inf(kkt_val[:self.nw]).full()[0][0] / s_d
+        scaled_comp = ca.norm_inf(kkt_val[-self.nG-self.n_comp:]).full()[0][0] / s_c
+        eq_res = ca.norm_inf(kkt_val[self.nw:self.nw+self.n_H]).full()[0][0]
+
+        # if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
+        if max(scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
             results["status"] = Status.SUCCESS
         else:
             results["status"] = Status.NOT_CONVERGED
             ikkt = np.argmax(kkt_val)
             condA = np.linalg.cond(self.mat.toarray())
+
             print(f"biggest KKT res at {ikkt} with value {self.kkt_eq[ikkt]} = {kkt_val.full()[ikkt][0]:.2e}, condA = {condA:.2e}")
             print("continue to print iterate and step")
             breakpoint()
