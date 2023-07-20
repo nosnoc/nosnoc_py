@@ -185,7 +185,7 @@ class NosnocCustomSolver(NosnocSolverBase):
         self.slack0_fun = ca.Function('slack0_fun', [prob.w, prob.p], [self.slack0_expr], casadi_function_opts)
 
         self.kkt_max_res_fun = ca.Function('kkt_max_res_fun', [w_pd, prob.p], [ca.norm_inf(kkt_eq)], casadi_function_opts)
-        self.max_violation_fun = ca.Function('max_violation_fun', [w_pd, prob.p], [ca.norm_inf(ca.vertcat(slacked_complementarity, self.H))], casadi_function_opts)
+        self.violation_norm_fun = ca.Function('violation_norm_fun', [w_pd, prob.p], [ca.norm_1(ca.vertcat(slacked_complementarity, self.H))], casadi_function_opts)
         log_merit = prob.cost - tau * ca.sum1(ca.log(self.G))
         self.log_merit_fun = ca.Function('log_merit_fun', [w_pd, prob.p], [log_merit], casadi_function_opts)
         self.log_merit_fun_jac = ca.Function('log_merit_fun_jac', [w_pd, prob.p], [log_merit, ca.jacobian(log_merit, prob.w)], casadi_function_opts)
@@ -555,7 +555,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             G_val = self.G_fun(w_current).full().flatten()
 
             # TODO: should this be evaluated every homotopy iteration?
-            theta_0 = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+            theta_0 = self.violation_norm_fun(w_current, self.p_val).full()[0][0]
             theta_min = self.solver_opts.theta_min_fact * max(1, theta_0)
             theta_max = 1e4 * max(1, theta_0)
 
@@ -606,7 +606,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 step_norm = np.max(np.abs(step))
 
                 t0_ls = time.time()
-                self.theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+                self.theta_current = self.violation_norm_fun(w_current, self.p_val).full()[0][0]
 
                 # log_merit = self.log_merit_fun(w_current, self.p_val).full()[0][0]
                 log_merit, dlog_merit_x = self.log_merit_fun_jac(w_candidate, self.p_val)
@@ -660,7 +660,7 @@ class NosnocCustomSolver(NosnocSolverBase):
                 while True:
                     w_candidate[:self.n_all_but_mu] = w_current[:self.n_all_but_mu] + alpha * step[:self.n_all_but_mu]
                     # t0_ca = time.time()
-                    theta_step = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+                    theta_step = self.violation_norm_fun(w_candidate, self.p_val).full()[0][0]
                     step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                     dir_der_log_merit = self.dlog_merit_x @ step[:self.nw]
 
@@ -750,7 +750,7 @@ class NosnocCustomSolver(NosnocSolverBase):
 
                 # augment filter if Waechter_19 or Waechter_20 do NOT hold.
                 # TODO: avoid reevalution of functions and conditions
-                self.theta_current = self.max_violation_fun(w_current, self.p_val).full()[0][0]
+                self.theta_current = self.violation_norm_fun(w_current, self.p_val).full()[0][0]
                 log_merit_current = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
                 if (not self.check_Waechter19(step, alpha, dir_der_log_merit)) or \
                    (not self.check_Waechter20(step_log_merit, step, alpha, dir_der_log_merit)):
@@ -814,7 +814,6 @@ class NosnocCustomSolver(NosnocSolverBase):
         scaled_comp = ca.norm_inf(kkt_val[-self.nG-self.n_comp:]).full()[0][0] / s_c
         eq_res = ca.norm_inf(kkt_val[self.nw:self.nw+self.n_H]).full()[0][0]
 
-        # if nlp_res < solver_opts.kappa_res_sigma * sigma_k:
         if max(scaled_comp, eq_res) < solver_opts.kappa_res_sigma * sigma_k:
             results["status"] = Status.SUCCESS
         else:
@@ -892,7 +891,7 @@ class NosnocCustomSolver(NosnocSolverBase):
             w_candidate[:self.nw] = x_resto_current[:self.nw]
             w_candidate[self.nw+self.n_H:self.nw+self.n_H+self.n_comp] = x_resto_current[self.nw:]
             # i) is acceptible to (outside) filter
-            theta_step = self.max_violation_fun(w_candidate, self.p_val).full()[0][0]
+            theta_step = self.violation_norm_fun(w_candidate, self.p_val).full()[0][0]
             step_log_merit = self.log_merit_fun(w_candidate, self.p_val).full()[0][0]
             if self.filter.is_acceptable((theta_step, step_log_merit)):
                 # ii) if sufficient decrease in violation
