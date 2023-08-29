@@ -2,17 +2,21 @@ import casadi as ca
 import numpy as np
 from itertools import product
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 from nosnoc.utils import casadi_vertcat_list, casadi_sum_list
 from nosnoc.model import NosnocModel
 
 
 class NosnocAutoModel:
     r"""
-    An interface to automatically generate a NosnocModel given:
+    Represents a generic model with:
     - x: symbolic state vector
-    - f_nonsmooth_ode: symbolic vector field of the nonsmooth ODE
-    Outputs the switching functions c as well as either:
+    - u: symbolic control vector
+    - p: symbolic parameter vector
+    - f_nonsmooth_ode: symbolic vector field of the potentially nonsmooth ODE.
+
+    Experimental feature:
+    The class can be used to detect a NosnocModel using `reformulate()` with:
     - F: Filippov inclusion functions
     - S: Switching matrix
     or:
@@ -32,10 +36,13 @@ class NosnocAutoModel:
                  x: ca.SX,
                  x0: np.ndarray,
                  u: ca.SX,
-                 f_nonsmooth_ode: ca.SX):
+                 f_nonsmooth_ode: ca.SX,
+                 p: Optional[ca.SX],
+                 ):
         self.x = x
         self.x0 = x0
         self.u = u
+        self.p = p
         self.f_nonsmooth_ode = f_nonsmooth_ode
         self.c = []
         self.S = []
@@ -46,7 +53,7 @@ class NosnocAutoModel:
     def reformulate(self) -> NosnocModel:
         """
         Reformulate the given nonsmooth ODE into a NosnocModel.
-        Note: It care must be taken if your model is complex, in which case the Pss Mode `STEP` should be used.
+        Note: Care must be taken if your model is complex, in which case the Pss Mode `STEP` should be used.
         """
         if self._detect_additive():
             self._reformulate_nonlin()

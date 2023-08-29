@@ -53,7 +53,7 @@ class NosnocModel:
 
     # TODO: extend docu for n_sys > 1
     # NOTE: n_sys is needed decoupled systems: see FESD: "Remark on Cartesian products of Filippov systems"
-    # NOTE: theta is not meant to be used,  
+    # NOTE: theta is not meant to be used
     def __init__(self,
                  x: ca.SX,
                  x0: Optional[np.ndarray],
