@@ -1,63 +1,76 @@
 import numpy as np
-from casadi import SX, horzcat, vertcat, cos, sin, inv
-import matplotlib.pyplot as plt
+import casadi as ca
+from pendulum_utils import plot_results
 
 import nosnoc
 
 
-def solve_example():
-    # opts
-    opts = nosnoc.NosnocOpts()
-    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
-    opts.n_s = 2
-    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
+def get_cart_pole_with_friction_model(F_friction: float=2.0, use_fillipov: bool = True):
+    # symbolics
+    px = ca.SX.sym('px')
+    theta = ca.SX.sym('theta')
+    q = ca.vertcat(px, theta)
 
-    # opts.N_stages = 50  # MATLAB setting
-    opts.N_stages = 15  # number of control intervals
-    opts.N_finite_elements = 2  # number of finite element on every control intevral
-    opts.terminal_time = 4.0  # Time horizon
-    opts.print_level = 1
+    v = ca.SX.sym('v')
+    theta_dot = ca.SX.sym('theta_dot')
+    q_dot = ca.vertcat(v, theta_dot)
 
-    ## Model defintion
-    q = SX.sym('q', 2)
-    v = SX.sym('v', 2)
-    x = vertcat(q, v)
-    u = SX.sym('u')  # control
+    x = ca.vertcat(q, q_dot)
+    u = ca.SX.sym('u')  # control
 
     m1 = 1  # cart
     m2 = 0.1  # link
     link_length = 1
     g = 9.81
     # Inertia matrix
-    M = vertcat(horzcat(m1 + m2, m2 * link_length * cos(q[1])),
-                horzcat(m2 * link_length * cos(q[1]), m2 * link_length**2))
+    M = ca.vertcat(ca.horzcat(m1 + m2, m2 * link_length * ca.cos(theta)),
+                ca.horzcat(m2 * link_length * ca.cos(theta), m2 * link_length**2))
     # Coriolis force
-    C = SX.zeros(2, 2)
-    C[0, 1] = -m2 * link_length * v[1] * sin(q[1])
+    C = ca.SX.zeros(2, 2)
+    C[0, 1] = -m2 * link_length * theta_dot * ca.sin(theta)
 
-    # all forces = Gravity+Control+Coriolis (+Friction)
-    f_all = vertcat(u, -m2 * g * link_length * sin(x[1])) - C @ v
+    # all forces = Gravity + Control + Coriolis; Note: friction added later
+    f_all = ca.vertcat(u, -m2 * g * link_length * ca.sin(theta)) - C @ q_dot
 
-    # friction between cart and ground
-    F_friction = 2
-    # Dynamics with $ v > 0$
-    f_1 = vertcat(v, inv(M) @ (f_all - vertcat(F_friction, 0)))
-    # Dynamics with $ v < 0$
-    f_2 = vertcat(v, inv(M) @ (f_all + vertcat(F_friction, 0)))
-
-    F = [horzcat(f_1, f_2)]
-    # switching function (cart velocity)
-    c = [v[0]]
-    # Sign matrix # f_1 for c=v>0, f_2 for c=v<0
-    S = [np.array([[1], [-1]])]
-
-    # specify initial and end state, cost ref and weight matrix
     x0 = np.array([1, 0 / 180 * np.pi, 0, 0])  # start downwards
+
+    if use_fillipov:
+        # Dynamics with $ v > 0$
+        f_1 = ca.vertcat(q_dot, ca.inv(M) @ (f_all - ca.vertcat(F_friction, 0)))
+        # Dynamics with $ v < 0$
+        f_2 = ca.vertcat(q_dot, ca.inv(M) @ (f_all + ca.vertcat(F_friction, 0)))
+
+        F = [ca.horzcat(f_1, f_2)]
+        # switching function (cart velocity)
+        c = [v]
+        # Sign matrix # f_1 for c=v>0, f_2 for c=v<0
+        S = [np.array([[1], [-1]])]
+        model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u)
+    else:
+        sigma = ca.SX.sym('sigma')
+
+        f_ode = ca.vertcat(q_dot, ca.inv(M) @ (f_all - ca.vertcat( F_friction* ca.tanh(v/ sigma), 0)))
+        model = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_ode, x0=x0, u=u)
+    return model
+
+def solve_example():
+    # opts
+    opts = nosnoc.NosnocOpts()
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
+    opts.n_s = 2
+    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
+
+    opts.N_stages = 20  # number of control intervals
+    opts.N_finite_elements = 2  # number of finite element on every control intevral
+    opts.terminal_time = 5.0  # Time horizon
+    opts.print_level = 1
+
+    model = get_cart_pole_with_friction_model()
+    # specify initial, cost ref and weight matrix
     x_ref = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
 
     Q = np.diag([1.0, 100.0, 1.0, 1.0])
-    Q_terminal = np.diag([100.0, 100.0, 10.0, 10.0])
+    Q_terminal = np.diag([500, 100, 10, 10])
     R = 1.0
 
     # bounds
@@ -67,18 +80,14 @@ def solve_example():
     u_ref = 0.0
 
     # Stage cost
-    f_q = (x - x_ref).T @ Q @ (x - x_ref) + (u - u_ref).T @ R @ (u - u_ref)
+    f_q = (model.x - x_ref).T @ Q @ (model.x - x_ref) + (model.u - u_ref).T @ R @ (model.u - u_ref)
     # terminal cost
-    f_terminal = (x - x_ref).T @ Q_terminal @ (x - x_ref)
-    g_terminal = []
-
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u)
+    f_terminal = (model.x - x_ref).T @ Q_terminal @ (model.x - x_ref)
 
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
-    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal,
-                           lbx=lbx, ubx=ubx)
+    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, lbx=lbx, ubx=ubx)
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)
@@ -89,35 +98,6 @@ def solve_example():
 def main():
     results = solve_example()
     plot_results(results)
-
-
-def plot_results(results):
-    nosnoc.latexify_plot()
-
-    x_traj = np.array(results["x_traj"])
-
-    plt.figure()
-    # states
-    plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], x_traj[:, 0], label='$q_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 1], label='$q_2$ - pole')
-    plt.legend()
-    plt.grid()
-
-    plt.subplot(3, 1, 2)
-    plt.plot(results["t_grid"], x_traj[:, 2], label='$v_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 3], label='$v_2$ - pole')
-    plt.legend()
-    plt.grid()
-
-    # controls
-    plt.subplot(3, 1, 3)
-    plt.step(results["t_grid_u"], [results["u_traj"][0]] + results["u_traj"], label='u')
-
-    plt.legend()
-    plt.grid()
-
-    plt.show()
 
 
 if __name__ == "__main__":

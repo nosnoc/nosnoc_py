@@ -1,8 +1,9 @@
 import numpy as np
 from casadi import SX, horzcat, vertcat, cos, sin, inv
-import matplotlib.pyplot as plt
-
 import nosnoc
+
+from pendulum_utils import plot_results
+
 
 
 def solve_paramteric_example(with_global_var=False):
@@ -126,36 +127,6 @@ def solve_paramteric_example(with_global_var=False):
 def main():
     results = solve_paramteric_example()
     plot_results(results)
-
-
-
-def plot_results(results):
-    nosnoc.latexify_plot()
-
-    x_traj = np.array(results["x_traj"])
-
-    plt.figure()
-    # states
-    plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], x_traj[:, 0], label='$q_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 1], label='$q_2$ - pole')
-    plt.legend()
-    plt.grid()
-
-    plt.subplot(3, 1, 2)
-    plt.plot(results["t_grid"], x_traj[:, 2], label='$v_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 3], label='$v_2$ - pole')
-    plt.legend()
-    plt.grid()
-
-    # controls
-    plt.subplot(3, 1, 3)
-    plt.step(results["t_grid_u"], [results["u_traj"][0]] + results["u_traj"], label='u')
-
-    plt.legend()
-    plt.grid()
-
-    plt.show()
 
 
 if __name__ == "__main__":
