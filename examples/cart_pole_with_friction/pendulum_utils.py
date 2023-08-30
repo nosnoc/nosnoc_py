@@ -5,6 +5,8 @@ import nosnoc
 import numpy as np
 
 nosnoc.latexify_plot()
+
+
 def plot_results(results):
 
     x_traj = np.array(results["x_traj"])
@@ -48,7 +50,7 @@ def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
     N = Xtraj.shape[0]
     pendulum_length = 1.0
     cart_width = .2
-    cart_height =.1
+    cart_height = .1
 
     q1 = Xtraj[:, 0]
     q2 = Xtraj[:, 1]
@@ -69,11 +71,16 @@ def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
         ax.plot([xmin, xmax], [0, 0], 'k--')
 
         # draw rectancle for cart
-        cart = mpl.patches.Rectangle((q1[i] - cart_width / 2, 0 - cart_height / 2), cart_width, cart_height, facecolor='C0')
+        cart = mpl.patches.Rectangle((q1[i] - cart_width / 2, 0 - cart_height / 2),
+                                     cart_width,
+                                     cart_height,
+                                     facecolor='C0')
         ax.add_patch(cart)
 
         # draw line for pendulum
-        pendu = mpl.lines.Line2D([q1[i], pendu_tip_x[i]], [0, pendu_tip_y[i]], color='k', linewidth=2)
+        pendu = mpl.lines.Line2D([q1[i], pendu_tip_x[i]], [0, pendu_tip_y[i]],
+                                 color='k',
+                                 linewidth=2)
         ax.add_line(pendu)
 
         # trace of pendulum tip
@@ -83,10 +90,11 @@ def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
         ax.set_ylim([-1.2, 1.2])
         ax.set_aspect('equal')
 
-    ani = FuncAnimation(fig, animate, N, interval=dt*1000, repeat_delay=500, repeat=True)
+    ani = FuncAnimation(fig, animate, N, interval=dt * 1000, repeat_delay=500, repeat=True)
     if saveas is not None:
         ani.save(saveas, dpi=100)
     return ani
+
 
 def plot_sigma_experiment(sigma_values, objective_values):
 

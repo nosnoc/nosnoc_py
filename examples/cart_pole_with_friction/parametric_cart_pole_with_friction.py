@@ -5,7 +5,6 @@ import nosnoc
 from pendulum_utils import plot_results
 
 
-
 def solve_paramteric_example(with_global_var=False):
     # opts
     opts = nosnoc.NosnocOpts()
@@ -102,17 +101,30 @@ def solve_paramteric_example(with_global_var=False):
     f_terminal = (x - x_ref).T @ Q_terminal @ (x - x_ref)
     g_terminal = []
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, u=u,
-                               p_global=p_global, p_global_val=p_global_val,
+    model = nosnoc.NosnocModel(x=x,
+                               F=F,
+                               S=S,
+                               c=c,
+                               x0=x0,
+                               u=u,
+                               p_global=p_global,
+                               p_global_val=p_global_val,
                                p_time_var=p_time_var,
-                               v_global=v_global
-    )
+                               v_global=v_global)
 
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
-    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal,
-                           lbx=lbx, ubx=ubx, lbv_global=lbv_global, ubv_global=ubv_global, v_global_guess=v_global_guess)
+    ocp = nosnoc.NosnocOcp(lbu=lbu,
+                           ubu=ubu,
+                           f_q=f_q,
+                           f_terminal=f_terminal,
+                           g_terminal=g_terminal,
+                           lbx=lbx,
+                           ubx=ubx,
+                           lbv_global=lbv_global,
+                           ubv_global=ubv_global,
+                           v_global_guess=v_global_guess)
 
     # create solver
     solver = nosnoc.NosnocSolver(opts, model, ocp)
@@ -123,6 +135,7 @@ def solve_paramteric_example(with_global_var=False):
     # solve OCP
     results = solver.solve()
     return results
+
 
 def main():
     results = solve_paramteric_example()

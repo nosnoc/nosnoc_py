@@ -5,7 +5,7 @@ from pendulum_utils import plot_results
 import nosnoc
 
 
-def get_cart_pole_model_and_ocp(F_friction: float=2.0, use_fillipov: bool = True):
+def get_cart_pole_model_and_ocp(F_friction: float = 2.0, use_fillipov: bool = True):
     # symbolics
     px = ca.SX.sym('px')
     theta = ca.SX.sym('theta')
@@ -24,7 +24,7 @@ def get_cart_pole_model_and_ocp(F_friction: float=2.0, use_fillipov: bool = True
     g = 9.81
     # Inertia matrix
     M = ca.vertcat(ca.horzcat(m1 + m2, m2 * link_length * ca.cos(theta)),
-                ca.horzcat(m2 * link_length * ca.cos(theta), m2 * link_length**2))
+                   ca.horzcat(m2 * link_length * ca.cos(theta), m2 * link_length**2))
     # Coriolis force
     C = ca.SX.zeros(2, 2)
     C[0, 1] = -m2 * link_length * theta_dot * ca.sin(theta)
@@ -49,7 +49,8 @@ def get_cart_pole_model_and_ocp(F_friction: float=2.0, use_fillipov: bool = True
     else:
         sigma = ca.SX.sym('sigma')
 
-        f_ode = ca.vertcat(q_dot, ca.inv(M) @ (f_all - ca.vertcat( F_friction* ca.tanh(v/ sigma), 0)))
+        f_ode = ca.vertcat(q_dot,
+                           ca.inv(M) @ (f_all - ca.vertcat(F_friction * ca.tanh(v / sigma), 0)))
         model = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_ode, x0=x0, u=u, p=sigma)
 
     ## OCP description
@@ -97,6 +98,7 @@ def solve_example():
 
     results = solver.solve()
     return results
+
 
 def main():
     results = solve_example()

@@ -5,7 +5,8 @@ from cart_pole_with_friction import get_cart_pole_model_and_ocp
 from pendulum_utils import plot_results, plot_sigma_experiment
 
 
-def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: int, n_s: int, N_FE: int):
+def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: int, n_s: int,
+                          N_FE: int):
     B, C, D, _ = generate_butcher_tableu_integral(n_s, IrkSchemes.RADAU_IIA)
 
     # Time horizon
@@ -22,7 +23,7 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
     f_terminal = ca.Function('f_terminal', [x], [ocp.f_terminal])
 
     # Control discretization
-    h = T/(N*N_FE)
+    h = T / (N * N_FE)
 
     # Start with an empty NLP
     w = []
@@ -58,7 +59,7 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
 
         # Loop over integration steps / finite elements
         for i_fe in range(N_FE):
-            Xk_end = D[0]*Xk
+            Xk_end = D[0] * Xk
             # State at collocation points
             Xc = []
             for j in range(n_s):
@@ -70,23 +71,23 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
                 w0.append(np.zeros((nx,)))
 
             # Loop over collocation points
-            for j in range(1,n_s+1):
+            for j in range(1, n_s + 1):
                 # Expression for the state derivative at the collocation point
-                xp = C[0,j]*Xk
+                xp = C[0, j] * Xk
                 for r in range(n_s):
-                    xp = xp + C[r+1,j] * Xc[r]
+                    xp = xp + C[r + 1, j] * Xc[r]
 
                 # Append collocation equations
-                fj, qj = f_ode(Xc[j-1], Uk, model.p)
-                g.append(h*fj - xp)
+                fj, qj = f_ode(Xc[j - 1], Uk, model.p)
+                g.append(h * fj - xp)
                 lbg.append(np.zeros((nx,)))
                 ubg.append(np.zeros((nx,)))
 
                 # Add contribution to the end state
-                Xk_end = Xk_end + D[j]*Xc[j-1]
+                Xk_end = Xk_end + D[j] * Xc[j - 1]
 
                 # Add contribution to quadrature function
-                objective = objective + B[j]*qj*h
+                objective = objective + B[j] * qj * h
 
             # New NLP variable for state at end of interval
             Xk = ca.SX.sym(f'X_{k+1}', nx)
@@ -97,10 +98,9 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
             x_plot.append(Xk)
 
             # Add equality constraint
-            g.append(Xk_end-Xk)
+            g.append(Xk_end - Xk)
             lbg.append(np.zeros((nx,)))
             ubg.append(np.zeros((nx,)))
-
 
     objective += f_terminal(Xk)
 
@@ -114,7 +114,17 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
     ubg = np.concatenate(ubg)
 
     # NLP dict
-    nlp = {'f': objective, 'x': w, 'g': g, 'p': model.p, 'w0': w0, 'lbw': lbw, 'ubw': ubw, 'lbg': lbg, 'ubg': ubg}
+    nlp = {
+        'f': objective,
+        'x': w,
+        'g': g,
+        'p': model.p,
+        'w0': w0,
+        'lbw': lbw,
+        'ubw': ubw,
+        'lbg': lbg,
+        'ubg': ubg
+    }
     casadi_nlp = {'f': objective, 'x': w, 'g': g, 'p': model.p}
     return nlp, casadi_nlp
 
@@ -133,20 +143,26 @@ def collocation_ocp_example():
 
     solver = ca.nlpsol('solver', 'ipopt', casadi_nlp)
 
-    sol = solver(x0=nlp['w0'], lbx=nlp['lbw'], ubx=nlp['ubw'], lbg=nlp['lbg'], ubg=nlp['ubg'], p=sigma0)
+    sol = solver(x0=nlp['w0'],
+                 lbx=nlp['lbw'],
+                 ubx=nlp['ubw'],
+                 lbg=nlp['lbg'],
+                 ubg=nlp['ubg'],
+                 p=sigma0)
 
     w_opt = sol['x'].full()
 
     # split into x and u values
     nx = casadi_length(model.x)
     nu = casadi_length(model.u)
-    idx_diff = nu + nx * (n_s * N_FE) + (N_FE)*nx # between x values at shooting nodes
+    idx_diff = nu + nx * (n_s * N_FE) + (N_FE) * nx  # between x values at shooting nodes
     x_traj = np.hstack([w_opt[i::idx_diff] for i in range(nx)])
     u_traj = w_opt[nx::idx_diff].tolist()
-    t_grid = np.linspace(0, terminal_time, N+1)
+    t_grid = np.linspace(0, terminal_time, N + 1)
 
     results = {'x_traj': x_traj, 'u_traj': u_traj, 't_grid': t_grid, 't_grid_u': t_grid}
     plot_results(results)
+
 
 def simulate_smoothed_model_cart_pole():
     terminal_time = 5.0
@@ -155,33 +171,42 @@ def simulate_smoothed_model_cart_pole():
 
     # create integrator
     p_integrator = ca.vertcat(model.u, model.p)
-    Phi = ca.integrator('integrator', 'idas', {'x': model.x, 'ode': model.f_nonsmooth_ode, 'p': p_integrator}, {'tf': terminal_time/Nsim})
+    Phi = ca.integrator('integrator', 'idas', {
+        'x': model.x,
+        'ode': model.f_nonsmooth_ode,
+        'p': p_integrator
+    }, {'tf': terminal_time / Nsim})
 
     nx = casadi_length(model.x)
 
     # define parameters / controls
     p_traj = np.ones((casadi_length(p_integrator), Nsim))
-    p_traj[0, Nsim//2:] = -2
+    p_traj[0, Nsim // 2:] = -2
 
     xcurrent = np.zeros((nx,))
-    simX = np.zeros((nx, Nsim+1))
+    simX = np.zeros((nx, Nsim + 1))
     simX[:, 0] = xcurrent
     # simulation loop
     for i in range(Nsim):
         out = Phi(x0=xcurrent, p=p_traj[:, i])
         xcurrent = out['xf'].full().flatten()
-        simX[:, i+1] = xcurrent
+        simX[:, i + 1] = xcurrent
 
-    t_grid = np.linspace(0, terminal_time, Nsim+1)
-    results = {'x_traj': simX.T, 't_grid': t_grid, 't_grid_u': t_grid, 'u_traj': p_traj[0,:].tolist()}
+    t_grid = np.linspace(0, terminal_time, Nsim + 1)
+    results = {
+        'x_traj': simX.T,
+        't_grid': t_grid,
+        't_grid_u': t_grid,
+        'u_traj': p_traj[0, :].tolist()
+    }
     plot_results(results)
+
 
 def smoothing_collocation_experiment():
     terminal_time = 5.0
     N = 30
     n_s = 1
     N_FE = 2
-
 
     model, ocp = get_cart_pole_model_and_ocp(F_friction=2.0, use_fillipov=False)
     nlp, casadi_nlp = setup_collocation_nlp(model, ocp, terminal_time, N, n_s, N_FE)
@@ -193,11 +218,17 @@ def smoothing_collocation_experiment():
     sigma_values = np.logspace(1, -8, n_sigmas)
     objective_values = np.zeros((n_sigmas,))
     for i, sigma0 in enumerate(sigma_values):
-        sol = solver(x0=nlp['w0'], lbx=nlp['lbw'], ubx=nlp['ubw'], lbg=nlp['lbg'], ubg=nlp['ubg'], p=sigma0)
+        sol = solver(x0=nlp['w0'],
+                     lbx=nlp['lbw'],
+                     ubx=nlp['ubw'],
+                     lbg=nlp['lbg'],
+                     ubg=nlp['ubg'],
+                     p=sigma0)
         objective_values[i] = sol['f'].full().flatten()
 
     # print(f"{sigma_values=} {objective_values=}")
     plot_sigma_experiment(sigma_values, objective_values)
+
 
 if __name__ == "__main__":
     # simulate_smoothed_model_cart_pole()
