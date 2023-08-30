@@ -1,6 +1,5 @@
 import numpy as np
 import casadi as ca
-from pendulum_utils import plot_results
 
 import nosnoc
 
@@ -94,16 +93,7 @@ def solve_example():
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)
-    solver.problem.print()
+    # solver.problem.print()
 
     results = solver.solve()
     return results
-
-
-def main():
-    results = solve_example()
-    plot_results(results)
-
-
-if __name__ == "__main__":
-    main()

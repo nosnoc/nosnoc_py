@@ -2,24 +2,17 @@ import numpy as np
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc
 
-from pendulum_utils import plot_results
-
-
 def solve_paramteric_example(with_global_var=False):
-    # opts
+    # options
     opts = nosnoc.NosnocOpts()
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.n_s = 2
-    opts.homotopy_update_rule = nosnoc.HomotopyUpdateRule.SUPERLINEAR
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
-    opts.equidistant_control_grid = True
+    # opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
 
-    opts.N_stages = 50  # number of control intervals
+    opts.N_stages = 20  # number of control intervals
     opts.N_finite_elements = 2  # number of finite element on every control intevral
-    opts.terminal_time = 4.0  # Time horizon
+    opts.terminal_time = 5.0  # Time horizon
     opts.print_level = 1
-    # faster options
-    opts.N_stages = 15  # number of control intervals
 
     ## Model defintion
     q = SX.sym('q', 2)
@@ -46,7 +39,7 @@ def solve_paramteric_example(with_global_var=False):
         v_global = m1
         lbv_global = np.array([1.0])
         ubv_global = np.array([100.0])
-        v_global_guess = np.array([1.5])
+        v_global_guess = np.array([1.2])
     else:
         p_global = vertcat(m1, m2)
         p_global_val = np.array([1.0, 0.1])
@@ -86,21 +79,6 @@ def solve_paramteric_example(with_global_var=False):
     # specify initial and end state, cost ref and weight matrix
     x0 = np.array([1, 0 / 180 * np.pi, 0, 0])  # start downwards
 
-    Q = np.diag([1.0, 100.0, 1.0, 1.0])
-    Q_terminal = np.diag([100.0, 100.0, 10.0, 10.0])
-    R = 1.0
-
-    # bounds
-    ubx = np.array([5.0, 240 / 180 * np.pi, 20.0, 20.0])
-    lbx = np.array([-0.0, -240 / 180 * np.pi, -20.0, -20.0])
-    u_max = 30.0
-
-    # Stage cost
-    f_q = (x - x_ref).T @ Q @ (x - x_ref) + (u - u_ref).T @ R @ (u - u_ref)
-    # terminal cost
-    f_terminal = (x - x_ref).T @ Q_terminal @ (x - x_ref)
-    g_terminal = []
-
     model = nosnoc.NosnocModel(x=x,
                                F=F,
                                S=S,
@@ -112,6 +90,20 @@ def solve_paramteric_example(with_global_var=False):
                                p_time_var=p_time_var,
                                v_global=v_global)
 
+    Q = np.diag([10, 100, 1, 1])
+    Q_terminal = np.diag([500, 100, 10, 10])
+    R = 1.0
+
+    # Stage cost
+    f_q = (model.x - x_ref).T @ Q @ (model.x - x_ref) + (model.u - u_ref).T @ R @ (model.u - u_ref)
+    # terminal cost
+    f_terminal = (model.x - x_ref).T @ Q_terminal @ (model.x - x_ref)
+
+    # bounds
+    ubx = np.array([5.0, np.inf, np.inf, np.inf])
+    lbx = -np.array([5.0, np.inf, np.inf, np.inf])
+
+    u_max = 30.0
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
@@ -119,7 +111,6 @@ def solve_paramteric_example(with_global_var=False):
                            ubu=ubu,
                            f_q=f_q,
                            f_terminal=f_terminal,
-                           g_terminal=g_terminal,
                            lbx=lbx,
                            ubx=ubx,
                            lbv_global=lbv_global,
@@ -135,12 +126,3 @@ def solve_paramteric_example(with_global_var=False):
     # solve OCP
     results = solver.solve()
     return results
-
-
-def main():
-    results = solve_paramteric_example()
-    plot_results(results)
-
-
-if __name__ == "__main__":
-    main()
