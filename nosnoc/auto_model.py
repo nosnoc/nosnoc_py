@@ -37,7 +37,7 @@ class NosnocAutoModel:
                  x0: np.ndarray,
                  u: ca.SX,
                  f_nonsmooth_ode: ca.SX,
-                 p: Optional[ca.SX],
+                 p: Optional[ca.SX] = None,
                  ):
         self.x = x
         self.x0 = x0
