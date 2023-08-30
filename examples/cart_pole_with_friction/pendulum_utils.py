@@ -4,8 +4,8 @@ from matplotlib.animation import FuncAnimation
 import nosnoc
 import numpy as np
 
+nosnoc.latexify_plot()
 def plot_results(results):
-    nosnoc.latexify_plot()
 
     x_traj = np.array(results["x_traj"])
 
@@ -61,14 +61,14 @@ def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
     xmax = max(np.max(q1), np.max(pendu_tip_x)) + 5 * cart_width / 2
 
     fig, ax = plt.subplots()
-    
+
     def animate(i):
         ax.clear()
 
         # level of cart
         ax.plot([xmin, xmax], [0, 0], 'k--')
 
-        # draw rectancle for cat
+        # draw rectancle for cart
         cart = mpl.patches.Rectangle((q1[i] - cart_width / 2, 0 - cart_height / 2), cart_width, cart_height, facecolor='C0')
         ax.add_patch(cart)
 
@@ -87,3 +87,12 @@ def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
     if saveas is not None:
         ani.save(saveas, dpi=100)
     return ani
+
+def plot_sigma_experiment(sigma_values, objective_values):
+
+    plt.plot(sigma_values, objective_values)
+    plt.grid()
+    plt.xlabel(r'smoothing parameter $\sigma$')
+    plt.ylabel(r'objective function value')
+    plt.xscale('log')
+    plt.show()

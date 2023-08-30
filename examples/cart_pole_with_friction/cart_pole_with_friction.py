@@ -5,7 +5,7 @@ from pendulum_utils import plot_results
 import nosnoc
 
 
-def get_cart_pole_with_friction_model(F_friction: float=2.0, use_fillipov: bool = True):
+def get_cart_pole_ocp_description(F_friction: float=2.0, use_fillipov: bool = True):
     # symbolics
     px = ca.SX.sym('px')
     theta = ca.SX.sym('theta')
@@ -50,47 +50,50 @@ def get_cart_pole_with_friction_model(F_friction: float=2.0, use_fillipov: bool 
         sigma = ca.SX.sym('sigma')
 
         f_ode = ca.vertcat(q_dot, ca.inv(M) @ (f_all - ca.vertcat( F_friction* ca.tanh(v/ sigma), 0)))
-        model = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_ode, x0=x0, u=u)
-    return model
+        model = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_ode, x0=x0, u=u, p=sigma)
 
-def solve_example():
-    # opts
-    opts = nosnoc.NosnocOpts()
-    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
-    opts.n_s = 2
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
-
-    opts.N_stages = 20  # number of control intervals
-    opts.N_finite_elements = 2  # number of finite element on every control intevral
-    opts.terminal_time = 5.0  # Time horizon
-    opts.print_level = 1
-
-    model = get_cart_pole_with_friction_model()
-    # specify initial, cost ref and weight matrix
+    ## OCP description
+    # cost
     x_ref = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
-
-    Q = np.diag([1.0, 100.0, 1.0, 1.0])
+    u_ref = 0.0
+    Q = np.diag([10, 100, 1, 1])
     Q_terminal = np.diag([500, 100, 10, 10])
     R = 1.0
-
-    # bounds
-    ubx = np.array([5.0, 240 / 180 * np.pi, 20.0, 20.0])
-    lbx = np.array([-0.0, -240 / 180 * np.pi, -20.0, -20.0])
-    u_max = 30.0
-    u_ref = 0.0
 
     # Stage cost
     f_q = (model.x - x_ref).T @ Q @ (model.x - x_ref) + (model.u - u_ref).T @ R @ (model.u - u_ref)
     # terminal cost
     f_terminal = (model.x - x_ref).T @ Q_terminal @ (model.x - x_ref)
 
+    # bounds
+    ubx = np.array([5.0, np.inf, np.inf, np.inf])
+    lbx = -np.array([5.0, np.inf, np.inf, np.inf])
+
+    u_max = 30.0
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, f_terminal=f_terminal, lbx=lbx, ubx=ubx)
+    return model, ocp
+
+
+def solve_example():
+    # opts
+    opts = nosnoc.NosnocOpts()
+    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
+    opts.n_s = 2
+    # opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
+
+    opts.N_stages = 20  # number of control intervals
+    opts.N_finite_elements = 2  # number of finite element on every control intevral
+    opts.terminal_time = 5.0  # Time horizon
+    opts.print_level = 1
+
+    model, ocp = get_cart_pole_ocp_description()
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)
+    solver.problem.print()
 
     results = solver.solve()
     return results
