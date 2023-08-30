@@ -5,7 +5,7 @@ from pendulum_utils import plot_results
 import nosnoc
 
 
-def get_cart_pole_ocp_description(F_friction: float=2.0, use_fillipov: bool = True):
+def get_cart_pole_model_and_ocp(F_friction: float=2.0, use_fillipov: bool = True):
     # symbolics
     px = ca.SX.sym('px')
     theta = ca.SX.sym('theta')
@@ -89,7 +89,7 @@ def solve_example():
     opts.terminal_time = 5.0  # Time horizon
     opts.print_level = 1
 
-    model, ocp = get_cart_pole_ocp_description()
+    model, ocp = get_cart_pole_model_and_ocp()
 
     ## Solve OCP
     solver = nosnoc.NosnocSolver(opts, model, ocp)

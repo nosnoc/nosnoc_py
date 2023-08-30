@@ -1,46 +1,12 @@
 import casadi as ca
 import numpy as np
-from nosnoc import casadi_length, NosnocOcp, NosnocAutoModel, print_casadi_vector
-from cart_pole_with_friction import get_cart_pole_ocp_description
+from nosnoc import casadi_length, NosnocOcp, NosnocAutoModel, print_casadi_vector, generate_butcher_tableu_integral, IrkSchemes
+from cart_pole_with_friction import get_cart_pole_model_and_ocp
 from pendulum_utils import plot_results, plot_sigma_experiment
 
-def generate_collocation_coefficients(n_s: int):
-
-    # Get collocation points
-    tau_root = np.append(0, ca.collocation_points(n_s, 'radau'))
-
-    # Coefficients of the collocation equation
-    C = np.zeros((n_s+1, n_s+1))
-
-    # Coefficients of the continuity equation
-    D = np.zeros(n_s+1)
-
-    # Coefficients of the quadrature function
-    B = np.zeros(n_s+1)
-
-    # Construct polynomial basis
-    for j in range(n_s+1):
-        # Construct Lagrange polynomials to get the polynomial basis at the collocation point
-        p = np.poly1d([1])
-        for r in range(n_s+1):
-            if r != j:
-                p *= np.poly1d([1, -tau_root[r]]) / (tau_root[j]-tau_root[r])
-
-        # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
-        D[j] = p(1.0)
-
-        # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
-        pder = np.polyder(p)
-        for r in range(n_s+1):
-            C[j,r] = pder(tau_root[r])
-
-        # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
-        pint = np.polyint(p)
-        B[j] = pint(1.0)
-    return B, C, D
 
 def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: int, n_s: int, N_FE: int):
-    B, C, D = generate_collocation_coefficients(n_s)
+    B, C, D, _ = generate_butcher_tableu_integral(n_s, IrkSchemes.RADAU_IIA)
 
     # Time horizon
     T = 10.
@@ -153,16 +119,16 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
     return nlp, casadi_nlp
 
 
-def main():
+def collocation_ocp_example():
     terminal_time = 5.0
     N = 30
     n_s = 1
     N_FE = 2
 
     # smoothing parameter
-    sigma0 = 1.0
+    sigma0 = 1e0
 
-    model, ocp = get_cart_pole_ocp_description(F_friction=2.0, use_fillipov=False)
+    model, ocp = get_cart_pole_model_and_ocp(F_friction=2.0, use_fillipov=False)
     nlp, casadi_nlp = setup_collocation_nlp(model, ocp, terminal_time, N, n_s, N_FE)
 
     solver = ca.nlpsol('solver', 'ipopt', casadi_nlp)
@@ -182,15 +148,42 @@ def main():
     results = {'x_traj': x_traj, 'u_traj': u_traj, 't_grid': t_grid, 't_grid_u': t_grid}
     plot_results(results)
 
+def simulate_smoothed_model_cart_pole():
+    terminal_time = 5.0
+    Nsim = 100
+    model, ocp = get_cart_pole_model_and_ocp(F_friction=2.0, use_fillipov=False)
 
-def smoothing_experiment():
+    # create integrator
+    p_integrator = ca.vertcat(model.u, model.p)
+    Phi = ca.integrator('integrator', 'idas', {'x': model.x, 'ode': model.f_nonsmooth_ode, 'p': p_integrator}, {'tf': terminal_time/Nsim})
+
+    nx = casadi_length(model.x)
+
+    # define parameters / controls
+    p_traj = np.ones((casadi_length(p_integrator), Nsim))
+    p_traj[0, Nsim//2:] = -2
+
+    xcurrent = np.zeros((nx,))
+    simX = np.zeros((nx, Nsim+1))
+    simX[:, 0] = xcurrent
+    # simulation loop
+    for i in range(Nsim):
+        out = Phi(x0=xcurrent, p=p_traj[:, i])
+        xcurrent = out['xf'].full().flatten()
+        simX[:, i+1] = xcurrent
+
+    t_grid = np.linspace(0, terminal_time, Nsim+1)
+    results = {'x_traj': simX.T, 't_grid': t_grid, 't_grid_u': t_grid, 'u_traj': p_traj[0,:].tolist()}
+    plot_results(results)
+
+def smoothing_collocation_experiment():
     terminal_time = 5.0
     N = 30
     n_s = 1
     N_FE = 2
 
 
-    model, ocp = get_cart_pole_ocp_description(F_friction=2.0, use_fillipov=False)
+    model, ocp = get_cart_pole_model_and_ocp(F_friction=2.0, use_fillipov=False)
     nlp, casadi_nlp = setup_collocation_nlp(model, ocp, terminal_time, N, n_s, N_FE)
 
     solver = ca.nlpsol('solver', 'ipopt', casadi_nlp)
@@ -207,5 +200,6 @@ def smoothing_experiment():
     plot_sigma_experiment(sigma_values, objective_values)
 
 if __name__ == "__main__":
-    main()
-    # smoothing_experiment()
+    # simulate_smoothed_model_cart_pole()
+    collocation_ocp_example()
+    # smoothing_collocation_experiment()

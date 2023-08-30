@@ -8,7 +8,7 @@ from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComp
 from .helpers import NosnocSimLooper
 from .utils import casadi_length, casadi_vertcat_list, print_casadi_vector, flatten_layer, make_object_json_dumpable
 from .plot_utils import plot_timings, plot_iterates, latexify_plot
-from .rk_utils import rk4
+from .rk_utils import rk4, generate_butcher_tableu_integral, generate_butcher_tableu
 
 import warnings
 warnings.simplefilter("always")
