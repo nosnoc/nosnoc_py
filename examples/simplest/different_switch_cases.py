@@ -49,6 +49,7 @@ def get_simplest_model_switch():
 
     return model
 
+
 def get_spontaneous_switch_model():
     # Variable defintion
     x = SX.sym("x")
@@ -64,7 +65,7 @@ def get_spontaneous_switch_model():
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=0*X0, name='sponteneous')
+    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=0 * X0, name='sponteneous')
 
     return model
 
@@ -106,6 +107,7 @@ def main(variant='switch'):
     plot_results(results)
 
     return
+
 
 def plot_results(results):
     nosnoc.latexify_plot()

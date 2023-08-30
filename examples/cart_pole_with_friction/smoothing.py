@@ -35,17 +35,12 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
     lbg = []
     ubg = []
 
-    # For plotting x and u given w
-    x_plot = []
-    u_plot = []
-
     # "Lift" initial conditions
     Xk = ca.SX.sym('X0', nx)
     w.append(Xk)
     lbw.append(x0)
     ubw.append(x0)
     w0.append(x0)
-    x_plot.append(Xk)
 
     # Formulate the NLP
     for k in range(N):
@@ -55,7 +50,6 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
         lbw.append(ocp.lbu)
         ubw.append(ocp.ubu)
         w0.append(np.zeros((nu,)))
-        u_plot.append(Uk)
 
         # Loop over integration steps / finite elements
         for i_fe in range(N_FE):
@@ -95,7 +89,6 @@ def setup_collocation_nlp(model: NosnocAutoModel, ocp: NosnocOcp, T: float, N: i
             lbw.append(ocp.lbx)
             ubw.append(ocp.ubx)
             w0.append(np.zeros((nx,)))
-            x_plot.append(Xk)
 
             # Add equality constraint
             g.append(Xk_end - Xk)
@@ -134,6 +127,7 @@ def collocation_ocp_example():
     N = 30
     n_s = 1
     N_FE = 2
+    x_ref = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
 
     # smoothing parameter
     sigma0 = 1e0
@@ -159,6 +153,9 @@ def collocation_ocp_example():
     x_traj = np.hstack([w_opt[i::idx_diff] for i in range(nx)])
     u_traj = w_opt[nx::idx_diff].tolist()
     t_grid = np.linspace(0, terminal_time, N + 1)
+
+    distance_to_target = np.abs(x_ref-x_traj[-1,:])
+    print(f"{distance_to_target=}")
 
     results = {'x_traj': x_traj, 'u_traj': u_traj, 't_grid': t_grid, 't_grid_u': t_grid}
     plot_results(results)
