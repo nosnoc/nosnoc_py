@@ -22,7 +22,7 @@ def get_default_options():
     return opts
 
 
-def get_simplest_model_sliding():
+def get_simplest_model_sliding(x0=X0):
     # Variable defintion
     x1 = SX.sym("x1")
     x = x1
@@ -31,17 +31,17 @@ def get_simplest_model_sliding():
     # sign matrix for the modes
     S = [np.array([[-1], [1]])]
 
-    f_11 = 3
+    f_11 = 1
     f_12 = -1
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, name='simplest_sliding')
+    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, name='simplest_sliding')
 
     return model
 
 
-def get_simplest_model_switch():
+def get_simplest_model_switch(x0=X0):
     # Variable defintion
     x1 = SX.sym("x1")
     x = x1
@@ -60,7 +60,7 @@ def get_simplest_model_switch():
     return model
 
 
-def solve_simplest_example(opts=None, model=None):
+def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     if opts is None:
         opts = get_default_options()
         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
@@ -68,14 +68,13 @@ def solve_simplest_example(opts=None, model=None):
     if model is None:
         model = get_simplest_model_sliding()
 
-    Nsim = 1
-    Tstep = TSIM / Nsim
+    Tstep = Tsim / Nsim
     opts.terminal_time = Tstep
 
     solver = nosnoc.NosnocSolver(opts, model)
 
     # loop
-    looper = nosnoc.NosnocSimLooper(solver, X0, Nsim)
+    looper = nosnoc.NosnocSimLooper(solver, x0, Nsim)
     looper.run()
     results = looper.get_results()
     # solver.print_problem()

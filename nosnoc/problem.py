@@ -473,8 +473,7 @@ class FiniteElement(FiniteElementBase):
             self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
 
         # g_z_all constraint for boundary point and continuity of algebraic variables.
-        if not opts.right_boundary_point_explicit and opts.use_fesd and (
-                self.fe_idx < opts.Nfe_list[self.ctrl_idx] - 1):
+        if not opts.right_boundary_point_explicit and opts.use_fesd:
             self.add_constraint(
                 model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk, self.p))
 
