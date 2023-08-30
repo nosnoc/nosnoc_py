@@ -84,6 +84,16 @@ class NosnocSolverBase(ABC):
         elif field == 'p_time_var':
             for i in range(self.opts.N_stages):
                 self.model.p_val_ctrl_stages[i, :dims.n_p_time_var] = value[i, :]
+        elif field == 'theta':
+            if value.shape[0] == sum(self.opts.Nfe_list):
+                i = 0
+                for sub_idx in prob.ind_theta:
+                    for ssub_idx in sub_idx:
+                        for sssub_idx in ssub_idx:
+                            prob.w0[sssub_idx] = value[i, :]
+                        i += 1
+            else:
+                raise Exception('set for theta only implemented for value of shape (sum(Nfe_list), ntheta)')
         elif field == 'w':
             prob.w0 = value
             if self.opts.initialization_strategy is not InitializationStrategy.EXTERNAL:
