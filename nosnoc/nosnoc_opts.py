@@ -5,7 +5,7 @@ import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
-from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling
+from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
 
 
 def _assign(dictionary, keys, value):
@@ -103,6 +103,11 @@ class NosnocOpts:
 
     time_freezing: bool = False
     time_freezing_tolerance: float = 1e-3
+
+    # Speed of time handling
+    speed_of_time_variables: SpeedOfTimeVariableMode = SpeedOfTimeVariableMode.NONE
+    speed_of_time_min: float = 1.0
+    speed_of_time_max: float = 25.0
 
     rootfinder_for_initial_z: bool = False
 

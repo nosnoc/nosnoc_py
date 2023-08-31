@@ -7,7 +7,7 @@ import casadi as ca
 
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import MpccMode, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, ConstraintHandling
+from nosnoc.nosnoc_types import MpccMode, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, ConstraintHandling, SpeedOfTimeVariableMode
 from nosnoc.ocp import NosnocOcp
 from nosnoc.utils import casadi_length, casadi_vertcat_list, casadi_sum_list, flatten, increment_indices, create_empty_list_matrix
 
@@ -432,7 +432,7 @@ class FiniteElement(FiniteElementBase):
 
         return X_fe
 
-    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX) -> None:
+    def forward_simulation(self, ocp: NosnocOcp, Uk: ca.SX, sot: ca.SX) -> None:
         opts = self.opts
         model = self.model
 
@@ -453,8 +453,8 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
-            qj = ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
+            fj = sot*model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
+            qj = sot*ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gqj = ocp.g_path_fun(X_fe[j], Uk, self.p, model.v_global)
             self.add_constraint(gqj, ocp.lbg, ocp.ubg)
 
@@ -569,6 +569,11 @@ class NosnocProblem(NosnocFormulationObject):
         Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
 
+        # Create stage local speed of time variables
+        if self.opts.speed_of_time_variables == SpeedOfTimeVariableMode.LOCAL:
+            sot = ca.SX.sym(f'sot_{ctrl_idx}', 1)
+            self.add_variable(sot, self.ind_sot, [self.opts.speed_of_time_min], [self.opts.speed_of_time_max], [1.0])
+
         # Create Finite elements in this control stage
         control_stage = []
         for ii in range(self.opts.Nfe_list[ctrl_idx]):
@@ -596,6 +601,11 @@ class NosnocProblem(NosnocFormulationObject):
         # v_global
         self.add_variable(self.model.v_global, self.ind_v_global, self.ocp.lbv_global,
                           self.ocp.ubv_global, self.ocp.v_global_guess)
+
+        # add global speed of time if necessary
+        if self.opts.speed_of_time_variables == SpeedOfTimeVariableMode.GLOBAL:
+            sot = ca.SX.sym('sot', 1)
+            self.add_variables(sot, self.ind_sot, self.opts.speed_of_time_min, self.opts.speed_of_time_max, 1.0)
 
         # Generate control_stages
         prev_fe = self.fe0
@@ -682,6 +692,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_elastic = []
 
         self.ind_u = []
+        self.ind_sot = []
         self.ind_h = []
         self.ind_v_global = []
 
@@ -714,10 +725,17 @@ class NosnocProblem(NosnocFormulationObject):
 
         for ctrl_idx, stage in enumerate(self.stages):
             Uk = self.w[self.ind_u[ctrl_idx]]
+            if self.opts.speed_of_time_variables == SpeedOfTimeVariableMode.GLOBAL:
+                sot = self.w[self.ind_sot[0]]
+            elif self.opts.speed_of_time_variables == SpeedOfTimeVariableMode.LOCAL:
+                sot = self.w[self.ind_sot[ctrl_idx]]
+            else:
+                sot = ca.SX.eye(1)
+            
             for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
-                fe.forward_simulation(ocp, Uk)
+                fe.forward_simulation(ocp, Uk, sot)
 
                 # 2) Complementarity Constraints
                 fe.create_complementarity_constraints(sigma_p, tau, Uk, s_elastic)
