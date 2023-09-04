@@ -313,7 +313,7 @@ class FiniteElement(FiniteElementBase):
                         ca.SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                   dims.n_c_sys[ij]), self.ind_alpha,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
-                        opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        0.5 * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
