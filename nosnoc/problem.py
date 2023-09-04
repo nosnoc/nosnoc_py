@@ -305,7 +305,7 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
-                                      opts.init_mu * np.ones(1), ii, ij)
+                                      np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
@@ -349,7 +349,7 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
-                                      opts.init_mu * np.ones(1), opts.n_s, ij)
+                                      np.ones(1), opts.n_s, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):

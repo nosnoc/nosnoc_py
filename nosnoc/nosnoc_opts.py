@@ -44,14 +44,6 @@ class NosnocOpts:
     # used in InitializationStrategy.RK4_smoothed
     fix_active_set_fe0: bool = False
 
-    # initialization - Stewart
-    # init_theta: Optional[float] = None
-    # init_lambda: Optional[float] = None
-    init_mu: float = 1.0
-    # initialization - Step
-    init_alpha: float = 0.5  # for step only
-    init_beta: float = 1.0
-
     N_finite_elements: int = 2  #
     Nfe_list: list = field(default_factory=list)  #: list of length N_stages, Nfe per stage
 
