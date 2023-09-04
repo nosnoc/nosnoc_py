@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(name='nosnoc',
    version='0.1',
-   python_requires='>=3.7',
+   python_requires='>=3.8',
    description='Nonsmooth Numerical Optimal Control for Python',
 #    url='',
    author='Jonathan Frey, Armin Nurkanovic',
