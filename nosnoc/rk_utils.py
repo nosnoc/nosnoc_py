@@ -1052,7 +1052,7 @@ def generate_butcher_tableu(n_s, irk_scheme):
     return A, b, c, order
 
 
-def generate_butcher_tableu_integral(n_s, irk_scheme):
+def generate_butcher_tableu_integral(n_s: int, irk_scheme: IrkSchemes):
     IRK_SCHEME_TO_STRING = {IrkSchemes.GAUSS_LEGENDRE: "legendre", IrkSchemes.RADAU_IIA: "radau"}
     points = ca.collocation_points(n_s, IRK_SCHEME_TO_STRING[irk_scheme])
     tau_root = np.array([0.0] + points)

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -43,14 +43,6 @@ class NosnocOpts:
     smoothing_parameter: float = 1e1  #: used for smoothed Step representation
     # used in InitializationStrategy.RK4_smoothed
     fix_active_set_fe0: bool = False
-
-    # initialization - Stewart
-    init_theta: float = 1.0
-    init_lambda: float = 1.0
-    init_mu: float = 1.0
-    # initialization - Step
-    init_alpha: float = 0.5  # for step only
-    init_beta: float = 1.0
 
     N_finite_elements: int = 2  #
     Nfe_list: list = field(default_factory=list)  #: list of length N_stages, Nfe per stage

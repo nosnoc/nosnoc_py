@@ -187,20 +187,22 @@ class FiniteElementZero(FiniteElementBase):
         # lambda00
         if opts.pss_mode == PssMode.STEWART:
             for ij in range(dims.n_sys):
+                initial_lambda = np.ones(dims.n_f_sys[ij]) # not used
                 self.add_variable(ca.SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
                                   -np.inf * np.ones(dims.n_f_sys[ij]),
                                   np.inf * np.ones(dims.n_f_sys[ij]),
-                                  opts.init_lambda * np.ones(dims.n_f_sys[ij]), 0, ij)
+                                  initial_lambda, 0, ij)
         elif opts.pss_mode == PssMode.STEP:
             for ij in range(dims.n_sys):
+                initial_lambda = np.ones(dims.n_c_sys[ij]) # not used
                 self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
                                   self.ind_lambda_n, -np.inf * np.ones(dims.n_c_sys[ij]),
                                   np.inf * np.ones(dims.n_c_sys[ij]),
-                                  opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
+                                  initial_lambda, 0, ij)
                 self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]),
                                   self.ind_lambda_p, -np.inf * np.ones(dims.n_c_sys[ij]),
                                   np.inf * np.ones(dims.n_c_sys[ij]),
-                                  opts.init_lambda * np.ones(dims.n_c_sys[ij]), 0, ij)
+                                  initial_lambda, 0, ij)
 
 
 class FiniteElement(FiniteElementBase):
@@ -283,23 +285,27 @@ class FiniteElement(FiniteElementBase):
             if opts.pss_mode == PssMode.STEWART:
                 # add thetas
                 for ij in range(dims.n_sys):
+                    initial_theta = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
                     self.add_variable(
                         ca.SX.sym(f'theta_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
                         self.ind_theta, lb_dual * np.ones(dims.n_f_sys[ij]),
                         np.inf * np.ones(dims.n_f_sys[ij]),
-                        opts.init_theta * np.ones(dims.n_f_sys[ij]), ii, ij)
+                        initial_theta,
+                        ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
+                    initial_lambda = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
                     self.add_variable(
                         ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
                         self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]),
                         np.inf * np.ones(dims.n_f_sys[ij]),
-                        opts.init_lambda * np.ones(dims.n_f_sys[ij]), ii, ij)
+                        initial_lambda,
+                        ii, ij)
                 # add mu
                 for ij in range(dims.n_sys):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
-                                      opts.init_mu * np.ones(1), ii, ij)
+                                      np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
@@ -307,21 +313,21 @@ class FiniteElement(FiniteElementBase):
                         ca.SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                   dims.n_c_sys[ij]), self.ind_alpha,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
-                        opts.init_theta * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        0.5 * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
                         self.ind_lambda_n, lb_dual * np.ones(dims.n_c_sys[ij]),
                         np.inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_lambda * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_mu * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
@@ -333,16 +339,17 @@ class FiniteElement(FiniteElementBase):
             if opts.pss_mode == PssMode.STEWART:
                 # add lambdas
                 for ij in range(dims.n_sys):
+                    initial_lambda = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
                     self.add_variable(
                         ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
                         self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]),
                         np.inf * np.ones(dims.n_f_sys[ij]),
-                        opts.init_lambda * np.ones(dims.n_f_sys[ij]), opts.n_s, ij)
+                        initial_lambda, opts.n_s, ij)
                 # add mu
                 for ij in range(dims.n_sys):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
-                                      opts.init_mu * np.ones(1), opts.n_s, ij)
+                                      np.ones(1), opts.n_s, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):
@@ -350,14 +357,14 @@ class FiniteElement(FiniteElementBase):
                         ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_c_sys[ij]),
                         self.ind_lambda_n, lb_dual * np.ones(dims.n_c_sys[ij]),
                         np.inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_lambda * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                        .5 * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
-                        opts.init_mu * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                        .5 * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
 
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):

@@ -56,7 +56,7 @@ def get_motor_with_friction_ocp_description_with_auto_model():
 
     am = nosnoc.NosnocAutoModel(x=x, f_nonsmooth_ode=f_nonsmooth, x0=X0, u=u)
     model = am.reformulate()
-    
+
     # constraints
     lbu = -u_max * np.ones((1,))
     ubu = u_max * np.ones((1,))
