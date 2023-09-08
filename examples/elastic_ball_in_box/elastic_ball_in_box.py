@@ -190,6 +190,7 @@ def solve_ocp(opts=None, plot=True):
 def plot_results(results, opts, omega, ref_fun):
     x_traj = np.array(results['x_traj'])
     u_traj = np.array(results['u_traj'])
+    theta_traj = np.array(results['theta_list'])
     t_num = np.array(results['t_grid'])
     t = x_traj[:, -1]
     x = x_traj[:, 0]
@@ -199,29 +200,32 @@ def plot_results(results, opts, omega, ref_fun):
     ux = u_traj[:, 0]
     uy = u_traj[:, 1]
     ref = ref_fun(np.atleast_2d(t))
-    x_ref = ref[0, :].T
-    y_ref = ref[1, :].T
-    vx_ref = ref[2, :].T
-    vy_ref = ref[3, :].T
+    x_ref = ref[0, :].T.full()
+    y_ref = ref[1, :].T.full()
+    vx_ref = ref[2, :].T.full()
+    vy_ref = ref[3, :].T.full()
+
+    
+    ind_t = np.concatenate(([True], theta_traj[:, 0, 0] > 0.1))
 
     breakpoint()
     plt.figure()
-    plt.plot(x, y, 'b')
-    plt.plot(x_ref, y_ref, 'r--')
+    plt.plot(x[ind_t], y[ind_t], 'b')
+    plt.plot(x_ref[ind_t], y_ref[ind_t], 'r--')
 
     # Plot Trajectory
     plt.figure()
 
     plt.subplot(1, 2, 1)
-    plt.plot(t, x, 'b')
-    plt.plot(t, y, 'r')
-    plt.plot(t, x_ref, 'b--')
-    plt.plot(t, y_ref, 'r--')
+    plt.plot(t[ind_t], x[ind_t], 'b')
+    plt.plot(t[ind_t], y[ind_t], 'r')
+    plt.plot(t[ind_t], x_ref[ind_t], 'b--')
+    plt.plot(t[ind_t], y_ref[ind_t], 'r--')
     plt.subplot(1, 2, 2)
-    plt.plot(t, vx, 'b')
-    plt.plot(t, vy, 'r')
-    plt.plot(t, vx_ref, 'b--')
-    plt.plot(t, vy_ref, 'r--')
+    plt.plot(t[ind_t], vx[ind_t], 'b')
+    plt.plot(t[ind_t], vy[ind_t], 'r')
+    plt.plot(t[ind_t], vx_ref[ind_t], 'b--')
+    plt.plot(t[ind_t], vy_ref[ind_t], 'r--')
 
     # Plot Trajectory vs numerical time
     plt.figure()
