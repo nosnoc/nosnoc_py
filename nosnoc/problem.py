@@ -294,8 +294,7 @@ class FiniteElement(FiniteElementBase):
                         ii, ij)
                 # add lambdas
                 for ij in range(dims.n_sys):
-                    # initial_lambda = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
-                    initial_lambda = np.ones(dims.n_f_sys[ij])
+                    initial_lambda = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
                     self.add_variable(
                         ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
                         self.ind_lam, lb_dual * np.ones(dims.n_f_sys[ij]),
