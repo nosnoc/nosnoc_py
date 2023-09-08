@@ -82,6 +82,12 @@ class ConstraintHandling(Enum):
     LEAST_SQUARES = auto()
 
 
+class SpeedOfTimeVariableMode(Enum):
+    NONE = auto()    # No speed of time variables
+    LOCAL = auto()   # Speed of time variables as control stage discontinous variables
+    GLOBAL = auto()  # Single speed of time variable used across whole problem
+
+
 class PssMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).

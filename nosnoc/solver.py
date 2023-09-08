@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -8,7 +7,7 @@ import time
 
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status
+from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
 from nosnoc.rk_utils import rk4_on_timegrid
@@ -482,6 +481,8 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
     results["u_list"] = [w_opt[ind] for ind in prob.ind_u]
+    if opts.speed_of_time_variables != SpeedOfTimeVariableMode.NONE:
+        results["sot"] = [w_opt[ind] for ind in prob.ind_sot]
 
     results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
     results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
@@ -496,6 +497,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["lambda_p_list"] = [
         w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_p)
     ]
+    results["z_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_z)]
 
     if opts.use_fesd:
         time_steps = w_opt[prob.ind_h]

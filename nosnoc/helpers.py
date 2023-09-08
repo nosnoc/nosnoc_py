@@ -2,6 +2,7 @@ from typing import Optional
 
 import numpy as np
 from .solver import NosnocSolver
+from .nosnoc_types import SpeedOfTimeVariableMode
 
 
 class NosnocSimLooper:
@@ -42,6 +43,8 @@ class NosnocSimLooper:
         self.theta_sim = []
         self.lambda_sim = []
         self.alpha_sim = []
+        self.z_sim = []
+        self.sot = []
         self.w_sim = []
         self.w_all = []
         self.cost_vals = []
@@ -80,10 +83,13 @@ class NosnocSimLooper:
             self.theta_sim.append(results["theta_list"])
             self.lambda_sim.append(results["lambda_list"])
             self.alpha_sim.append(results["alpha_list"])
+            self.z_sim.append(results["z_list"])
             self.w_sim += [results["w_sol"]]
             self.w_all += [results["w_all"]]
             self.cost_vals.append(results["cost_val"])
             self.status.append(results["status"])
+            if self.solver.opts.speed_of_time_variables != SpeedOfTimeVariableMode.NONE:
+                self.sot.append(results["sot"])
             if self.print_level > 0:
                 print(f"Sim step {i + 1}/{self.Nsim}\t status: {results['status']}")
 
@@ -102,6 +108,8 @@ class NosnocSimLooper:
             "theta_sim": self.theta_sim,
             "lambda_sim": self.lambda_sim,
             "alpha_sim": self.alpha_sim,
+            "z_sim": self.z_sim,
+            "sot": self.sot,
             "w_sim": self.w_sim,
             "w_all": self.w_all,
             "cost_vals": self.cost_vals,
