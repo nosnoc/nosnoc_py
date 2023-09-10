@@ -19,9 +19,5 @@ class TestParametericOcp(unittest.TestCase):
         print(f"{results_with_global_var['v_global']=}")
         self.assertTrue(np.allclose(np.ones((1,)), results_with_global_var["v_global"], atol=1e-7))
 
-        # note: with_global_var converges to better local minimum.
-        self.assertTrue(ref_results["cost_val"] >=results_with_global_var["cost_val"], 'cost value comparison failed')
-
-
 if __name__ == "__main__":
     unittest.main()

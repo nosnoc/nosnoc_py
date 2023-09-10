@@ -71,9 +71,15 @@ class NosnocOpts:
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
 
+    # generic path constraint handling
+    g_path_at_fe: bool = False  # g_path evaluated at every finite element
+    g_path_at_stg: bool = False # g_path evaluated at every integrator stage
+
     s_elastic_0: float = 1.0
     s_elastic_max: float = 1e1
     s_elastic_min: float = 0.0
+
+    objective_scaling_direct: bool = True
 
     # IPOPT opts
     opts_casadi_nlp = dict()

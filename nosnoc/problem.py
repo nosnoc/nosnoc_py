@@ -263,7 +263,7 @@ class FiniteElement(FiniteElementBase):
         lbh = (1 - opts.gamma_h) * h0
         self.add_step_size_variable(h, lbh, ubh, h0)
 
-        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_TWO_SIDED]:
+        if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ, MpccMode.ELASTIC_EQ]:
             lb_dual = 0.0
         else:
             lb_dual = -np.inf
@@ -305,7 +305,7 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
-                                      np.ones(1), ii, ij)
+                                      0.5 * np.ones(1), ii, ij)
             elif opts.pss_mode == PssMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
@@ -455,9 +455,6 @@ class FiniteElement(FiniteElementBase):
             # Dynamics excluding complementarities
             fj = sot*model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot*ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-            gqj = ocp.g_path_fun(X_fe[j], Uk, self.p, model.v_global)
-            self.add_constraint(gqj, ocp.lbg, ocp.ubg)
-
             # path constraint
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
             self.add_constraint(gj)
@@ -479,12 +476,45 @@ class FiniteElement(FiniteElementBase):
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             self.add_constraint(Xk_end - self.w[self.ind_x[-1]])
 
+        # Generic path constraints
+        end_allowance = 0 if opts.right_boundary_point_explicit else 1
+        if self.fe_idx == opts.Nfe_list[self.ctrl_idx]-1 or opts.g_path_at_fe:
+            end_idx = opts.n_s + end_allowance - 1
+            gqj = ocp.g_path_fun(X_fe[end_idx], Uk, self.p, model.v_global)
+            self.add_constraint(gqj, ocp.lbg, ocp.ubg)
+
+        if opts.g_path_at_stg:
+            end_allowance = 1 if opts.right_boundary_point_explicit else 0
+            for j in range(opts.n_s - end_allowance):
+                gqj = ocp.g_path_fun(X_fe[j], Uk, self.p, model.v_global)
+                self.add_constraint(gqj, ocp.lbg, ocp.ubg)
+
         # g_z_all constraint for boundary point and continuity of algebraic variables.
         if not opts.right_boundary_point_explicit and opts.use_fesd:
             self.add_constraint(
                 model.g_z_switching_fun(self.w[self.ind_x[-1]], self.rk_stage_z(-1), Uk, self.p))
 
         return
+
+    def get_complementarity_vector(self):
+        opts = self.opts
+        comp_vec = []
+        if opts.use_fesd:
+            for j in range(opts.n_s):
+                # cross comp with prev_fe
+                theta = self.Theta(stage=j)
+                lam = self.prev_fe.Lambda(stage=-1)
+                comp_vec = ca.vertcat(comp_vec, theta*lam)
+                for jj in range(opts.n_s):
+                    lam = self.Lambda(stage=jj)
+                    comp_vec = ca.vertcat(comp_vec, theta*lam)
+        else:
+            for j in range(opts.n_s):
+                for jj in range(opts.n_s):
+                    theta = self.Theta(stage=j)
+                    lam = self.prev_fe.Lambda(stage=jj)
+                    comp_vec = ca.vertcat(comp_vec, theta*lam)
+        return comp_vec
 
     def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: ca.SX) -> None:
         opts = self.opts
@@ -571,7 +601,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Create stage local speed of time variables
         if self.opts.speed_of_time_variables == SpeedOfTimeVariableMode.LOCAL:
-            sot = ca.SX.sym(f'sot_{ctrl_idx}', 1)
+            sot = ca.SX.sym(f's_sot_{ctrl_idx}', 1)
             self.add_variable(sot, self.ind_sot, [self.opts.speed_of_time_min], [self.opts.speed_of_time_max], [1.0])
 
         # Create Finite elements in this control stage
@@ -708,7 +738,6 @@ class NosnocProblem(NosnocFormulationObject):
                               opts.s_elastic_min * np.ones(1),
                               opts.s_elastic_max * np.ones(1),
                               opts.s_elastic_0 * np.ones(1))
-            self.cost += 1 / sigma_p * s_elastic
         else:
             s_elastic = None
 
@@ -731,7 +760,7 @@ class NosnocProblem(NosnocFormulationObject):
                 sot = self.w[self.ind_sot[ctrl_idx]]
             else:
                 sot = ca.SX.eye(1)
-            
+
             for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
@@ -762,19 +791,10 @@ class NosnocProblem(NosnocFormulationObject):
         self.create_global_compl_constraints(sigma_p, tau, s_elastic)
 
         # Scalar-valued complementarity residual
-        if opts.use_fesd:
-            J_comp = 0.0
-            for fe in flatten(self.stages):
-                sum_abs_lam = casadi_sum_list(
-                    [ca.fabs(lam) for lam in fe.get_Lambdas_incl_last_prev_fe()])
-                sum_abs_theta = casadi_sum_list([ca.fabs(t) for t in fe.get_Theta_list()])
-                J_comp += ca.sum1(ca.diag(sum_abs_theta) @ sum_abs_lam)
-        else:
-            J_comp = casadi_sum_list([
-                model.std_compl_res_fun(fe.rk_stage_z(j), fe.p)
-                for j in range(opts.n_s)
-                for fe in flatten(self.stages)
-            ])
+        comp_vec = []
+        for fe in flatten(self.stages):
+            comp_vec = ca.vertcat(comp_vec, fe.get_complementarity_vector())
+        J_comp = ca.mmax(comp_vec)
 
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
@@ -784,8 +804,15 @@ class NosnocProblem(NosnocFormulationObject):
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
+        # apply elastic costs
+        if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
+            if opts.objective_scaling_direct:
+                self.cost += 1 / sigma_p * s_elastic
+            else:
+                self.cost = sigma_p * self.cost + s_elastic
+
         # Terminal numerical time
-        if opts.N_stages > 1 and opts.use_fesd:
+        if opts.N_stages > 1 and opts.use_fesd and not opts.equidistant_control_grid:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
