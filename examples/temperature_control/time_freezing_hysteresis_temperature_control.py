@@ -27,7 +27,7 @@ def create_options():
     # upper bound for elastic variables
     opts.s_elastic_max = 1e1
     # in penalty methods  1: J = J+(1/p)*J_comp (direct)  , 0 : J = p*J+J_comp (inverse)
-    opts.objective_scaling_direct = 0
+    opts.objective_scaling_direct = False
     # === Penalty/Relaxation paraemetr ===
     # initial smoothing parameter
     opts.sigma_0 = 1e1
