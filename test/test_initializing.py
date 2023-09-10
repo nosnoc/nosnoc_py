@@ -46,8 +46,10 @@ class TestInitialization(unittest.TestCase):
         res_initialized = solver.solve()
 
         print("Solve with bad initialization")
+        opts2.initialization_strategy = nosnoc.InitializationStrategy.EXTERNAL
         solver2 = nosnoc.NosnocSolver(opts2, model2, ocp2)
         solver2.set("u", -u_guess)
+        solver2.set("x", np.repeat(np.array([53, 72, 28, 36]), 36, 0).reshape((36,4)))
         res_bad_init = solver2.solve()
         ipopt_iter_initialized = sum(res_initialized["nlp_iter"])
         ipopt_iter_bad_init = sum(res_bad_init["nlp_iter"])
