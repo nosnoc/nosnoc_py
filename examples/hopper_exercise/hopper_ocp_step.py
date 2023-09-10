@@ -6,8 +6,6 @@
 import nosnoc as ns
 import casadi as ca
 import numpy as np
-import tk
-import matplotlib
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 from matplotlib.animation import FuncAnimation
@@ -187,7 +185,6 @@ def solve_ocp_step(opts=None, plot=True, lift_algebraic=False, x_goal=0.9, ref_a
     model, ocp, x_ref, v_tangent_fun, v_normal_fun, f_c_fun = get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump)
 
     solver = ns.NosnocSolver(opts, model, ocp)
-    solver.print_problem()
 
     # Calculate time steps and initialize x to [xref, t]
     if ref_as_init:
@@ -250,25 +247,55 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     y = x_traj[:, 1]
     theta = x_traj[:, 2]
     leg_len = x_traj[:, 3]
+
     plt.subplot(4, 1, 1)
     plt.plot(results['t_grid'], t)
+
     plt.subplot(4, 1, 2)
-    plt.plot(results['t_grid'], x, color='r')
-    plt.plot(results['t_grid'], y, color='b')
-    plt.plot(results['t_grid_u'], x_ref[:, 0], color='r', alpha=0.5, linestyle='--')
-    plt.plot(results['t_grid_u'], x_ref[:, 1], color='b', alpha=0.5, linestyle='--')
+    plt.plot(results['t_grid'], x, color='r', label=r"$x(\tau)$")
+    plt.plot(results['t_grid'], y, color='b', label=r"$y(\tau)$")
+    plt.plot(results['t_grid_u'], x_ref[:, 0], color='r', alpha=0.5, linestyle='--', label=r"$x^{\mathrm{ref}}(t)$")
+    plt.plot(results['t_grid_u'], x_ref[:, 1], color='b', alpha=0.5, linestyle='--', label=r"$y^{\mathrm{ref}}(t)$")
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$p(\tau)$")
+    plt.legend(loc='best', framealpha=0.1)
+    plt.grid()
+
     plt.subplot(4, 1, 3)
     plt.plot(results['t_grid'], theta, color='b')
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$q_\theta(\tau)$")
+    plt.grid()
+
     plt.subplot(4, 1, 4)
-    plt.plot(results['t_grid'], leg_len, color='b')
-    plt.plot(results['t_grid_u'], x_ref[:, 3], color='b', alpha=0.5, linestyle='--')
+    plt.plot(results['t_grid'], leg_len, color='b', label=r"$l(\tau)$")
+    plt.plot(results['t_grid_u'], x_ref[:, 3], color='b', alpha=0.5, linestyle='--', label=r"$l^{\mathrm{ref}}(\tau)$")
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$l(\tau)$")
+    plt.legend(loc='best', framealpha=0.1)
+    plt.grid()
+    plt.tight_layout()
+
     plt.figure()
     plt.subplot(3, 1, 1)
     plt.plot(results['t_grid'], f_c_fun(x_traj[:, :-1].T).full().T)
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$f_c(\tau)$")
+    plt.grid()
+
     plt.subplot(3, 1, 2)
     plt.plot(results['t_grid'], v_tangent_fun(x_traj[:, :-1].T).full().T)
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$v_{\mathrm{tangent}}(\tau)$")
+    plt.grid()
+
     plt.subplot(3, 1, 3)
     plt.plot(results['t_grid'], v_normal_fun(x_traj[:, :-1].T).full().T)
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$v_{\mathrm{normal}}(\tau)$")
+    plt.grid()
+    plt.tight_layout()
+
     # Plot Controls
     plt.figure()
     u_traj = np.array(results['u_traj'])
@@ -277,15 +304,24 @@ def plot_results(results, opts, x_ref, v_tangent_fun, v_normal_fun, f_c_fun, x_g
     sot = u_traj[:, 2]
     plt.subplot(3, 1, 1)
     plt.step(results['t_grid_u'], np.concatenate((reaction, [reaction[-1]])))
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$u_1(\tau)$")
+    plt.grid()
     plt.subplot(3, 1, 2)
     plt.step(results['t_grid_u'], np.concatenate((leg_force, [leg_force[-1]])))
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$u_2(\tau)$")
+    plt.grid()
     plt.subplot(3, 1, 3)
     plt.step(results['t_grid_u'], np.concatenate((sot, [sot[-1]])))
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$u_3(\tau)$")
+    plt.grid()
+    plt.tight_layout()
     plt.show()
 
 
 if __name__ == '__main__':
-    matplotlib.use('TkAgg')
     opts = get_default_options_step()
     opts.terminal_time = 1.0
     opts.N_stages = 20

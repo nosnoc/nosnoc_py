@@ -3,8 +3,6 @@
 import nosnoc as ns
 import casadi as ca
 import numpy as np
-import tk
-import matplotlib
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 from matplotlib.animation import FuncAnimation
@@ -143,14 +141,14 @@ def get_default_options_step():
     opts.homotopy_update_rule = ns.HomotopyUpdateRule.LINEAR
     opts.n_s = 2
     opts.step_equilibration = ns.StepEquilibrationMode.HEURISTIC_MEAN
-    opts.cross_comp_mode = ns.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    opts.cross_comp_mode = ns.CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
     opts.mpcc_mode = ns.MpccMode.ELASTIC_INEQ
     opts.speed_of_time_variables = ns.SpeedOfTimeVariableMode.LOCAL
     opts.print_level = 1
 
     opts.opts_casadi_nlp['ipopt']['print_level'] = 5
     opts.opts_casadi_nlp['ipopt']['tol'] = 1e-7
-    opts.opts_casadi_nlp['ipopt']['acceptable_tol'] = 1e-6
+    opts.opts_casadi_nlp['ipopt']['acceptable_tol'] = 1e-7
     opts.opts_casadi_nlp['ipopt']['acceptable_iter'] = 3
     opts.opts_casadi_nlp['ipopt']['max_iter'] = 1000
     #opts.opts_casadi_nlp['ipopt']['linear_solver'] = 'ma27'
@@ -171,13 +169,6 @@ def solve_ocp(opts=None, plot=True):
     model, ocp, ref_fun = get_ball_ocp(omega, opts)
 
     solver = ns.NosnocSolver(opts, model, ocp)
-    # for python3
-    import sys
-    with open('test.txt', 'w') as w:
-        std = sys.stdout
-        sys.stdout = w
-        solver.print_problem()
-        sys.stdout = std
     results = solver.solve()
     if plot:
         plot_results(results, opts, omega, ref_fun)
@@ -205,42 +196,69 @@ def plot_results(results, opts, omega, ref_fun):
     vx_ref = ref[2, :].T.full()
     vy_ref = ref[3, :].T.full()
 
-    
     ind_t = np.concatenate(([True], theta_traj[:, 0, 0] > 0.1))
 
-    breakpoint()
     plt.figure()
     plt.plot(x[ind_t], y[ind_t], 'b')
     plt.plot(x_ref[ind_t], y_ref[ind_t], 'r--')
-
+    plt.xlabel(r"$q_1(t)$")
+    plt.ylabel(r"$q_2(t)$")
+    plt.grid()
+    plt.axis('equal')
     # Plot Trajectory
     plt.figure()
 
-    plt.subplot(1, 2, 1)
-    plt.plot(t[ind_t], x[ind_t], 'b')
-    plt.plot(t[ind_t], y[ind_t], 'r')
-    plt.plot(t[ind_t], x_ref[ind_t], 'b--')
-    plt.plot(t[ind_t], y_ref[ind_t], 'r--')
-    plt.subplot(1, 2, 2)
-    plt.plot(t[ind_t], vx[ind_t], 'b')
-    plt.plot(t[ind_t], vy[ind_t], 'r')
-    plt.plot(t[ind_t], vx_ref[ind_t], 'b--')
-    plt.plot(t[ind_t], vy_ref[ind_t], 'r--')
-
-    # Plot Trajectory vs numerical time
-    plt.figure()
-
-    plt.subplot(1, 2, 1)
-    plt.plot(t_num, x)
-    plt.plot(t_num, y)
-    plt.subplot(1, 2, 2)
-    plt.plot(t_num, vx)
-    plt.plot(t_num, vy)
+    plt.subplot(2, 2, 1)
+    plt.plot(t[ind_t], x[ind_t], 'b', label=r"$q_1(t)$")
+    plt.plot(t[ind_t], y[ind_t], 'r', label=r"$q_2(t)$")
+    plt.plot(t[ind_t], x_ref[ind_t], 'b:', label=r"$q_1^{\mathrm{ref}}(t)$")
+    plt.plot(t[ind_t], y_ref[ind_t], 'r:', label=r"$q_2^{\mathrm{ref}}(t)$")
+    plt.xlabel(r"$t$")
+    plt.ylabel(r"$q(t)$")
+    plt.legend(loc='best', framealpha=0.1, ncols=2)
+    plt.ylim(-1.5, 3)
+    plt.grid()
+    plt.subplot(2, 2, 2)
+    plt.plot(t[ind_t], vx[ind_t], 'b', label=r"$v_1(t)$")
+    plt.plot(t[ind_t], vy[ind_t], 'r', label=r"$v_2(t)$")
+    plt.plot(t[ind_t], vx_ref[ind_t], 'b:', label=r"$v_1^{\mathrm{ref}}(t)$")
+    plt.plot(t[ind_t], vy_ref[ind_t], 'r:', label=r"$v_2^{\mathrm{ref}}(t)$")
+    plt.xlabel(r"$t$")
+    plt.ylabel(r"$v(t)$")
+    plt.legend(loc='best', framealpha=0.1, ncols=2)
+    plt.ylim(-11, 20)
+    plt.grid()
+    plt.subplot(2, 2, 3)
+    plt.plot(t_num, x, label=r"$q_1(\tau)$")
+    plt.plot(t_num, y, label=r"$q_2(\tau)$")
+    plt.plot(t_num, x_ref, 'b:', label=r"$q_1^{\mathrm{ref}}(\tau)$")
+    plt.plot(t_num, y_ref, 'r:', label=r"$q_2^{\mathrm{ref}}(\tau)$")
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$q(\tau)$")
+    plt.legend(loc='best', framealpha=0.1, ncols=2)
+    plt.ylim(-1.5, 3)
+    plt.grid()
+    plt.subplot(2, 2, 4)
+    plt.plot(t_num, vx, label=r"$v_1(\tau)$")
+    plt.plot(t_num, vy, label=r"$v_2(\tau)$")
+    plt.plot(t_num, vx_ref, 'b:', label=r"$v_1^{\mathrm{ref}}(\tau)$")
+    plt.plot(t_num, vy_ref, 'r:', label=r"$v_1^{\mathrm{ref}}(\tau)$")
+    plt.xlabel(r"$\tau$")
+    plt.ylabel(r"$v(\tau)$")
+    plt.legend(loc='best', framealpha=0.1, ncols=2)
+    plt.ylim(-11, 20)
+    plt.grid()
+    plt.tight_layout()
 
     # Plot Controls
     plt.figure()
-    plt.stairs(ux, results['t_grid_u'])
-    plt.stairs(uy, results['t_grid_u'])
+    plt.stairs(ux, results['t_grid_u'], label=r"$u_x(t)$")
+    plt.stairs(uy, results['t_grid_u'], label=r"$u_y$(t)")
+    plt.xlabel(r"$t$")
+    plt.ylabel(r"$u(t)$")
+    plt.legend(loc='best', framealpha=0.1, ncols=2)
+    plt.ylim(-51, 70)
+    plt.grid()
 
     plt.show()
 

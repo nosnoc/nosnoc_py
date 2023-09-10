@@ -738,7 +738,6 @@ class NosnocProblem(NosnocFormulationObject):
                               opts.s_elastic_min * np.ones(1),
                               opts.s_elastic_max * np.ones(1),
                               opts.s_elastic_0 * np.ones(1))
-            self.cost += 1 / sigma_p * s_elastic
         else:
             s_elastic = None
 
@@ -761,7 +760,7 @@ class NosnocProblem(NosnocFormulationObject):
                 sot = self.w[self.ind_sot[ctrl_idx]]
             else:
                 sot = ca.SX.eye(1)
-            
+
             for _, fe in enumerate(stage):
 
                 # 1) Stewart Runge-Kutta discretization
@@ -804,6 +803,13 @@ class NosnocProblem(NosnocFormulationObject):
         g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
+
+        # apply elastic costs
+        if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
+            if opts.objective_scaling_direct:
+                self.cost += 1 / sigma_p * s_elastic
+            else:
+                self.cost = sigma_p * self.cost + s_elastic
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd and not opts.equidistant_control_grid:

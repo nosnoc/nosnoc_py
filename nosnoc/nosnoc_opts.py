@@ -79,6 +79,8 @@ class NosnocOpts:
     s_elastic_max: float = 1e1
     s_elastic_min: float = 0.0
 
+    objective_scaling_direct: bool = True
+
     # IPOPT opts
     opts_casadi_nlp = dict()
     opts_casadi_nlp['print_time'] = 0
