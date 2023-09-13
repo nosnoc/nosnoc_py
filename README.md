@@ -31,8 +31,8 @@ source env/bin/activate
 pip install -e .
 ```
 
-4. Docs
-In order to build docs also run:
+## Optinal additional installation steps
+1. In order to build docs also run:
 ```
 pip -r docs/docs_reqirements.txt
 ```
