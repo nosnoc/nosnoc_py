@@ -510,10 +510,9 @@ class FiniteElement(FiniteElementBase):
                     comp_vec = ca.vertcat(comp_vec, theta*lam)
         else:
             for j in range(opts.n_s):
-                for jj in range(opts.n_s):
-                    theta = self.Theta(stage=j)
-                    lam = self.prev_fe.Lambda(stage=jj)
-                    comp_vec = ca.vertcat(comp_vec, theta*lam)
+                theta = self.Theta(stage=j)
+                lam = self.Lambda(stage=j)
+                comp_vec = ca.vertcat(comp_vec, theta*lam)
         return comp_vec
 
     def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: ca.SX) -> None:
