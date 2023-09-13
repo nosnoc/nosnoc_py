@@ -227,7 +227,35 @@ def smoothing_collocation_experiment():
     plot_sigma_experiment(sigma_values, objective_values)
 
 
+def sparsity_collocation_plot():
+    terminal_time = 5.0
+    N = 30
+    n_s = 1
+    N_FE = 2
+    x_ref = np.array([0, 180 / 180 * np.pi, 0, 0])  # end upwards
+
+    # smoothing parameter
+    sigma0 = 1e0
+
+    model, ocp = get_cart_pole_model_and_ocp(F_friction=2.0, use_fillipov=False)
+    nlp, casadi_nlp = setup_collocation_nlp(model, ocp, terminal_time, N, n_s, N_FE)
+
+    import matplotlib.pylab as plt
+    jac_constraints = ca.jacobian(ca.vertcat(nlp['g']), ca.vertcat(nlp['x']))
+    plt.spy(ca.DM.ones(jac_constraints.sparsity()).sparse())
+    plt.title('sparsity pattern of constraint Jacobian')
+
+    plt.figure()
+    lambda_g = ca.SX.sym('lambda_g', casadi_length(nlp['g']))
+    lagrangian = nlp['f'] + lambda_g.T @ nlp['g']
+    lagrange_hessian, _ = ca.hessian(lagrangian, nlp['x'])
+    plt.spy(ca.DM.ones(lagrange_hessian.sparsity()).sparse())
+    plt.title('sparsity pattern of Lagrange Hessian')
+    plt.show()
+
+
 if __name__ == "__main__":
     # simulate_smoothed_model_cart_pole()
     collocation_ocp_example()
     # smoothing_collocation_experiment()
+    # sparsity_collocation_plot()
