@@ -31,10 +31,14 @@ source env/bin/activate
 pip install -e .
 ```
 
-## Optinal additional installation steps
+## Optional additional installation steps
 1. In order to build docs also run:
 ```
 pip -r docs/docs_reqirements.txt
+```
+2. In order to run tests you should install the testing requirements:
+```
+pip -r requirements-test.txt
 ```
 
 ## Literature - theory and algorithms
