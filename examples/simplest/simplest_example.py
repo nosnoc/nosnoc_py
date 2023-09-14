@@ -19,6 +19,7 @@ def get_default_options():
     opts.comp_tol = TOL
     opts.N_finite_elements = 2
     opts.n_s = 2
+    opts.print_level = 1
     return opts
 
 
@@ -31,7 +32,7 @@ def get_simplest_model_sliding(x0=X0):
     # sign matrix for the modes
     S = [np.array([[-1], [1]])]
 
-    f_11 = 1
+    f_11 = 3
     f_12 = -1
     # in matrix form
     F = [horzcat(f_11, f_12)]
@@ -72,7 +73,6 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     opts.terminal_time = Tstep
 
     solver = nosnoc.NosnocSolver(opts, model)
-
     # loop
     looper = nosnoc.NosnocSimLooper(solver, x0, Nsim)
     looper.run()

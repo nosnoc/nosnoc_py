@@ -1,5 +1,4 @@
 from examples.simplest.simplest_example import (
-    TOL,
     get_default_options,
     X0,
     TSIM,
@@ -17,6 +16,7 @@ N_FINITE_ELEMENT_VALUES = range(2, 4)
 
 NO_FESD_X_END = 0.36692644
 
+TOL = 1e-7
 
 def compute_errors(results, model) -> dict:
     X_sim = results["X_sim"]
@@ -43,7 +43,7 @@ def compute_errors(results, model) -> dict:
     }
 
 
-def test_opts(opts, model):
+def check_opts(opts, model):
     results = solve_simplest_example(opts=opts, model=model)
     errors = compute_errors(results, model)
 
@@ -61,7 +61,7 @@ class SimpleTests(unittest.TestCase):
 
     def test_default(self):
         model = get_simplest_model_sliding()
-        test_opts(get_default_options(), model)
+        check_opts(get_default_options(), model)
 
     def test_switch(self):
         model = get_simplest_model_switch()
@@ -79,9 +79,9 @@ class SimpleTests(unittest.TestCase):
                         opts.cross_comp_mode = cross_comp_mode
                         opts.print_level = 0
                         try:
-                            test_opts(opts, model=model)
+                            check_opts(opts, model=model)
                         except:
-                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                            raise Exception(f"test_switch failed with setting:\n {ns=} {Nfe=} {pss_mode=} {cross_comp_mode=}")
         print("main_test_switch: SUCCESS")
 
     def test_sliding(self):
@@ -99,9 +99,9 @@ class SimpleTests(unittest.TestCase):
                         opts.N_finite_elements = Nfe
                         opts.pss_mode = pss_mode
                         try:
-                            test_opts(opts, model=model)
+                            check_opts(opts, model=model)
                         except:
-                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                            raise Exception(f"test_sliding failed with setting:\n {ns=} {Nfe=} {pss_mode=} {irk_scheme=}")
         print("main_test_sliding: SUCCESS")
 
     def test_discretization(self):
@@ -116,7 +116,7 @@ class SimpleTests(unittest.TestCase):
                     opts.print_level = 0
                     opts.irk_representation = irk_representation
                     try:
-                        test_opts(opts, model=model)
+                        check_opts(opts, model=model)
                     except:
                         raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
         print("main_test_sliding: SUCCESS")
@@ -167,10 +167,8 @@ class SimpleTests(unittest.TestCase):
         opts.sigma_0 = 1e0
         opts.gamma_h = np.inf
 
-        # opts.comp_tol = 1e-5
-        # opts.do_polishing_step = True
         try:
-            results = test_opts(opts, model=model)
+            results = check_opts(opts, model=model)
             print(results["t_grid"])
         except:
             raise Exception(f"Test failed.")
@@ -197,7 +195,7 @@ class SimpleTests(unittest.TestCase):
                 opts.gamma_h = np.inf
 
                 try:
-                    results = test_opts(opts, model=model)
+                    results = check_opts(opts, model=model)
                     # print(results["t_grid"])
                 except:
                     # print(f"Test failed with {fix_as=}, {step_equilibration=}")
@@ -214,7 +212,7 @@ class SimpleTests(unittest.TestCase):
             opts.initialization_strategy = initialization_strategy
             print(f"\ntesting initialization_strategy = {initialization_strategy}")
             try:
-                test_opts(opts, model=model)
+                check_opts(opts, model=model)
             except:
                 raise Exception(f"Test failed with setting:\n {opts=}")
 
@@ -226,7 +224,7 @@ class SimpleTests(unittest.TestCase):
         opts.do_polishing_step = True
         opts.comp_tol = 1e-3
         try:
-            test_opts(opts, model=model)
+            check_opts(opts, model=model)
         except:
             raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
 

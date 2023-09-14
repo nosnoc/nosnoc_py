@@ -59,7 +59,7 @@ class TestSlidingMode(unittest.TestCase):
         print(x_traj)
         print(t_grid)
         xt = np.vstack((x_traj.T, t_grid))
-        diff = xt - np.array([[0], [np.sqrt(2)]])
+        diff = xt - np.array([[0], [np.sqrt(2)/3]])
 
         self.assertTrue(np.min(np.linalg.norm(diff, axis=0)) < 1e-5, message)
 

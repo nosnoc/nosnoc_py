@@ -99,6 +99,7 @@ def main(variant='switch'):
         theta_0[:, 1] = 0.0
         solver.set('theta', theta_0)
 
+    solver.problem.print()
     # loop
     looper = nosnoc.NosnocSimLooper(solver, x0=model.x0, Nsim=Nsim)
     looper.run()
@@ -142,4 +143,4 @@ def plot_results(results):
 
 
 if __name__ == "__main__":
-    main(variant='switch')
+    main(variant='spontaneous')
