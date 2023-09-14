@@ -19,7 +19,7 @@ setup(name='nosnoc',
    install_requires=[
       'numpy>=1.20.0,<2.0.0',
       'scipy',
-      'casadi<=3.6.3',
+      'casadi==3.6.3',
       'matplotlib',
    ]
 )
