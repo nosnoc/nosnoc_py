@@ -1,5 +1,4 @@
 from examples.simplest.simplest_example import (
-    TOL,
     get_default_options,
     X0,
     TSIM,
@@ -16,6 +15,8 @@ NS_VALUES = range(1, 4)
 N_FINITE_ELEMENT_VALUES = range(2, 4)
 
 NO_FESD_X_END = 0.36692644
+
+TOL = 1e-7
 
 
 def compute_errors(results, model) -> dict:
