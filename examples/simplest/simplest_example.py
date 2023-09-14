@@ -19,6 +19,7 @@ def get_default_options():
     opts.comp_tol = TOL
     opts.N_finite_elements = 2
     opts.n_s = 2
+    opts.print_level = 1
     return opts
 
 

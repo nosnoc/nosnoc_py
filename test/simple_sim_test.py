@@ -81,7 +81,7 @@ class SimpleTests(unittest.TestCase):
                         try:
                             test_opts(opts, model=model)
                         except:
-                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                            raise Exception(f"test_switch failed with setting:\n {ns=} {Nfe=} {pss_mode=} {cross_comp_mode=}")
         print("main_test_switch: SUCCESS")
 
     def test_sliding(self):
@@ -101,7 +101,7 @@ class SimpleTests(unittest.TestCase):
                         try:
                             test_opts(opts, model=model)
                         except:
-                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                            raise Exception(f"test_sliding failed with setting:\n {ns=} {Nfe=} {pss_mode=} {irk_scheme=}")
         print("main_test_sliding: SUCCESS")
 
     def test_discretization(self):
@@ -167,8 +167,6 @@ class SimpleTests(unittest.TestCase):
         opts.sigma_0 = 1e0
         opts.gamma_h = np.inf
 
-        # opts.comp_tol = 1e-5
-        # opts.do_polishing_step = True
         try:
             results = test_opts(opts, model=model)
             print(results["t_grid"])
