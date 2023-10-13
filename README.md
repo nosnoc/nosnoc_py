@@ -6,6 +6,9 @@ https://nosnoc-py.readthedocs.io/en/latest/
 ## About
 `nosnoc` is an open source Python software package for NOnSmooth Numerical Optimal Control.
 
+A detailed overview of the theory and methods behind NOSNOC can be found in the course material of the
+[Summer School on Direct Methods for Optimal Control of Nonsmooth Systems](https://www.syscop.de/teaching/ss2023/summer-school-direct-methods-optimal-control-nonsmooth-systems).
+
 It is a structured reimplementation of the Matlab package NOSNOC (https://github.com/nurkanovic/nosnoc), but does not support all features in there (yet).
 Most importantly, time freezing is not implemented yet.
 
