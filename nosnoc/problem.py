@@ -895,3 +895,25 @@ class NosnocProblem(NosnocFormulationObject):
         if not self.ocp_trivial:
             return False
         return True
+
+    def dump(self, file):
+        """Dump the problem to a file."""
+        import pickle
+        with open(file, "wb") as f:
+            data = {
+                key: self.__dict__[key] for key in self.__dict__
+                if key not in [
+                    "w", "p", "cost", "g", "model", "ocp", "stages", "fe0"
+                ]
+            }
+            data["f"] = ca.Function("f", [self.w, self.p], [self.cost])
+            data["g"] = ca.Function("g", [self.w, self.p], [self.g])
+            data["w_shape"] = self.w.shape
+            data["p_shape"] = self.p.shape
+
+            sigma, tau = 0.0, 0.0
+            lambda00 = self.model.compute_lambda00(self.opts)
+            data["p0"] = np.concatenate(
+                    (self.model.p_val_ctrl_stages.flatten(),
+                     np.array([sigma, tau]), lambda00, self.model.x0))
+            f.write(pickle.dumps(data))
