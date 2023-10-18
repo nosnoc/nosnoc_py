@@ -140,6 +140,19 @@ class NosnocFormulationObject(ABC):
             for j in range(n):
                 for x_i in x:
                     g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
+        elif opts.mpcc_mode == MpccMode.BOOLEAN:
+            bigM = 1e5
+            n_z = y.numel()
+            z = ca.SX.sym("z", n_z)
+            self.add_variable(z, self.ind_bool, np.zeros(n_z),
+                              np.ones(n_z), 0.5 * np.ones(n_z))
+            _x = casadi_sum_list([x_i for x_i in x])
+            g_comp = ca.vcat(
+                [bigM * z - y,  # y < bigM * z  -> 0 < ...
+                 y + bigM * z,
+                 bigM * (1 - z) - _x,
+                 _x + bigM * (1 - z)]
+            )
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode in [MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ]:
@@ -155,10 +168,11 @@ class NosnocFormulationObject(ABC):
         elif opts.mpcc_mode == MpccMode.ELASTIC_TWO_SIDED:
             lb_comp = np.hstack((-ca.inf*np.ones((n,)), np.zeros((n,))))
             ub_comp = np.hstack((np.zeros((n,)), ca.inf*np.ones((n,))))
+        elif opts.mpcc_mode == MpccMode.BOOLEAN:
+            lb_comp = np.zeros((n_comp,))
+            ub_comp = ca.inf * np.ones((n_comp,))
 
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
-
-        return
 
 
 class FiniteElementBase(NosnocFormulationObject):
@@ -254,6 +268,7 @@ class FiniteElement(FiniteElementBase):
         self.ind_h = []
 
         self.ind_comp = []
+        self.ind_bool = []
 
         # create variables
         h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -612,7 +627,6 @@ class NosnocProblem(NosnocFormulationObject):
                                ctrl_idx,
                                fe_idx=ii,
                                prev_fe=prev_fe)
-            self._add_finite_element(fe, ctrl_idx)
             control_stage.append(fe)
             prev_fe = fe
         return control_stage
@@ -643,7 +657,13 @@ class NosnocProblem(NosnocFormulationObject):
             self.stages.append(stage)
             prev_fe = stage[-1]
 
-    def _add_finite_element(self, fe: FiniteElement, ctrl_idx: int):
+    def _collect_finite_elements(self):
+        """Collect all FE"""
+        for ctrl_idx, stage in enumerate(self.stages):
+            for fe in stage:
+                self.__collect_final_element(fe, ctrl_idx)
+
+    def __collect_final_element(self, fe: FiniteElement, ctrl_idx: int):
         w_len = casadi_length(self.w)
         self._add_primal_vector(fe.w, fe.lbw, fe.ubw, fe.w0)
 
@@ -659,6 +679,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
         self.ind_z[ctrl_idx].append(increment_indices(fe.ind_z, w_len))
+        self.ind_bool[ctrl_idx].append(increment_indices(fe.ind_bool, w_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: ca.SX, lb: np.array, ub, initial):
@@ -717,6 +738,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
+        self.ind_bool = create_empty_list_matrix((opts.N_stages,))
         self.ind_z = create_empty_list_matrix((opts.N_stages,))
         self.ind_elastic = []
 
@@ -730,6 +752,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
+        tau = ca.SX.sym('tau')  # homotopy parameter
         if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
             # Elasticity parameter
             s_elastic = ca.SX.sym('s_elastic')
@@ -740,7 +763,6 @@ class NosnocProblem(NosnocFormulationObject):
         else:
             s_elastic = None
 
-        tau = ca.SX.sym('tau')  # homotopy parameter
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
         # Generate all the variables we need
@@ -798,7 +820,8 @@ class NosnocProblem(NosnocFormulationObject):
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        x_terminal = self.w[self.ind_x[-1][-1][-1]]
+        last_fe = self.stages[-1][-1]
+        x_terminal = last_fe.w[last_fe.ind_x[-1]]
         g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
@@ -814,6 +837,9 @@ class NosnocProblem(NosnocFormulationObject):
         if opts.N_stages > 1 and opts.use_fesd and not opts.equidistant_control_grid:
             all_h = [fe.h() for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
+
+        # Collect all w
+        self._collect_finite_elements()
 
         # CasADi Functions
         self.cost_fun = ca.Function('cost_fun', [self.w, self.p], [self.cost])
