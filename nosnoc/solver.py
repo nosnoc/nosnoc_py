@@ -503,8 +503,9 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
         time_steps = w_opt[prob.ind_h]
     else:
         t_stages = opts.terminal_time / opts.N_stages
+        time_steps = []
         for Nfe in opts.Nfe_list:
-            time_steps = Nfe * [t_stages / Nfe]
+            time_steps += [t_stages / Nfe] * Nfe
     results["time_steps"] = time_steps
 
     # results relevant for OCP:
