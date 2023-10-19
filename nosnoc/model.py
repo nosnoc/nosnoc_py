@@ -322,8 +322,8 @@ class NosnocModel:
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
         if opts.pss_mode == PssMode.STEWART:
             mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
-            self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.p], [mu00_stewart])
-            self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.p], [g_Stewart])
+            self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.z, self.p], [mu00_stewart])
+            self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.z, self.p], [g_Stewart])
 
     def create_stage_vars(self, opts: NosnocOpts):
         """
