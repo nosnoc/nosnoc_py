@@ -285,8 +285,8 @@ class NosnocSolverBase(ABC):
                 ca.sum1(theta)-1
             )
         ))
-        def fun(x, u):
-            g  = self.model.g_Stewart_fun(x, p)
+        def fun(x, u, z=[0]):
+            g  = self.model.g_Stewart_fun(x, z, p)
             theta = theta_fun(0, g)[:-1]
             F = self.model.F_fun(x, u, p, v)
             return np.dot(F, theta)
