@@ -271,12 +271,15 @@ class FiniteElement(FiniteElementBase):
         self.ind_bool = []
 
         # create variables
-        h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
-        ubh = (1 + opts.gamma_h) * h0
-        lbh = (1 - opts.gamma_h) * h0
-        self.add_step_size_variable(h, lbh, ubh, h0)
+        if opts.use_fesd:
+            self.h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
+            ubh = (1 + opts.gamma_h) * h0
+            lbh = (1 - opts.gamma_h) * h0
+            self.add_step_size_variable(self.h, lbh, ubh, h0)
+        else:
+            self.h = h0
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ, MpccMode.ELASTIC_EQ]:
             lb_dual = 0.0
@@ -388,7 +391,7 @@ class FiniteElement(FiniteElementBase):
                               ocp.lbx, ocp.ubx, model.x0, -1)
 
     def add_step_size_variable(self, symbolic: ca.SX, lb: float, ub: float, initial: float):
-        self.ind_h = casadi_length(self.w)
+        self.ind_h = [casadi_length(self.w)]
         self.w = ca.vertcat(self.w, symbolic)
 
         self.lbw = np.append(self.lbw, lb)
@@ -426,9 +429,6 @@ class FiniteElement(FiniteElementBase):
         Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
 
-    def h(self) -> List[ca.SX]:
-        return self.w[self.ind_h]
-
     def X_fe(self) -> List[ca.SX]:
         """returns list of all x values in finite element"""
         opts = self.opts
@@ -439,7 +439,7 @@ class FiniteElement(FiniteElementBase):
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
                 X_fe.append(x_temp)
             X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
@@ -462,7 +462,7 @@ class FiniteElement(FiniteElementBase):
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
                 # lifting constraints
                 self.add_constraint(self.w[self.ind_x[j]] - x_temp)
 
@@ -478,13 +478,13 @@ class FiniteElement(FiniteElementBase):
                 for r in range(opts.n_s):
                     xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
                 Xk_end += opts.D_irk[j + 1] * X_fe[j]
-                self.add_constraint(self.h() * fj - xj)
-                self.cost += opts.B_irk[j + 1] * self.h() * qj
+                self.add_constraint(self.h * fj - xj)
+                self.cost += opts.B_irk[j + 1] * self.h * qj
             elif (opts.irk_representation
                   in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
-                Xk_end += self.h() * opts.b_irk[j] * self.w[self.ind_v[j]]
+                Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
                 self.add_constraint(fj - self.w[self.ind_v[j]])
-                self.cost += opts.b_irk[j] * self.h() * qj
+                self.cost += opts.b_irk[j] * self.h * qj
 
         # continuity condition: end of fe state - final stage state
         if (not opts.right_boundary_point_explicit or
@@ -572,13 +572,13 @@ class FiniteElement(FiniteElementBase):
         # only step equilibration mode that does not require previous finite element
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
-            self.cost += opts.rho_h * (self.h() - h_fe)**2
+            self.cost += opts.rho_h * (self.h - h_fe)**2
             return
         elif not self.fe_idx > 0:
             return
 
         prev_fe: FiniteElement = self.prev_fe
-        delta_h_ki = self.h() - prev_fe.h()
+        delta_h_ki = self.h - prev_fe.h
 
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self.cost += opts.rho_h * delta_h_ki**2
@@ -668,7 +668,7 @@ class NosnocProblem(NosnocFormulationObject):
         self._add_primal_vector(fe.w, fe.lbw, fe.ubw, fe.w0)
 
         # update all indices
-        self.ind_h.append(fe.ind_h + w_len)
+        self.ind_h.extend(increment_indices(fe.ind_h, w_len))
         self.ind_x[ctrl_idx].append(increment_indices(fe.ind_x, w_len))
         self.ind_x_cont[ctrl_idx].append(increment_indices(fe.ind_x[-1], w_len))
         self.ind_v[ctrl_idx].append(increment_indices(fe.ind_v, w_len))
@@ -798,7 +798,7 @@ class NosnocProblem(NosnocFormulationObject):
                 self.add_fe_constraints(fe, ctrl_idx)
 
             if opts.use_fesd and opts.equidistant_control_grid:
-                self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
+                self.add_constraint(sum([fe.h for fe in stage]) - h_ctrl_stage)
 
             if opts.time_freezing and opts.equidistant_control_grid:
                 # TODO: make t0 dynamic (since now it needs to be 0!)
@@ -835,7 +835,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd and not opts.equidistant_control_grid:
-            all_h = [fe.h() for stage in self.stages for fe in stage]
+            all_h = [fe.h for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
 
         # Collect all w
