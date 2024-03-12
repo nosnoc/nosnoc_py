@@ -498,13 +498,13 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
         w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_lambda_p)
     ]
     results["z_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_z)]
-
     if opts.use_fesd:
         time_steps = w_opt[prob.ind_h]
     else:
         t_stages = opts.terminal_time / opts.N_stages
+        time_steps = []
         for Nfe in opts.Nfe_list:
-            time_steps = Nfe * [t_stages / Nfe]
+            time_steps += Nfe * [t_stages / Nfe]
     results["time_steps"] = time_steps
 
     # results relevant for OCP:
