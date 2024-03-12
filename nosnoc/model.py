@@ -298,6 +298,8 @@ class NosnocModel:
                 std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(n_c_sys[ii]) - alpha_ii)
                 lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
+        else:
+            raise NotImplementedError()
 
         # collect all algebraic equations
         g_z_all = ca.vertcat(g_switching, g_convex, g_lift, self.g_z)  # g_lift_forces

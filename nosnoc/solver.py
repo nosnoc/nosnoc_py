@@ -14,6 +14,17 @@ from nosnoc.rk_utils import rk4_on_timegrid
 from nosnoc.utils import flatten_layer, flatten, get_cont_algebraic_indices, flatten_outer_layers, check_ipopt_success
 
 
+def construct_problem(opts: NosnocOpts, model: NosnocModel, ocp: Optional[NosnocOcp] = None) -> NosnocProblem:
+    # preprocess inputs
+    opts.preprocess()
+    model.preprocess_model(opts)
+
+    if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
+        model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
+
+    return NosnocProblem(opts, model, ocp)
+
+
 class NosnocSolverBase(ABC):
 
     @abstractmethod
@@ -21,22 +32,11 @@ class NosnocSolverBase(ABC):
                  opts: NosnocOpts,
                  model: NosnocModel,
                  ocp: Optional[NosnocOcp] = None) -> None:
-        # preprocess inputs
-        opts.preprocess()
-        model.preprocess_model(opts)
-
-        if opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
-            model.add_smooth_step_representation(smoothing_parameter=opts.smoothing_parameter)
-
         # store references
         self.model = model
         self.ocp = ocp
         self.opts = opts
-
-        # create problem
-        problem = NosnocProblem(opts, model, ocp)
-        self.problem: NosnocProblem = problem
-        return
+        self.problem = construct_problem(opts, model, ocp)
 
     def set(self, field: str, value: np.ndarray) -> None:
         """
@@ -49,7 +49,7 @@ class NosnocSolverBase(ABC):
         dims = prob.model.dims
         if field == 'x0':
             prob.model.x0 = value
-        elif field == 'x': # TODO: check other dimensions for useful error message
+        elif field == 'x':  # TODO: check other dimensions for useful error message
             if value.shape[0] == self.opts.N_stages:
                 # Shape is equal to the number of control stages
                 for i, sub_idx in enumerate(prob.ind_x):
@@ -503,8 +503,9 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
         time_steps = w_opt[prob.ind_h]
     else:
         t_stages = opts.terminal_time / opts.N_stages
+        time_steps = []
         for Nfe in opts.Nfe_list:
-            time_steps = Nfe * [t_stages / Nfe]
+            time_steps += [t_stages / Nfe] * Nfe
     results["time_steps"] = time_steps
 
     # results relevant for OCP:

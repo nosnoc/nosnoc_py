@@ -27,6 +27,7 @@ class MpccMode(Enum):
     ELASTIC_INEQ = auto()
     ELASTIC_EQ = auto()
     ELASTIC_TWO_SIDED = auto()
+    BOOLEAN = auto()
     # KANZOW_SCHWARTZ = auto()
     # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
     # NOTE: tested in simple_sim_tests

@@ -140,6 +140,19 @@ class NosnocFormulationObject(ABC):
             for j in range(n):
                 for x_i in x:
                     g_comp[j + 3 * n] = opts.fb_ip_aug2_weight * (g_comp[j]) * ca.sqrt(1 + (x_i[j] - y[j])**2)
+        elif opts.mpcc_mode == MpccMode.BOOLEAN:
+            bigM = 1e5
+            n_z = y.numel()
+            z = ca.SX.sym("z", n_z)
+            self.add_variable(z, self.ind_bool, np.zeros(n_z),
+                              np.ones(n_z), 0.5 * np.ones(n_z))
+            _x = casadi_sum_list([x_i for x_i in x])
+            g_comp = ca.vcat(
+                [bigM * z - y,  # y < bigM * z  -> 0 < ...
+                 y + bigM * z,
+                 bigM * (1 - z) - _x,
+                 _x + bigM * (1 - z)]
+            )
 
         n_comp = casadi_length(g_comp)
         if opts.mpcc_mode in [MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ]:
@@ -155,10 +168,11 @@ class NosnocFormulationObject(ABC):
         elif opts.mpcc_mode == MpccMode.ELASTIC_TWO_SIDED:
             lb_comp = np.hstack((-ca.inf*np.ones((n,)), np.zeros((n,))))
             ub_comp = np.hstack((np.zeros((n,)), ca.inf*np.ones((n,))))
+        elif opts.mpcc_mode == MpccMode.BOOLEAN:
+            lb_comp = np.zeros((n_comp,))
+            ub_comp = ca.inf * np.ones((n_comp,))
 
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
-
-        return
 
 
 class FiniteElementBase(NosnocFormulationObject):
@@ -254,14 +268,18 @@ class FiniteElement(FiniteElementBase):
         self.ind_h = []
 
         self.ind_comp = []
+        self.ind_bool = []
 
         # create variables
-        h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
         h_ctrl_stage = opts.terminal_time / opts.N_stages
         h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
-        ubh = (1 + opts.gamma_h) * h0
-        lbh = (1 - opts.gamma_h) * h0
-        self.add_step_size_variable(h, lbh, ubh, h0)
+        if opts.use_fesd:
+            self.h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
+            ubh = (1 + opts.gamma_h) * h0
+            lbh = (1 - opts.gamma_h) * h0
+            self.add_step_size_variable(self.h, lbh, ubh, h0)
+        else:
+            self.h = h0
 
         if opts.mpcc_mode in [MpccMode.SCHOLTES_EQ, MpccMode.SCHOLTES_INEQ, MpccMode.ELASTIC_INEQ, MpccMode.ELASTIC_EQ]:
             lb_dual = 0.0
@@ -373,7 +391,7 @@ class FiniteElement(FiniteElementBase):
                               ocp.lbx, ocp.ubx, model.x0, -1)
 
     def add_step_size_variable(self, symbolic: ca.SX, lb: float, ub: float, initial: float):
-        self.ind_h = casadi_length(self.w)
+        self.ind_h = [casadi_length(self.w)]
         self.w = ca.vertcat(self.w, symbolic)
 
         self.lbw = np.append(self.lbw, lb)
@@ -411,9 +429,6 @@ class FiniteElement(FiniteElementBase):
         Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
 
-    def h(self) -> List[ca.SX]:
-        return self.w[self.ind_h]
-
     def X_fe(self) -> List[ca.SX]:
         """returns list of all x values in finite element"""
         opts = self.opts
@@ -424,7 +439,7 @@ class FiniteElement(FiniteElementBase):
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
                 X_fe.append(x_temp)
             X_fe.append(self.w[self.ind_x[-1]])
         elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
@@ -447,7 +462,7 @@ class FiniteElement(FiniteElementBase):
             for j in range(opts.n_s):
                 x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
-                    x_temp += self.h() * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
                 # lifting constraints
                 self.add_constraint(self.w[self.ind_x[j]] - x_temp)
 
@@ -463,13 +478,13 @@ class FiniteElement(FiniteElementBase):
                 for r in range(opts.n_s):
                     xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
                 Xk_end += opts.D_irk[j + 1] * X_fe[j]
-                self.add_constraint(self.h() * fj - xj)
-                self.cost += opts.B_irk[j + 1] * self.h() * qj
+                self.add_constraint(self.h * fj - xj)
+                self.cost += opts.B_irk[j + 1] * self.h * qj
             elif (opts.irk_representation
                   in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
-                Xk_end += self.h() * opts.b_irk[j] * self.w[self.ind_v[j]]
+                Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
                 self.add_constraint(fj - self.w[self.ind_v[j]])
-                self.cost += opts.b_irk[j] * self.h() * qj
+                self.cost += opts.b_irk[j] * self.h * qj
 
         # continuity condition: end of fe state - final stage state
         if (not opts.right_boundary_point_explicit or
@@ -557,13 +572,13 @@ class FiniteElement(FiniteElementBase):
         # only step equilibration mode that does not require previous finite element
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
-            self.cost += opts.rho_h * (self.h() - h_fe)**2
+            self.cost += opts.rho_h * (self.h - h_fe)**2
             return
         elif not self.fe_idx > 0:
             return
 
         prev_fe: FiniteElement = self.prev_fe
-        delta_h_ki = self.h() - prev_fe.h()
+        delta_h_ki = self.h - prev_fe.h
 
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self.cost += opts.rho_h * delta_h_ki**2
@@ -612,7 +627,6 @@ class NosnocProblem(NosnocFormulationObject):
                                ctrl_idx,
                                fe_idx=ii,
                                prev_fe=prev_fe)
-            self._add_finite_element(fe, ctrl_idx)
             control_stage.append(fe)
             prev_fe = fe
         return control_stage
@@ -643,12 +657,18 @@ class NosnocProblem(NosnocFormulationObject):
             self.stages.append(stage)
             prev_fe = stage[-1]
 
-    def _add_finite_element(self, fe: FiniteElement, ctrl_idx: int):
+    def _collect_finite_elements(self):
+        """Collect all FE"""
+        for ctrl_idx, stage in enumerate(self.stages):
+            for fe in stage:
+                self.__collect_final_element(fe, ctrl_idx)
+
+    def __collect_final_element(self, fe: FiniteElement, ctrl_idx: int):
         w_len = casadi_length(self.w)
         self._add_primal_vector(fe.w, fe.lbw, fe.ubw, fe.w0)
 
         # update all indices
-        self.ind_h.append(fe.ind_h + w_len)
+        self.ind_h.extend(increment_indices(fe.ind_h, w_len))
         self.ind_x[ctrl_idx].append(increment_indices(fe.ind_x, w_len))
         self.ind_x_cont[ctrl_idx].append(increment_indices(fe.ind_x[-1], w_len))
         self.ind_v[ctrl_idx].append(increment_indices(fe.ind_v, w_len))
@@ -659,6 +679,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
         self.ind_z[ctrl_idx].append(increment_indices(fe.ind_z, w_len))
+        self.ind_bool[ctrl_idx].append(increment_indices(fe.ind_bool, w_len))
 
     # TODO: can we just use add_variable? It is a bit involved, since index vectors here have different format.
     def _add_primal_vector(self, symbolic: ca.SX, lb: np.array, ub, initial):
@@ -717,6 +738,7 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
+        self.ind_bool = create_empty_list_matrix((opts.N_stages,))
         self.ind_z = create_empty_list_matrix((opts.N_stages,))
         self.ind_elastic = []
 
@@ -730,6 +752,7 @@ class NosnocProblem(NosnocFormulationObject):
 
         # setup parameters, lambda00 is added later:
         sigma_p = ca.SX.sym('sigma_p')  # homotopy parameter
+        tau = ca.SX.sym('tau')  # homotopy parameter
         if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
             # Elasticity parameter
             s_elastic = ca.SX.sym('s_elastic')
@@ -740,7 +763,6 @@ class NosnocProblem(NosnocFormulationObject):
         else:
             s_elastic = None
 
-        tau = ca.SX.sym('tau')  # homotopy parameter
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
 
         # Generate all the variables we need
@@ -776,7 +798,7 @@ class NosnocProblem(NosnocFormulationObject):
                 self.add_fe_constraints(fe, ctrl_idx)
 
             if opts.use_fesd and opts.equidistant_control_grid:
-                self.add_constraint(sum([fe.h() for fe in stage]) - h_ctrl_stage)
+                self.add_constraint(sum([fe.h for fe in stage]) - h_ctrl_stage)
 
             if opts.time_freezing and opts.equidistant_control_grid:
                 # TODO: make t0 dynamic (since now it needs to be 0!)
@@ -798,7 +820,8 @@ class NosnocProblem(NosnocFormulationObject):
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        x_terminal = self.w[self.ind_x[-1][-1][-1]]
+        last_fe = self.stages[-1][-1]
+        x_terminal = last_fe.w[last_fe.ind_x[-1]]
         g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
         self.add_constraint(g_terminal)
         self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
@@ -812,8 +835,11 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Terminal numerical time
         if opts.N_stages > 1 and opts.use_fesd and not opts.equidistant_control_grid:
-            all_h = [fe.h() for stage in self.stages for fe in stage]
+            all_h = [fe.h for stage in self.stages for fe in stage]
             self.add_constraint(sum(all_h) - opts.terminal_time)
+
+        # Collect all w
+        self._collect_finite_elements()
 
         # CasADi Functions
         self.cost_fun = ca.Function('cost_fun', [self.w, self.p], [self.cost])
@@ -869,3 +895,25 @@ class NosnocProblem(NosnocFormulationObject):
         if not self.ocp_trivial:
             return False
         return True
+
+    def dump(self, file):
+        """Dump the problem to a file."""
+        import pickle
+        with open(file, "wb") as f:
+            data = {
+                key: self.__dict__[key] for key in self.__dict__
+                if key not in [
+                    "w", "p", "cost", "g", "model", "ocp", "stages", "fe0"
+                ]
+            }
+            data["f"] = ca.Function("f", [self.w, self.p], [self.cost])
+            data["g"] = ca.Function("g", [self.w, self.p], [self.g])
+            data["w_shape"] = self.w.shape
+            data["p_shape"] = self.p.shape
+
+            sigma, tau = 0.0, 0.0
+            lambda00 = self.model.compute_lambda00(self.opts)
+            data["p0"] = np.concatenate(
+                    (self.model.p_val_ctrl_stages.flatten(),
+                     np.array([sigma, tau]), lambda00, self.model.x0))
+            f.write(pickle.dumps(data))
