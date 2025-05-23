@@ -1,0 +1,1 @@
+This file (and the casadi directory) should end up in a folder called 'casadi-windows64-py310'

@@ -1,0 +1,11 @@
+prefix=/work/build/external_projects
+libdir=${prefix}/lib
+includedir=${prefix}/include/highs
+
+Name: OsiHiGHS
+Description: COIN-OR Open Solver Interface for HiGHS
+URL: https://github.com/ERGO-Code/HiGHS
+Version: 1.4.0
+Libs: -L${libdir} -lOsiHighs
+Cflags: -I${includedir}
+Requires.private: osi highs
