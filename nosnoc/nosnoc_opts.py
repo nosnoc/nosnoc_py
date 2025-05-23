@@ -5,7 +5,7 @@ import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .utils import validate
-from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, PssMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
+from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, DcsMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
 
 
 def _assign(dictionary, keys, value):
@@ -35,7 +35,7 @@ class NosnocOpts:
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
     constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 
-    pss_mode: PssMode = PssMode.STEWART  # possible options: Stewart and Step
+    dcs_mode: DcsMode = DcsMode.STEWART  # possible options: Stewart and Step
 
     use_upper_bound_h: bool = True
     gamma_h: float = 1.0

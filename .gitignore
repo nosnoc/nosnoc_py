@@ -1,5 +1,6 @@
 __pycache__
 env
+noc_env
 .vscode
 .coverage
 

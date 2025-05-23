@@ -5,7 +5,7 @@ import matplotlib
 
 from nosnoc import NosnocProblem, get_results_from_primal_vector
 from .utils import flatten_layer
-from .nosnoc_types import PssMode
+from .nosnoc_types import DcsMode
 
 
 def latexify_plot():
@@ -74,7 +74,7 @@ def plot_iterates(problem: NosnocProblem,
     if title_list == []:
         title_list = n_iterates * ['']
 
-    if problem.opts.pss_mode != PssMode.STEWART:
+    if problem.opts.dcs_mode != DcsMode.STEWART:
         raise NotImplementedError
 
     n_row = 3

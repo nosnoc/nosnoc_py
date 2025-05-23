@@ -89,7 +89,7 @@ class SpeedOfTimeVariableMode(Enum):
     GLOBAL = auto()  # Single speed of time variable used across whole problem
 
 
-class PssMode(Enum):
+class DcsMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).
     """
@@ -114,6 +114,18 @@ class PssMode(Enum):
     lambda_p_i >= 0;    for all i = 1,..., n_sys
     alpha_i >= 0;     for all i = 1,..., n_sys
     """
+
+    PDS = auto()
+    """
+    PDS representaion
+
+    f_x_unconstrained - Unconstrained System Dynamics expression  f(x)
+    c - The gap functions c(x) used in the definition of the feasible set.
+    E - Square matrix E that is used as the weighting matrix for the projection operator. By default this is the identity matrix.             
+    """
+
+
+
 
 
 class Status(Enum):

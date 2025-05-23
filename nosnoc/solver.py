@@ -7,7 +7,7 @@ import time
 
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
+from nosnoc.nosnoc_types import InitializationStrategy, DcsMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
 from nosnoc.rk_utils import rk4_on_timegrid
@@ -62,7 +62,7 @@ class NosnocSolverBase(ABC):
                 for sub_idx in prob.ind_x:
                     for ssub_idx in sub_idx:
                         for sssub_idx in ssub_idx:
-                            prob.w0[sssub_idx] = value[i, :]
+                            prob.w0[ssub_idx] = value[i, :]
                         i += 1
             else:
                 raise ValueError("value should have shape matching N_stages "
@@ -196,10 +196,24 @@ class NosnocSolverBase(ABC):
         return
 
     def setup_p_val(self, sigma, tau) -> None:
+        """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
-        self.p_val = np.concatenate(
-                (model.p_val_ctrl_stages.flatten(),
-                 np.array([sigma, tau]), self.lambda00, model.x0))
+        if self.opts.dcs_mode == DcsMode.PDS:
+            # For PDS, we only need: p_time_var, p_global, sigma, tau
+            self.p_val = np.concatenate((
+                model.p_val_ctrl_stages.flatten(),  # [p_time_var, p_global]
+                np.array([sigma, tau])
+            ))
+        else:   
+            self.p_val = np.concatenate((
+                model.p_val_ctrl_stages.flatten(), 
+                np.array([sigma, tau]), 
+                self.lambda00, 
+                model.x0
+            ))
+        # Debug print
+        print(f"Parameter vector shape: {self.p_val.shape}")
+        print(f"Expected shape from NLP: {self.problem.p.shape}")
         return
 
 
@@ -270,7 +284,7 @@ class NosnocSolverBase(ABC):
 
     def create_function_calculate_vector_field(self, sigma, p=[], v=[]):
         """Create a function to calculate the vector field."""
-        if self.opts.pss_mode != PssMode.STEWART:
+        if self.opts.pss_mode != DcsMode.STEWART:
             raise NotImplementedError()
 
         shape = self.model.g_Stewart_fun.size_out(0)
@@ -349,7 +363,7 @@ class NosnocSolver(NosnocSolverBase):
 
         sigma_k = opts.sigma_0
 
-        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
+        if opts.fix_active_set_fe0 and opts.dcs_mode == DcsMode.STEWART:
             lbw = prob.lbw.copy()
             ubw = prob.ubw.copy()
 
@@ -521,7 +535,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     # NOTE: this doesn't handle sliding modes well. But seems nontrivial.
     # compute based on changes in alpha or theta
     switch_indices = []
-    if opts.pss_mode == PssMode.STEP:
+    if opts.dcs_mode == DcsMode.STEP:
         alpha_prev = results["alpha_list"][0]
         for i, alpha in enumerate(results["alpha_list"][1:]):
             if any(np.abs(alpha - alpha_prev) > 0.1):

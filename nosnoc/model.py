@@ -5,7 +5,7 @@ import casadi as ca
 
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.dims import NosnocDims
-from nosnoc.nosnoc_types import PssMode
+from nosnoc.nosnoc_types import DcsMode
 from nosnoc.utils import casadi_length, casadi_vertcat_list
 
 
@@ -49,6 +49,8 @@ class NosnocModel:
     :param v_global: additional timefree optimization variables
     :param t_var: time variable (for time freezing)
     :param name: name of the model
+    :param f_unconstrained: unconstrained system dynamics expression f(x)
+    :param c_pds: the gap functions c(x) used in the definition of the feasible set.
     """
 
     # TODO: extend docu for n_sys > 1
@@ -58,6 +60,8 @@ class NosnocModel:
                  x: ca.SX,
                  x0: Optional[np.ndarray],
                  F: Optional[List[ca.SX]] = None,
+                 f_unconstrained: Optional[List[ca.SX]] = None,
+                 c_pds: Optional[List[ca.SX]] = None,
                  c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
@@ -81,18 +85,20 @@ class NosnocModel:
         self.alpha: List[ca.SX] = alpha
         self.theta: List[ca.SX] = theta
         self.F: Optional[List[ca.SX]] = F
+        self.f_unconstrained: Optional[List[ca.SX]] = f_unconstrained
+        self.c_pds: Optional[List[ca.SX]] = c_pds
         self.f_x: List[ca.SX] = f_x
         self.g_z: ca.SX = g_z
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
 
-        if not (bool(F is not None) ^ bool((f_x is not None) and (alpha is not None))):
-            raise ValueError("Provide either F (Fillipov) or f_x and alpha")
+        if not (bool(F is not None) ^ (bool((f_x is not None) and (alpha is not None))) ^ bool(f_unconstrained is not None)):
+            raise ValueError("Provide either F (Fillipov) or f_x and alpha (Step) or f_unconstrained (PDS)!")
         # Either c and S or g is given!
         if F is not None:
-            if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None)):
-                raise ValueError("Provide either c and S or g, not both!")
+            if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None) ^ bool(c_pds is not None)):
+                raise ValueError("Provide either c and S or g or c_pds !")
 
         self.x0: np.ndarray = x0
         self.p_time_var: ca.SX = p_time_var
@@ -122,7 +128,13 @@ class NosnocModel:
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
         n_z = casadi_length(self.z)
-        n_sys = len(self.F) if self.F is not None else len(self.f_x)
+        if self.F is not None:
+            n_sys = len(self.F) 
+        elif self.f_x is not None:
+            n_sys = len(self.f_x)   
+        else:
+            n_sys = len(self.f_unconstrained)
+    
 
         if self.z0 is None:
             self.z0 = np.zeros((n_z,))
@@ -139,8 +151,10 @@ class NosnocModel:
 
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
+        elif self.c_pds:
+            n_c_sys = [casadi_length(self.c_pds[i]) for i in range(n_sys)]
         else:
-            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
+            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]    
 
         # sanity checks
         if self.F is not None:
@@ -152,8 +166,8 @@ class NosnocModel:
                     raise Warning(f"model.F item {i} is not a switching system!")
 
             if self.g_Stewart:
-                if opts.pss_mode != PssMode.STEWART:
-                    raise ValueError("model.g_Stewart is used and pss_mode should be STEWART")
+                if opts.dcs_mode != DcsMode.STEWART:
+                    raise ValueError("model.g_Stewart is used andcs should be STEWART")
                 if not isinstance(self.g_Stewart, list):
                     raise ValueError("model.g_Stewart should be a list.")
                 for i, g_Stewart in enumerate(self.g_Stewart):
@@ -170,15 +184,23 @@ class NosnocModel:
                     if fi.shape[1] != Si.shape[0]:
                         raise ValueError(
                             f"model.F item {i} and S {i} should have the same number of columns")
-        else:  # Only check Step because Stewart is not allowed for general inclusions
-            if opts.pss_mode == PssMode.STEWART:
-                raise ValueError("model formulation with general inclusions using model.f_x is not supported with PssMode.STEWART")
+        
+        elif self.f_x is not None:  # Only check Step because Stewart is not allowed for general inclusions
+            if opts.dcs_mode == DcsMode.STEWART:
+                raise ValueError("model formulation with general inclusions using model.f_x is not supported with Dcs.STEWART")
             n_f_sys = [self.f_x[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.c, list):
                 raise ValueError("model.c should be a list.")
             if casadi_length(casadi_vertcat_list(self.c)) != casadi_length(casadi_vertcat_list(self.alpha)):
                 raise ValueError("model.c and model.alpha should have the same length!")
 
+        elif self.f_unconstrained is not None:
+            if self.c_pds:
+                if opts.dcs_mode != DcsMode.PDS:
+                    raise ValueError("model formulation with PDS is not supported with other DCS modes")
+                if not isinstance(self.c_pds, list):
+                    raise ValueError("model.c_pds should be a list.")
+                n_f_sys = [self.f_unconstrained[i].shape[1] for i in range(n_sys)]
         # parameters
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
@@ -221,7 +243,7 @@ class NosnocModel:
                                n_p_glob=n_p_glob,
                                n_z=n_z)
 
-        if opts.pss_mode == PssMode.STEWART:
+        if opts.dcs_mode == DcsMode.STEWART:
             if self.g_Stewart:
                 g_Stewart_list = self.g_Stewart
             else:
@@ -238,7 +260,7 @@ class NosnocModel:
 
         # setup upsilon
         upsilon = []
-        if opts.pss_mode == PssMode.STEP and self.F is not None:
+        if opts.dcs_mode == DcsMode.STEP and self.F is not None:
             for ii in range(self.dims.n_sys):
                 upsilon_temp = []
                 S_temp = self.S[ii]
@@ -269,12 +291,17 @@ class NosnocModel:
                        self.z)
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
-            f_x = casadi_vertcat_list(self.f_x)
-            z[0:sum(n_c_sys)] = casadi_vertcat_list(self.alpha)
+            if self.f_x is not None:
+                f_x = casadi_vertcat_list(self.f_x)
+                z[0:sum(n_c_sys)] = casadi_vertcat_list(self.alpha)
+            elif self.f_unconstrained is not None:
+                f_x = ca.SX.zeros((n_x, 1))  # will be built in the PDS branch below
+            else:
+                raise ValueError("No valid dynamics provided.")
         else:
             f_x = ca.SX.zeros((n_x, 1))
 
-        if opts.pss_mode == PssMode.STEWART:
+        if opts.dcs_mode == DcsMode.STEWART:
             for ii in range(n_sys):
                 f_x = f_x + self.F[ii] @ theta[ii]
                 g_switching = ca.vertcat(
@@ -284,7 +311,7 @@ class NosnocModel:
                 std_compl_res += ca.fabs(lam[ii].T @ theta[ii])
                 lambda00_expr = ca.vertcat(lambda00_expr,
                                            g_Stewart_list[ii] - ca.mmin(g_Stewart_list[ii]))
-        elif opts.pss_mode == PssMode.STEP:
+        elif opts.dcs_mode == DcsMode.STEP:
             for ii in range(n_sys):
                 if self.F is not None:
                     f_x = f_x + self.F[ii] @ upsilon[:, ii]
@@ -298,9 +325,15 @@ class NosnocModel:
                 std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(n_c_sys[ii]) - alpha_ii)
                 lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
-        else:
-            raise NotImplementedError()
+        elif opts.dcs_mode == DcsMode.PDS:
+            for ii in range(n_sys):
+                f_x = f_x + self.f_unconstrained[ii] + ca.jacobian(self.c_pds[ii], self.x).T @ lam[ii]
+                g_switching = ca.vertcat(g_switching,self.c_pds[ii] - lam[ii])
+                std_compl_res += ca.transpose(lam[ii]) @ self.c_pds[ii]
+                lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c_pds[ii], 0),
+                                           ca.fmax(self.c_pds[ii], 0))
 
+            
         # collect all algebraic equations
         g_z_all = ca.vertcat(g_switching, g_convex, g_lift, self.g_z)  # g_lift_forces
 
@@ -322,7 +355,7 @@ class NosnocModel:
         self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
 
         self.std_compl_res_fun = ca.Function('std_compl_res_fun', [z, self.p], [std_compl_res])
-        if opts.pss_mode == PssMode.STEWART:
+        if opts.dcs_mode == DcsMode.STEWART:
             mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
             self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.z, self.p], [mu00_stewart])
             self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.z, self.p], [g_Stewart])
@@ -333,7 +366,7 @@ class NosnocModel:
         """
         dims = self.dims
         # algebraic variables
-        if opts.pss_mode == PssMode.STEWART:
+        if opts.dcs_mode == DcsMode.STEWART:
             # add thetas
             theta = [ca.SX.sym('theta', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add lambdas
@@ -345,7 +378,7 @@ class NosnocModel:
             alpha = []
             lambda_n = []
             lambda_p = []
-        elif opts.pss_mode == PssMode.STEP:
+        elif opts.dcs_mode == DcsMode.STEP:
             # add alpha
             alpha = [ca.SX.sym('alpha', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_n
@@ -357,6 +390,19 @@ class NosnocModel:
             theta = []
             lam = []
             mu = []
+
+        elif opts.dcs_mode == DcsMode.PDS:
+            
+            # add lambda
+            lam = [ca.SX.sym('lambda', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
+
+            # unused
+            theta = []  
+            mu = []
+            alpha = []
+            lambda_n = []
+            lambda_p = []
+
         return theta, lam, mu, alpha, lambda_n, lambda_p
 
     def add_smooth_step_representation(self, smoothing_parameter: float = 1e1):
