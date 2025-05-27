@@ -62,7 +62,7 @@ class NosnocSolverBase(ABC):
                 for sub_idx in prob.ind_x:
                     for ssub_idx in sub_idx:
                         for sssub_idx in ssub_idx:
-                            prob.w0[sssub_idx] = value[i, :]
+                            prob.w0[ssub_idx] = value[i, :]
                         i += 1
             else:
                 raise ValueError("value should have shape matching N_stages "

@@ -202,6 +202,7 @@ class FiniteElementZero(FiniteElementBase):
 
         # lambda00
         if opts.dcs_mode == DcsMode.STEWART:
+
             for ij in range(dims.n_sys):
                 initial_lambda = np.ones(dims.n_f_sys[ij]) # not used
                 self.add_variable(ca.SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
@@ -357,12 +358,6 @@ class FiniteElement(FiniteElementBase):
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
-            
-            elif opts.dcs_mode == DcsMode.PDS:
-                initial_lambda = np.ones(dims.n_f_sys[0]) 
-                self.add_variable(ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{1}', dims.n_f_sys[0]),
-                        self.ind_lam, -np.inf * np.ones(dims.n_f_sys[0]), np.inf * np.ones(dims.n_f_sys[0]), initial_lambda, ii,0)
-                    
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
