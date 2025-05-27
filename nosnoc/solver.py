@@ -62,7 +62,7 @@ class NosnocSolverBase(ABC):
                 for sub_idx in prob.ind_x:
                     for ssub_idx in sub_idx:
                         for sssub_idx in ssub_idx:
-                            prob.w0[ssub_idx] = value[i, :]
+                            prob.w0[sssub_idx] = value[i, :]
                         i += 1
             else:
                 raise ValueError("value should have shape matching N_stages "
@@ -202,7 +202,7 @@ class NosnocSolverBase(ABC):
             # For PDS, we only need: p_time_var, p_global, sigma, tau
             self.p_val = np.concatenate((
                 model.p_val_ctrl_stages.flatten(),  # [p_time_var, p_global]
-                np.array([sigma, tau])
+                np.array([sigma, tau]),model.x0
             ))
         else:   
             self.p_val = np.concatenate((

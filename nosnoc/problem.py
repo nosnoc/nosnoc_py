@@ -196,8 +196,6 @@ class FiniteElementZero(FiniteElementBase):
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
-        self.u = ca.SX.sym('u', 1)  # Example: 1-dimensional control
-        self.v_global = ca.SX.sym('v_global', 1)  # Example: 1-dimensional global variable
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
         self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
@@ -223,12 +221,13 @@ class FiniteElementZero(FiniteElementBase):
                                   initial_lambda, 0, ij)
 
         elif opts.dcs_mode == DcsMode.PDS:
-            for ij in range(dims.n_sys):
-                initial_lambda = np.ones(dims.n_f_sys[ij])
-                self.add_variable(ca.SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
-                                  -np.inf * np.ones(dims.n_f_sys[ij]),
-                                  np.inf * np.ones(dims.n_f_sys[ij]),
-                                  initial_lambda, 0, ij)
+            # In PDS mode we don't need multiple lambda variables per system
+            initial_lambda = np.ones(dims.n_f_sys[0])  # Use first dimension
+            self.add_variable(ca.SX.sym(f'lambda00', dims.n_f_sys[0]), self.ind_lam,
+                              -np.inf * np.ones(dims.n_f_sys[0]),
+                              np.inf * np.ones(dims.n_f_sys[0]),
+                              initial_lambda, 0, 0)  # Only one system slot needed
+
                 
 class FiniteElement(FiniteElementBase):
 
@@ -360,11 +359,9 @@ class FiniteElement(FiniteElementBase):
                         .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
             
             elif opts.dcs_mode == DcsMode.PDS:
-                for ij in range(dims.n_sys):
-                    initial_lambda = np.ones(dims.n_f_sys[ij]) 
-                    self.add_variable(
-                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, -np.inf * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]), initial_lambda, ii, ij)
+                initial_lambda = np.ones(dims.n_f_sys[0]) 
+                self.add_variable(ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{1}', dims.n_f_sys[0]),
+                        self.ind_lam, -np.inf * np.ones(dims.n_f_sys[0]), np.inf * np.ones(dims.n_f_sys[0]), initial_lambda, ii,0)
                     
             # user algebraic variables
             self.add_variable(
@@ -404,11 +401,12 @@ class FiniteElement(FiniteElementBase):
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         .5 * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
             elif opts.dcs_mode == DcsMode.PDS:
-                for ij in range(dims.n_sys):
-                    initial_lambda = np.ones(dims.n_f_sys[ij]) 
-                    self.add_variable(
-                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lam, -np.inf * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]), initial_lambda, opts.n_s, ij)
+                if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+                    raise NotImplementedError("PDS mode does not support DIFFERENTIAL IRK representation")
+                initial_lambda = np.ones(dims.n_f_sys[0]) 
+                self.add_variable(
+                    ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_f_sys[0]),
+                    self.ind_lam, -np.inf * np.ones(dims.n_f_sys[0]), np.inf * np.ones(dims.n_f_sys[0]), initial_lambda, opts.n_s, 0)
                             
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
@@ -457,7 +455,8 @@ class FiniteElement(FiniteElementBase):
 
     def get_c_pds_incl_last_prev_fe(self, sys=slice(None)):
         c_pds = [self.model.c_pds[sys](self.X_fe()[ii]) for ii in range(len(self.ind_c_pds))]
-        c_pds += [self.prev_fe.model.c_pds[sys](self.prev_fe.X_fe()[-1])]
+        for x_i in self.X_fe():
+            c_pds += [self.model.c_pds_fun(x_i)]
         return c_pds
 
     def sum_c_pds(self, sys=slice(None)):
@@ -504,21 +503,19 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            p_stage = self.p[:4]
-            fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p_stage, model.v_global)
+        
+            fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
             self.add_constraint(gj)
             if opts.dcs_mode == DcsMode.PDS:
                 # Add PDS-specific constraints
-                # lam = self.Lambda(stage=j)  # or use self.ind_lam
                 lam = self.w[flatten(self.ind_lam[j])]
-                # c_pds is a list, one per system
-                for sys_idx in range(model.dims.n_sys):
-                    c_pds_val = ca.Function('c_pds_tmp', [model.x], [model.c_pds[sys_idx]])(X_fe[j])  # or however you evaluate c_pds
-                    self.add_constraint(c_pds_val - lam[sys_idx])
-                # Add the unconstrained dynamics as the ODE
-                self.add_constraint(fj - ca.Function('f_unconstrained_tmp', [model.x], [model.f_unconstrained[sys_idx]])(X_fe[j]))
+                c_pds_val = model.c_pds_fun(X_fe[j])
+                self.add_constraint(c_pds_val - lam)
+
+                # Add the full ODE dynamics 
+                self.add_constraint(fj)
             
             else:
                 if opts.irk_representation == IrkRepresentation.INTEGRAL:
@@ -599,11 +596,9 @@ class FiniteElement(FiniteElementBase):
             # For PDS, enforce complementarity between lambda and c_pds
             for j in range(opts.n_s):
                 lam = self.w[flatten(self.ind_lam[j])]
-                # Loop over each subsystem
-                for sys_idx in range(self.model.dims.n_sys):
-                    c_pds_val = ca.Function('c_pds_tmp', [self.model.x], [self.model.c_pds[sys_idx]])(X_fe[j])
-                    # Create complementarity between the lambda value of the current subsystem and its c_pds
-                    self.create_complementarity([lam[sys_idx]], c_pds_val, sigma_p, tau, s_elastic)
+                c_pds_val = ca.Function('c_pds_tmp', [self.model.x], [self.model.c_pds[0]])(X_fe[j])
+                # Create complementarity between the lambda value of the current subsystem and its c_pds
+                self.create_complementarity([lam], c_pds_val, sigma_p, tau, s_elastic)
     
         else:
             if not opts.use_fesd:
