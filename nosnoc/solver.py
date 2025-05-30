@@ -198,22 +198,47 @@ class NosnocSolverBase(ABC):
     def setup_p_val(self, sigma, tau) -> None:
         """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
+        
         if self.opts.dcs_mode == DcsMode.PDS:
-            # For PDS, we only need: p_time_var, p_global, sigma, tau
-            self.p_val = np.concatenate((
-                model.p_val_ctrl_stages.flatten(),  # [p_time_var, p_global]
-                np.array([sigma, tau]),model.x0
-            ))
+            # Convert x0 to numpy array and ensure correct shape
+            x0_array = np.array(model.x0).reshape(-1)
+            
+            # Build parameter vector components
+            p_ctrl = model.p_val_ctrl_stages.flatten()  # Original parameters
+            p_pds = np.array([sigma, tau])             # PDS parameters
+            p_slack = np.ones(1)                       # Slack variable
+            
+            # Construct parameter vector in specific order:
+            # [original_params, slack, sigma, tau, x0]
+            self.p_val = np.concatenate([
+                p_ctrl,          # Original parameters
+                p_slack,         # Slack variable (always 1)  
+                p_pds,          # Sigma and tau
+                x0_array        # Initial state
+            ])
+            
+            # Debug prints
+            print("\nDEBUG: PDS Parameter Structure")
+            print(f"Original parameters: {p_ctrl.shape}")
+            print(f"Slack variable: {p_slack.shape}")
+            print(f"PDS parameters: {p_pds.shape}")
+            print(f"Initial state: {x0_array.shape}")
+            print(f"Total parameters: {self.p_val.shape}")
+            print(f"Parameter values: {self.p_val}")
         else:   
-            self.p_val = np.concatenate((
+            # Convert list x0 to numpy array for other modes
+            x0_array = np.array(model.x0).reshape(-1, 1)
+            self.p_val = np.concatenate([
                 model.p_val_ctrl_stages.flatten(), 
                 np.array([sigma, tau]), 
                 self.lambda00, 
-                model.x0
-            ))
-        # Debug print
-        print(f"Parameter vector shape: {self.p_val.shape}")
-        print(f"Expected shape from NLP: {self.problem.p.shape}")
+                x0_array.flatten()
+            ])
+    
+        # Debug final result
+        print("\nDEBUG: Final Parameter Vector")
+        print(f"p_val shape: {self.p_val.shape}")
+        print(f"p_val contents: {self.p_val}")
         return
 
 

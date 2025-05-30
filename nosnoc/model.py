@@ -65,52 +65,58 @@ class NosnocModel:
                  c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
-                 u: ca.SX = ca.SX.sym('u_dummy', 0, 1),
-                 z: ca.SX = ca.SX.sym('z_dummy', 0, 1),
+                 u: ca.MX = ca.MX.sym('u_dummy', 0, 1),
+                 z: ca.MX = ca.MX.sym('z_dummy', 0, 1),
                  z0: Optional[np.ndarray] = None,
                  lbz: Optional[np.ndarray] = None,
                  ubz: Optional[np.ndarray] = None,
                  alpha: Optional[List[ca.SX]] = None,
                  theta: Optional[List[ca.SX]] = None,
                  f_x: Optional[List[ca.SX]] = None,
-                 g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
+                 g_z: ca.MX = ca.MX.sym('g_z_dummy', 0, 1),
+                 p: ca.MX = ca.MX.sym('p_dummy', 0, 2),
                  p_time_var: ca.SX = ca.SX.sym('p_time_var_dummy', 0, 1),
                  p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
-                 v_global: ca.SX = ca.SX.sym('v_global_dummy', 0, 1),
-                 t_var: Optional[ca.SX] = None,
+                 n_v_global: int = 0,
+                 v_global: ca.MX = ca.MX.sym('v_global_dummy', 0, 1),
+                 t_var: Optional[ca.MX] = None,
                  name: str = 'nosnoc'):
-        self.x: ca.SX = x
-        self.alpha: List[ca.SX] = alpha
-        self.theta: List[ca.SX] = theta
-        self.F: Optional[List[ca.SX]] = F
-        self.f_unconstrained: Optional[ca.SX] = f_unconstrained
-        self.c_pds: Optional[List[ca.SX]] = c_pds
-        self.f_x: List[ca.SX] = f_x
-        self.g_z: ca.SX = g_z
-        self.c: List[ca.SX] = c
+        self.x: ca.MX = x
+        self.alpha: List[ca.MX] = alpha
+        self.theta: List[ca.MX] = theta
+        self.F: Optional[List[ca.MX]] = F
+        self.f_unconstrained: Optional[ca.MX] = f_unconstrained
+        self.c_pds: Optional[ca.SX] = c_pds
+        self.f_x: List[ca.MX] = f_x
+        self.g_z: ca.MX = g_z
+        self.c: List[ca.MX] = c
         self.S: List[np.ndarray] = S
         self.g_Stewart = g_Stewart
+        self.p: ca.MX = p
 
         if not (bool(F is not None) ^ (bool((f_x is not None) and (alpha is not None))) ^ bool(f_unconstrained is not None)):
             raise ValueError("Provide either F (Fillipov) or f_x and alpha (Step) or f_unconstrained (PDS)!")
         # Either c and S or g is given!
-        if F is not None:
-            if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None) ^ bool(c_pds is not None)):
-                raise ValueError("Provide either c and S or g or c_pds !")
+       #if F is not None:
+        #   if not (bool(c is not None and S is not None) ^ bool(g_Stewart is not None) ^ bool(c_pds is not None)):
+        #      raise ValueError("Provide either c and S or g or c_pds !")
 
         self.x0: np.ndarray = x0
-        self.p_time_var: ca.SX = p_time_var
-        self.p_global: ca.SX = p_global
+        self.p_time_var: ca.MX = p_time_var
+        self.p_global: ca.MX = p_global
         self.p_time_var_val: np.ndarray = p_time_var_val
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
-        self.u: ca.SX = u
-        self.z: ca.SX = z
-        self.t_var: ca.SX = t_var
+        self.u: ca.MX = u
+        self.z: ca.MX = z
+        self.t_var: ca.MX = t_var
         self.name: str = name
+        self.n_v_global: np.ndarray = n_v_global
 
+        self.p_val_ctrl_stages: np.ndarray = np.zeros((0, 0))  # to be set in preprocess_model
+        self.p_ctrl_stages: List[ca.MX] = []  # to be set in preprocess_model
         self.z0 = z0
         self.lbz = lbz
         self.ubz = ubz
@@ -128,6 +134,9 @@ class NosnocModel:
         n_x = casadi_length(self.x)
         n_u = casadi_length(self.u)
         n_z = casadi_length(self.z)
+
+        n_v_global = casadi_length(self.v_global)
+
         if self.F is not None:
             n_sys = len(self.F) 
         elif self.f_x is not None:
@@ -161,8 +170,8 @@ class NosnocModel:
             n_f_sys = [self.F[i].shape[1] for i in range(n_sys)]
             if not isinstance(self.F, list):
                 raise ValueError("model.F should be a list.")
-            for i, f in enumerate(self.F):
-                if f.shape[1] == 1:
+            #for i,f in enumerate(self.F):
+                if f.shape[i]== 1:
                     raise Warning(f"model.F item {i} is not a switching system!")
 
             if self.g_Stewart:
@@ -228,6 +237,7 @@ class NosnocModel:
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
 
+        
         # initial guess z0
         if opts.rootfinder_for_initial_z:
             g_z0_fun = ca.Function('g_z0_fun', [self.z, ca.vertcat(self.x, self.p)], [self.g_z])
@@ -240,6 +250,8 @@ class NosnocModel:
                                n_c_sys=n_c_sys,
                                n_f_sys=n_f_sys,
                                n_p_time_var=n_p_time_var,
+                               n_p=n_p,
+                               n_v_global=n_v_global,
                                n_p_glob=n_p_glob,
                                n_z=n_z)
 
@@ -264,9 +276,9 @@ class NosnocModel:
             for ii in range(self.dims.n_sys):
                 upsilon_temp = []
                 S_temp = self.S[ii]
-                for j in range(len(S_temp)):
+                for j in range(S_temp.shape[0]):
                     upsilon_ij = 1
-                    for k in range(len(S_temp[0, :])):
+                    for k in range(S_temp.shape[1]):
                         # create multiafine term
                         if S_temp[j, k] != 0:
                             upsilon_ij *= (0.5 * (1 - S_temp[j, k]) +
@@ -275,12 +287,13 @@ class NosnocModel:
                 upsilon = ca.horzcat(upsilon, upsilon_temp)
 
         # start empty
-        g_lift = ca.SX.zeros((0, 1))
-        g_switching = ca.SX.zeros((0, 1))
-        g_convex = ca.SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
-        lambda00_expr = ca.SX.zeros(0, 0)
-        std_compl_res = ca.SX.zeros(1)  # residual of standard complementarity
-
+        g_lift = ca.MX.zeros((0, 1))
+        g_switching = ca.MX.zeros((0, 1))
+        g_convex = ca.MX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
+        lambda00_expr = ca.MX.zeros(0, 0)
+        std_compl_res = ca.MX.zeros(1)  # residual of standard complementarity
+        self.dims.n_p_time_var = self.p_time_var.shape[0] if hasattr(self, 'p_time_var') else 0
+        self.dims.n_p_global = self.p_global.shape[0] if hasattr(self, 'p_global') else 0
         # Note: this is the order of z used by FiniteElement
         z = ca.vertcat(casadi_vertcat_list(theta),
                        casadi_vertcat_list(lam),
@@ -326,43 +339,46 @@ class NosnocModel:
                 lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
         elif opts.dcs_mode == DcsMode.PDS:
+            if not hasattr(self, 'c_pds') or self.c_pds is None:
+                raise ValueError("c_pds must be provided for PDS mode.")
+            self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [ca.vertcat(*self.c_pds)])
+            self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2  # +2 for sigma and tau
+            f_x = self.f_unconstrained[0] + ca.jacobian(ca.vertcat(*self.c_pds), self.x).T @ lam[0]
+            g_switching = ca.MX([])
+            g_z_all = ca.MX([])
+            std_compl_res = ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
+            lambda00_expr = ca.MX([])
+
+          
+
+            self.f_x_fun = ca.Function('f_x_fun',
+                [self.x, self.z, self.u, self.p] + lam ,    
+                [f_x],
+                ['x','z','u','p'] + [f'lam_{i}' for i in range(len(lam))],
+                ['f_x'],{}
+            )
+
+            # Add g_z_all_fun for PDS mode (empty constraints)
+            self.g_z_all_fun = ca.Function('g_z_all_fun',
+                [self.x, self.z, self.u, self.p],
+                [g_z_all],
+                ['x', 'z', 'u', 'p'],
+                ['g_z_all'],{}
+            )
+
+            # Update std_compl_res_fun to include lam
+            self.std_compl_res_fun = ca.Function('std_compl_res_fun', 
+                [self.x, self.z, self.p] + lam,
+                [std_compl_res],
+                ['x', 'z', 'p'] + [f'lam_{i}' for i in range(len(lam))],
+                ['std_compl_res'],{}
+            )
             
-            f_x =  self.f_unconstrained[0] + ca.jacobian(ca.vertcat(*self.c_pds), self.x).T @ lam
-            g_switching = ca.SX([])
-            std_compl_res = ca.transpose(lam) @ ca.vertcat(*self.c_pds)
-            lambda00_expr = ca.SX([])
-
-        else:
-            raise NotImplementedError()    
-        # collect all algebraic equations
-        g_z_all = ca.vertcat(g_switching, g_convex, g_lift, self.g_z)  # g_lift_forces
-
-        # CasADi functions for indicator and region constraint functions
-        self.z_all = z
-
-        # dynamics
-        self.f_x_fun = ca.Function('f_x_fun', [self.x, self.z, self.u, self.p, self.v_global], [f_x],['x','z','u','p','v_global'],['f_x'])
-        # algebraic variables
-
-        # lp kkt conditions without bilinear complementarity terms
-        self.g_z_switching_fun = ca.Function('g_z_switching_fun', [self.x, self.z, self.u, self.p],
-                                             [g_switching])
-        self.g_z_all_fun = ca.Function('g_z_all_fun', [self.x, self.z, self.u, self.p], [g_z_all])
-        if self.t_var is not None:
-            self.t_fun = ca.Function("t_fun", [self.x], [self.t_var])
-        elif opts.time_freezing:
-            raise ValueError("Please provide t_var for time freezing!")
-
-        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
-
-        self.std_compl_res_fun = ca.Function('std_compl_res_fun', [self.x,self.z, self.p], [std_compl_res])
-        if opts.dcs_mode == DcsMode.STEWART:
-            mu00_stewart = casadi_vertcat_list([ca.mmin(g_Stewart_list[ii]) for ii in range(n_sys)])
-            self.mu00_stewart_fun = ca.Function('mu00_stewart_fun', [self.x, self.z, self.p], [mu00_stewart])
-            self.g_Stewart_fun = ca.Function('g_Stewart_fun', [self.x, self.z, self.p], [g_Stewart])
+            # Empty functions for PDS mode
+            self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
 
         # After self.c_pds is defined and is a list of expressions
-        self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [ca.vertcat(*self.c_pds)])
+        
 
     def create_stage_vars(self, opts: NosnocOpts):
         """
@@ -396,12 +412,13 @@ class NosnocModel:
             mu = []
 
         elif opts.dcs_mode == DcsMode.PDS:
-            
             # add lambda
-            lam = [1]
+        
+            n_lam = casadi_length(ca.vertcat(*self.c_pds))
+            lam = [ca.SX.sym(f'lam', n_lam)]  # Symbolic Lagrange multipliers
 
             # unused
-            theta = []  
+            theta = []
             mu = []
             alpha = []
             lambda_n = []

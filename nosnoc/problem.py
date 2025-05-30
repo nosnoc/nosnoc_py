@@ -4,7 +4,7 @@ from copy import copy
 
 import numpy as np
 import casadi as ca
-
+from nosnoc.dims import NosnocDims
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import MpccMode, CrossComplementarityMode, StepEquilibrationMode, DcsMode, IrkRepresentation, ConstraintHandling, SpeedOfTimeVariableMode
@@ -13,24 +13,20 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list, casadi_sum_list, fl
 
 
 class NosnocFormulationObject(ABC):
-
-    @abstractmethod
     def __init__(self):
-        # optimization variables with initial guess, bounds
-        self.w: ca.SX = ca.SX([])
+        # Use MX instead of SX
+        self.w: ca.MX = ca.MX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
         self.ubw: np.array = np.array([])
 
         # constraints and bounds
-        self.g: ca.SX = ca.SX([])
+        self.g: ca.MX = ca.MX([])
         self.lbg: np.array = np.array([])
         self.ubg: np.array = np.array([])
 
-       
-        
         # cost
-        self.cost: ca.SX = ca.SX.zeros(1)
+        self.cost: ca.MX = ca.MX.zeros(1)
 
         # index lists
         self.ind_x: list
@@ -43,7 +39,7 @@ class NosnocFormulationObject(ABC):
         return repr(self.__dict__)
 
     def add_variable(self,
-                     symbolic: ca.SX,
+                     symbolic: ca.MX,
                      index: list,
                      lb: np.array,
                      ub: np.array,
@@ -72,25 +68,31 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, symbolic: ca.SX, lb=None, ub=None, index: Optional[list] = None):
-        n = casadi_length(symbolic)
-        if n == 0:
-            return
+    def add_constraint(self, expr: ca.SX, lb=None, ub=None,index: Optional[list] = None):
+        
+        # Get constraint dimension
+        n = expr.shape[0]
+        
+        # If bounds not provided, use zeros
         if lb is None:
-            lb = np.zeros((n,))
+            lb = ca.SX.zeros(n)
         if ub is None:
-            ub = np.zeros((n,))
-        if len(lb) != n or len(ub) != n:
-            raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+            ub = ca.SX.zeros(n)
+            
+        # Check dimensions using CasADi's shape property
+        if lb.shape[0] != n or ub.shape[0] != n:
+            raise ValueError(f"Bound dimension mismatch. Expected {n}, got lb: {lb.shape[0]}, ub: {ub.shape[0]}")
+        
+        # Add constraint and bounds
+        self.g = ca.vertcat(self.g, expr)
+        self.lbg = ca.vertcat(self.lbg, lb)
+        self.ubg = ca.vertcat(self.ubg, ub)
 
+        # Add indices if provided
         if index is not None:
             ng = casadi_length(self.g)
-            new_indices = list(range(ng, ng + n))
+            new_indices = list(range(ng - n, ng))
             index.append(new_indices)
-
-        self.g = ca.vertcat(self.g, symbolic)
-        self.lbg = np.concatenate((self.lbg, lb))
-        self.ubg = np.concatenate((self.ubg, ub))
 
         return
 
@@ -190,7 +192,18 @@ class FiniteElementZero(FiniteElementBase):
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
-        dims = model.dims
+        dims = NosnocDims(
+        n_x=2,  # Number of state variables
+        n_u=0,
+        n_sys=1,
+        n_c_sys=[1],
+        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
+        n_p_time_var=1,  # Number of time-varying parameters
+        n_v_global=0,  # Number of global variables
+        n_z=0,      # Number of algebraic variables
+        n_p_glob=0,
+        n_f_sys=[1]  # Number of functions in the system        
+        )
 
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
@@ -419,10 +432,16 @@ class FiniteElement(FiniteElementBase):
         return
 
     def rk_stage_z(self, stage) -> ca.SX:
-        idx = np.concatenate((flatten(self.ind_theta[stage]), flatten(self.ind_lam[stage]),
-                              flatten(self.ind_mu[stage]), flatten(self.ind_alpha[stage]),
-                              flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage]),
-                              self.ind_z[stage]))
+        opts = self.opts
+        if opts.dcs_mode == DcsMode.STEWART:
+            idx = np.concatenate((flatten(self.ind_theta[stage]), 
+                            flatten(self.ind_lam[stage]),
+                            flatten(self.ind_mu[stage])))
+        else:
+            idx = np.concatenate((flatten(self.ind_alpha[stage]), 
+                            flatten(self.ind_lambda_n[stage]),
+                            flatten(self.ind_lambda_p[stage]),  
+                            flatten(self.ind_z[stage])))
         return self.w[idx]
 
     def Theta(self, stage=slice(None), sys=slice(None)) -> ca.SX:
@@ -498,21 +517,30 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-        
-            fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-            self.add_constraint(gj)
             if opts.dcs_mode == DcsMode.PDS:
-                # Add PDS-specific constraints
+                # Get lambda for this stage
                 lam = self.w[flatten(self.ind_lam[j])]
+                # Pass lambda as additional argument
+                fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global, lam)
+                qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
+                gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+                self.add_constraint(gj)
+                
+                # Add PDS-specific constraints using CasADi functions instead of numpy
                 c_pds_val = model.c_pds_fun(X_fe[j])
-                self.add_constraint(c_pds_val - lam)
+                # Create symbolic zeros and inf bounds of appropriate size
+                n_c = c_pds_val.shape[0]
+                lb = ca.SX.zeros(n_c)
+                ub = ca.inf * ca.SX.ones(n_c)
+                self.add_constraint(c_pds_val, lb=lb, ub=ub)
 
                 # Add the full ODE dynamics 
                 self.add_constraint(fj)
-            
             else:
+                fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
+                gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+                self.add_constraint(gj)
                 if opts.irk_representation == IrkRepresentation.INTEGRAL:
                     xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                     for r in range(opts.n_s):

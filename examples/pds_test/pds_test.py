@@ -9,41 +9,45 @@ from nosnoc.problem import NosnocProblem
 from nosnoc.solver import NosnocSolver
 
 # Create a minimal model for PDS.
-# Define a state x in R^2 and an unconstrained dynamics function.
+# Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
-x = ca.SX.sym('x', n_x)
-x0 = np.zeros(n_x)
+x = ca.MX.sym('x', n_x)
+x0 = [0.0, 1.14159]  # initial state
 
-# For PDS, supply a list for f_unconstrained and c_pds.
-# f_unconstrained: Here a simple linear dynamics.
-f_unconstrained_expr = [ca.vertcat(-x[0] + 0.5*x[1], -x[1])]  # list with one expression (shape (2,1))
+# For PDS, supply a list for f_unconstrained and c_pds
+# f_unconstrained: Simple linear dynamics
+f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
-# c_pds: A simple gap function; here, for example, x[0] - 0.5.
-c_pds_expr = [ca.vertcat(x[0] - 0.5)]  # list with one expression (shape (1,1))
+# c_pds: Simple gap function
+c_pds_expr = [ca.vertcat(x[1] - 0.5)]  
 
-# Other necessary inputs: minimal placeholders for p_time_var and p_global.
-p_time_var = ca.SX.sym('p_time', 1)
-p_global = ca.SX.sym('p_global', 1)
-p_time_var_val = np.ones((1, 1))
-p_global_val = np.array([1.0])
+# Parameters setup for PDS mode (all using MX)
+p_time_var = ca.MX.sym('p_time', 1)  
+p_global = ca.MX.sym('p_global', 0)   
+p_time_var_val = np.ones((1,1))
+p_global_val = np.array([])
 
-# The algebraic variable and constraint placeholders.
-# (In a minimal example, we may set them to dummy values.)
-z = ca.SX.sym('z', 0)
-g_z = ca.SX([])
+# Algebraic variables (empty for this example)
+z = ca.MX.sym('z', 0)  
+g_z = ca.MX([])        
 
-# Create the model instance in PDS mode by providing f_unconstrained and c_pds.
-model = NosnocModel(x=x, x0=x0, f_unconstrained=f_unconstrained_expr,
-                    c_pds=c_pds_expr, g_z=g_z, 
-                    p_time_var=p_time_var, p_global=p_global,
-                    p_time_var_val=p_time_var_val, p_global_val=p_global_val)
+# Create model instance
+model = NosnocModel(x=x, 
+                   x0=x0, 
+                   f_unconstrained=f_unconstrained_expr,
+                   c_pds=c_pds_expr, 
+                   g_z=g_z, 
+                   p_time_var=p_time_var, 
+                   p_global=p_global,
+                   p_time_var_val=p_time_var_val, 
+                   p_global_val=p_global_val)
 
 
 # Construct options set to PDS mode.
-opts = NosnocOpts(dcs_mode=DcsMode.PDS, n_s=1, terminal_time=1.0, use_fesd=True)
+opts = NosnocOpts(dcs_mode=DcsMode.PDS, n_s=1, terminal_time=1.0, use_fesd=True,sigma_0=1.0)
 opts.preprocess()
 
-model.preprocess_model(opts)
+
 
 # Create a trivial OCP.
 ocp = NosnocOcp()
@@ -57,8 +61,16 @@ print("Minimal PDS example created successfully.")
 print("Model state dimension:", model.x.shape)
 print("Options dcs_mode:", opts.dcs_mode)
 
-# Build the solver
+# Add debug prints before solver creation
+print("\nDEBUG: Model Parameters")
+print(f"Time-varying parameters: {model.p_time_var.shape}")
+print(f"Global parameters: {model.p_global.shape}")
+print(f"Combined parameters: {model.p.shape}")
+
+# Create solver with additional debug info
 solver = NosnocSolver(opts, model, ocp)
+print("\nDEBUG: Solver Parameters")
+print(f"Initial parameter vector shape: {solver.p0.shape if hasattr(solver, 'p0') else 'No p0'}")
 
 # Solve the problem
 results = solver.solve()
