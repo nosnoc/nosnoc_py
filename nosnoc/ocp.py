@@ -31,13 +31,13 @@ class NosnocOcp:
             u_guess: Optional[np.ndarray] = None,
             lbx: Optional[np.ndarray] = None,
             ubx: Optional[np.ndarray] = None,
-            f_q: ca.MX = ca.MX.zeros(1),
-            g_path: ca.MX = ca.MX.zeros(0),
+            f_q: ca.SX = ca.SX.zeros(1),
+            g_path: ca.SX = ca.SX.zeros(0),
             lbg: Optional[np.ndarray] = None,
             ubg: Optional[np.ndarray] = None,
-            g_path_comp: ca.MX = ca.MX.zeros(0, 2),
-            f_terminal: ca.MX = ca.MX.zeros(1),
-            g_terminal: ca.MX = ca.MX.zeros(0),
+            g_path_comp: ca.SX = ca.SX.zeros(0, 2),
+            f_terminal: ca.SX = ca.SX.zeros(1),
+            g_terminal: ca.SX = ca.SX.zeros(0),
             lbv_global: Optional[np.ndarray] = None,
             ubv_global: Optional[np.ndarray] = None,
             v_global_guess: Optional[np.ndarray] = None,
@@ -48,13 +48,13 @@ class NosnocOcp:
         self.u_guess: Optional[np.ndarray] = u_guess
         self.lbx: np.ndarray = lbx
         self.ubx: np.ndarray = ubx
-        self.f_q: ca.MX = f_q
-        self.g_path: ca.MX = g_path
+        self.f_q: ca.SX = f_q
+        self.g_path: ca.SX = g_path
         self.lbg: np.ndarray = lbg
         self.ubg: np.ndarray = ubg
-        self.g_path_comp: ca.MX = g_path_comp
-        self.f_terminal: ca.MX = f_terminal
-        self.g_terminal: ca.MX = g_terminal
+        self.g_path_comp: ca.SX = g_path_comp
+        self.f_terminal: ca.SX = f_terminal
+        self.g_terminal: ca.SX = g_terminal
         self.lbv_global: np.ndarray = lbv_global
         self.ubv_global: np.ndarray = ubv_global
         self.v_global_guess: np.ndarray = v_global_guess
@@ -70,7 +70,7 @@ class NosnocOcp:
         n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
         n_p_time_var=1,  # Number of time-varying parameters
         n_v_global=0,  # Number of global variables
-        n_z=0,      # Number of algebraic variables
+        n_z=1,      # Number of algebraic variables
         n_p_glob=0,
         n_f_sys=[1]  # Number of functions in the system        
         )
@@ -90,9 +90,9 @@ class NosnocOcp:
 
         # Process complementarities into 3 categories:
         # rk_stage, ctrl_stage, global
-        self.g_global_comp = ca.MX.zeros(0, 2)
-        self.g_ctrl_comp = ca.MX.zeros(0, 2)
-        self.g_stage_comp = ca.MX.zeros(0, 2)
+        self.g_global_comp = ca.SX.zeros(0, 2)
+        self.g_ctrl_comp = ca.SX.zeros(0, 2)
+        self.g_stage_comp = ca.SX.zeros(0, 2)
 
         rk_stage_vars = ca.vertcat(model.x, model.z)
         control_stage_vars = ca.vertcat(model.u, model.p_time_var)
@@ -108,11 +108,9 @@ class NosnocOcp:
 
   
         
-        # For PDS mode, we don't need z_all since there are no algebraic variables
-        if hasattr(model, 'z_all'):
-            z_var = model.z_all
-        else:
-            z_var = model.z  # Use empty z for PDS mode
+        
+        z_var = model.z
+       
             
         self.g_global_comp_fun = ca.Function('g_global_comp_fun', 
             [model.p_global, model.v_global], 

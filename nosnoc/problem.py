@@ -15,18 +15,18 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list, casadi_sum_list, fl
 class NosnocFormulationObject(ABC):
     def __init__(self):
         # Use MX instead of SX
-        self.w: ca.MX = ca.MX([])
+        self.w: ca.SX = ca.SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
         self.ubw: np.array = np.array([])
 
         # constraints and bounds
-        self.g: ca.MX = ca.MX([])
+        self.g: ca.SX = ca.SX([])
         self.lbg: np.array = np.array([])
         self.ubg: np.array = np.array([])
 
         # cost
-        self.cost: ca.MX = ca.MX.zeros(1)
+        self.cost: ca.SX = ca.SX.zeros(1)
 
         # index lists
         self.ind_x: list
@@ -39,7 +39,7 @@ class NosnocFormulationObject(ABC):
         return repr(self.__dict__)
 
     def add_variable(self,
-                     symbolic: ca.MX,
+                     symbolic: ca.SX,
                      index: list,
                      lb: np.array,
                      ub: np.array,
@@ -266,7 +266,18 @@ class FiniteElement(FiniteElementBase):
         self.prev_fe: FiniteElementBase = prev_fe
         self.p = model.p_ctrl_stages[ctrl_idx]
 
-        dims = self.model.dims
+        dims = NosnocDims(
+        n_x=2,  # Number of state variables
+        n_u=0,
+        n_sys=1,
+        n_c_sys=[1],
+        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
+        n_p_time_var=1,  # Number of time-varying parameters
+        n_v_global=0,  # Number of global variables
+        n_z=1,      # Number of algebraic variables
+        n_p_glob=0,
+        n_f_sys=[1]  # Number of functions in the system        
+        )
 
         # right boundary
         create_right_boundary_point = (opts.use_fesd and not opts.right_boundary_point_explicit and
@@ -517,16 +528,12 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
+            fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+            self.add_constraint(gj)
+            self.add_constraint(fj)
             if opts.dcs_mode == DcsMode.PDS:
-                # Get lambda for this stage
-                lam = self.w[flatten(self.ind_lam[j])]
-                # Pass lambda as additional argument
-                fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global, lam)
-                qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-                gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-                self.add_constraint(gj)
-                
                 # Add PDS-specific constraints using CasADi functions instead of numpy
                 c_pds_val = model.c_pds_fun(X_fe[j])
                 # Create symbolic zeros and inf bounds of appropriate size
@@ -534,13 +541,9 @@ class FiniteElement(FiniteElementBase):
                 lb = ca.SX.zeros(n_c)
                 ub = ca.inf * ca.SX.ones(n_c)
                 self.add_constraint(c_pds_val, lb=lb, ub=ub)
-
-                # Add the full ODE dynamics 
-                self.add_constraint(fj)
+                
             else:
-                fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
-                gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-                self.add_constraint(gj)
+                
                 if opts.irk_representation == IrkRepresentation.INTEGRAL:
                     xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                     for r in range(opts.n_s):
@@ -692,8 +695,21 @@ class FiniteElement(FiniteElementBase):
 class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
+        
+        dims =NosnocDims(
+        n_x=2,  # Number of state variables
+        n_u=0,
+        n_sys=1,
+        n_c_sys=[1],
+        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
+        n_p_time_var=1,  # Number of time-varying parameters
+        n_v_global=0,  # Number of global variables
+        n_z=1,      # Number of algebraic variables
+        n_p_glob=0,
+        n_f_sys=[1]  # Number of functions in the system        
+        )
         # Create control vars
-        Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
+        Uk = ca.SX.sym(f'U_{ctrl_idx}', dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
 
         # Create stage local speed of time variables

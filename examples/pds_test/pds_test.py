@@ -11,7 +11,7 @@ from nosnoc.solver import NosnocSolver
 # Create a minimal model for PDS.
 # Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
-x = ca.MX.sym('x', n_x)
+x = ca.SX.sym('x', n_x)
 x0 = [0.0, 1.14159]  # initial state
 
 # For PDS, supply a list for f_unconstrained and c_pds
@@ -21,15 +21,19 @@ f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]
 # c_pds: Simple gap function
 c_pds_expr = [ca.vertcat(x[1] - 0.5)]  
 
-# Parameters setup for PDS mode (all using MX)
-p_time_var = ca.MX.sym('p_time', 1)  
-p_global = ca.MX.sym('p_global', 0)   
+# Parameters setup for PDS mode (all using time-varying parameters)
+p_time_var = ca.SX.sym('p_time', 1)  
+p_global = ca.SX.sym('p_global', 0)   
 p_time_var_val = np.ones((1,1))
 p_global_val = np.array([])
 
 # Algebraic variables (empty for this example)
-z = ca.MX.sym('z', 0)  
-g_z = ca.MX([])        
+z = ca.SX.sym('z', 1)  # lambda variable
+g_z = ca.SX.sym('g_z', 1)  # gap function for algebraic variable        
+
+lbz = np.array([0.0])  # lower bound for z
+ubz = np.array([1.0])  # upper bound for z
+z0 = np.array([0.0])  # initial value for z
 
 # Create model instance
 model = NosnocModel(x=x, 
@@ -40,7 +44,8 @@ model = NosnocModel(x=x,
                    p_time_var=p_time_var, 
                    p_global=p_global,
                    p_time_var_val=p_time_var_val, 
-                   p_global_val=p_global_val)
+                   p_global_val=p_global_val,z=z,lbz=lbz,
+                   ubz=ubz, z0=z0)
 
 
 # Construct options set to PDS mode.
@@ -54,21 +59,11 @@ ocp = NosnocOcp()
 ocp.preprocess_ocp(model)
 
 # Build the problem.
-problem = NosnocProblem(opts, model, ocp)
+#problem = NosnocProblem(opts, model, ocp)
 
-# (Optionally) print some key elements to check that the minimal example is created correctly.
-print("Minimal PDS example created successfully.")
-print("Model state dimension:", model.x.shape)
-print("Options dcs_mode:", opts.dcs_mode)
-
-# Add debug prints before solver creation
-print("\nDEBUG: Model Parameters")
-print(f"Time-varying parameters: {model.p_time_var.shape}")
-print(f"Global parameters: {model.p_global.shape}")
-print(f"Combined parameters: {model.p.shape}")
 
 # Create solver with additional debug info
-solver = NosnocSolver(opts, model, ocp)
+solver = NosnocSolver(opts, model,ocp)
 print("\nDEBUG: Solver Parameters")
 print(f"Initial parameter vector shape: {solver.p0.shape if hasattr(solver, 'p0') else 'No p0'}")
 
