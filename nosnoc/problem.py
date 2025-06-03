@@ -14,7 +14,7 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list, casadi_sum_list, fl
 
 class NosnocFormulationObject(ABC):
     def __init__(self):
-        # Use MX instead of SX
+        
         self.w: ca.SX = ca.SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
@@ -68,25 +68,29 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, expr: ca.SX, lb=None, ub=None,index: Optional[list] = None):
-        
+    def add_constraint(self, expr: ca.SX, lb=None, ub=None, index: Optional[list] = None):
         # Get constraint dimension
         n = expr.shape[0]
-        
+
         # If bounds not provided, use zeros
         if lb is None:
-            lb = ca.SX.zeros(n)
+            lb = np.zeros(n)  # Ensure numeric lower bound
+        elif isinstance(lb, ca.SX):
+            lb = np.array(lb).flatten()  # Convert SX to numeric
+
         if ub is None:
-            ub = ca.SX.zeros(n)
-            
-        # Check dimensions using CasADi's shape property
-        if lb.shape[0] != n or ub.shape[0] != n:
-            raise ValueError(f"Bound dimension mismatch. Expected {n}, got lb: {lb.shape[0]}, ub: {ub.shape[0]}")
-        
+            ub = np.zeros(n)  # Ensure numeric upper bound
+        elif isinstance(ub, ca.SX):
+            ub = np.array(ub).flatten()  # Convert SX to numeric
+
+        # Check dimensions using numpy's shape property
+        if len(lb) != n or len(ub) != n:
+            raise ValueError(f"Bound dimension mismatch. Expected {n}, got lb: {len(lb)}, ub: {len(ub)}")
+
         # Add constraint and bounds
         self.g = ca.vertcat(self.g, expr)
-        self.lbg = ca.vertcat(self.lbg, lb)
-        self.ubg = ca.vertcat(self.ubg, ub)
+        self.lbg = np.concatenate((self.lbg, lb))
+        self.ubg = np.concatenate((self.ubg, ub))
 
         # Add indices if provided
         if index is not None:
@@ -538,8 +542,8 @@ class FiniteElement(FiniteElementBase):
                 c_pds_val = model.c_pds_fun(X_fe[j])
                 # Create symbolic zeros and inf bounds of appropriate size
                 n_c = c_pds_val.shape[0]
-                lb = ca.SX.zeros(n_c)
-                ub = ca.inf * ca.SX.ones(n_c)
+                lb = np.zeros(n_c)
+                ub = np.inf * np.ones(n_c)
                 self.add_constraint(c_pds_val, lb=lb, ub=ub)
                 
             else:
@@ -618,29 +622,22 @@ class FiniteElement(FiniteElementBase):
             self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
         # Complementarity constraints depending on the DCS mode.
-        if opts.dcs_mode == DcsMode.PDS:
-            # For PDS, enforce complementarity between lambda and c_pds
+        
+        
+        if not opts.use_fesd:
             for j in range(opts.n_s):
-                lam = self.w[flatten(self.ind_lam[j])]
-                c_pds_val = ca.Function('c_pds_tmp', [self.model.x], [self.model.c_pds[0]])(X_fe[j])
-                # Create complementarity between the lambda value of the current subsystem and its c_pds
-                self.create_complementarity([lam], c_pds_val, sigma_p, tau, s_elastic)
-    
-        else:
-            if not opts.use_fesd:
-                for j in range(opts.n_s):
-                    self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p, tau, s_elastic)
-            elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
-                for j in range(opts.n_s):
-                    # cross comp with previous FE
-                    self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1), sigma_p, tau, s_elastic)
-                    for jj in range(opts.n_s):
-                        # within fe
-                        self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj), sigma_p, tau, s_elastic)
-            elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
-                for j in range(opts.n_s):
-                    Lambda_list = self.get_Lambdas_incl_last_prev_fe()
-                    self.create_complementarity(Lambda_list, self.Theta(stage=j), sigma_p, tau, s_elastic)
+                self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p, tau, s_elastic)
+        elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
+            for j in range(opts.n_s):
+                # cross comp with previous FE
+                self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1), sigma_p, tau, s_elastic)
+                for jj in range(opts.n_s):
+                    # within fe
+                    self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj), sigma_p, tau, s_elastic)
+        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
+            for j in range(opts.n_s):
+                Lambda_list = self.get_Lambdas_incl_last_prev_fe()
+                self.create_complementarity(Lambda_list, self.Theta(stage=j), sigma_p, tau, s_elastic)
         return
 
     def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX, s_elastic: Optional[ca.SX]) -> None:
@@ -865,7 +862,7 @@ class NosnocProblem(NosnocFormulationObject):
             s_elastic = None
 
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
-
+        print(f"Parameter vector (p): {self.p}")
         # Generate all the variables we need
         self.__create_primal_variables()
 
@@ -914,9 +911,20 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Scalar-valued complementarity residual
         comp_vec = []
+
+        # Collect complementarity terms from all finite elements
         for fe in flatten(self.stages):
             comp_vec = ca.vertcat(comp_vec, fe.get_complementarity_vector())
-        J_comp = ca.mmax(comp_vec)
+        print(f"Complementarity vector (comp_vec): {comp_vec}")
+
+        # Handle empty complementarity vector
+        if comp_vec.numel() == 0:
+            J_comp = ca.SX(0)  # Default value for empty complementarity vector
+        else:
+            J_comp = ca.mmax(comp_vec)
+
+        # Create CasADi function for complementarity residual
+        
 
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)

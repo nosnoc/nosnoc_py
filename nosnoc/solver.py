@@ -200,8 +200,7 @@ class NosnocSolverBase(ABC):
         model: NosnocModel = self.problem.model
         
         if self.opts.dcs_mode == DcsMode.PDS:
-            # Convert x0 to numpy array and ensure correct shape
-            x0_array = np.array(model.x0).reshape(-1)
+            
             
             # Build parameter vector components
             p_ctrl = model.p_val_ctrl_stages.flatten()  # Original parameters
@@ -214,7 +213,7 @@ class NosnocSolverBase(ABC):
                 p_ctrl,          # Original parameters
                 p_slack,         # Slack variable (always 1)  
                 p_pds,          # Sigma and tau
-                x0_array        # Initial state
+                model.x0        # Initial state
             ])
             
             # Debug prints
@@ -222,17 +221,16 @@ class NosnocSolverBase(ABC):
             print(f"Original parameters: {p_ctrl.shape}")
             print(f"Slack variable: {p_slack.shape}")
             print(f"PDS parameters: {p_pds.shape}")
-            print(f"Initial state: {x0_array.shape}")
+            #print(f"Initial state: {model.x0.shape}")
             print(f"Total parameters: {self.p_val.shape}")
             print(f"Parameter values: {self.p_val}")
         else:   
-            # Convert list x0 to numpy array for other modes
-            x0_array = np.array(model.x0).reshape(-1, 1)
+            
             self.p_val = np.concatenate([
                 model.p_val_ctrl_stages.flatten(), 
                 np.array([sigma, tau]), 
                 self.lambda00, 
-                x0_array.flatten()
+                model.x0.flatten()
             ])
     
         # Debug final result
@@ -309,7 +307,7 @@ class NosnocSolverBase(ABC):
 
     def create_function_calculate_vector_field(self, sigma, p=[], v=[]):
         """Create a function to calculate the vector field."""
-        if self.opts.pss_mode != DcsMode.STEWART:
+        if self.opts.dcs_mode != DcsMode.STEWART:
             raise NotImplementedError()
 
         shape = self.model.g_Stewart_fun.size_out(0)
@@ -355,6 +353,10 @@ class NosnocSolver(NosnocSolverBase):
                 'g': self.problem.g,
                 'p': self.problem.p
             }
+            print(f"Cost function (f): {self.problem.cost}")
+            print(f"Decision variables (x): {self.problem.w}")
+            print(f"Constraints (g): {self.problem.g}")
+            print(f"Parameters (p): {self.problem.p}")
             self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()
@@ -431,6 +433,12 @@ class NosnocSolver(NosnocSolverBase):
             # tau_val = sigma_k**1.5*1e3
             self.setup_p_val(sigma_k, tau_val)
 
+            print(f"w0: {type(w0)}, {w0}")
+            print(f"lbw: {type(lbw)}, {lbw}")
+            print(f"ubw: {type(ubw)}, {ubw}")
+            print(f"p_val: {type(self.p_val)}, {self.p_val}")
+            print(f"lbg: {type(prob.lbg)}, {prob.lbg}")
+            print(f"ubg: {type(prob.ubg)}, {prob.ubg}")
             # solve NLP
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
