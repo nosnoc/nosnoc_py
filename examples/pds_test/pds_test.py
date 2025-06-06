@@ -19,7 +19,7 @@ x0 = [0.0, 1.14159]  # initial state
 f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = [ca.vertcat(x[1] - 0.5)]  
+c_pds_expr = [ca.vertcat(x[1] +0.2)]  
 
 # Parameters setup for PDS mode (all using time-varying parameters)
 p_time_var = ca.SX.sym('p_time', 1)  
@@ -69,7 +69,7 @@ print(f"Initial parameter vector shape: {solver.p0.shape if hasattr(solver, 'p0'
 
 # Solve the problem
 results = solver.solve()
-
+#solver.problem.print()
 # Extract the state trajectory and time grid
 x_traj = np.array(results["x_traj"])  # shape: (N, n_x)
 t_grid = results["t_grid"]

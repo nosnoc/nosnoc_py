@@ -426,11 +426,14 @@ class FiniteElement(FiniteElementBase):
             elif opts.dcs_mode == DcsMode.PDS:
                 if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
                     raise NotImplementedError("PDS mode does not support DIFFERENTIAL IRK representation")
+                if not opts.right_boundary_point_explicit:
+                    raise NotImplementedError("PDS mode requires right_boundary_point_explicit=True")
                 initial_lambda = np.ones(dims.n_f_sys[0]) 
                 self.add_variable(
                     ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_f_sys[0]),
                     self.ind_lam, -np.inf * np.ones(dims.n_f_sys[0]), np.inf * np.ones(dims.n_f_sys[0]), initial_lambda, opts.n_s, 0)
                             
+
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
@@ -589,7 +592,13 @@ class FiniteElement(FiniteElementBase):
     def get_complementarity_vector(self):
         opts = self.opts
         comp_vec = []
-        if opts.use_fesd:
+        if opts.dcs_mode == DcsMode.PDS:
+            for j in range(opts.n_s):
+                lam = self.w[flatten(self.ind_lam[j])]
+                c_pds_val = self.model.c_pds_fun(self.X_fe()[j])
+                print(f"PDS Complementarity: lambda={lam}, c_pds={c_pds_val}")
+                comp_vec = ca.vertcat(comp_vec, lam * c_pds_val)
+        elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 theta = self.Theta(stage=j)
