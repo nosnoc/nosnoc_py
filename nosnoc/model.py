@@ -357,31 +357,31 @@ class NosnocModel:
 
           
 
-            self.f_x_fun = ca.Function('f_x_fun',
-                [self.x, self.z, self.u, self.p] + lam ,    
+        self.f_x_fun = ca.Function('f_x_fun',
+                [self.x, z, self.u, self.p, self.v_global]  ,    
                 [f_x],
-                ['x','z','u','p'] + [f'lam_{i}' for i in range(len(lam))],
+                ['x','z','u','p', 'v_global'],
                 ['f_x'],{}
             )
 
             # Add g_z_all_fun for PDS mode (empty constraints)
-            self.g_z_all_fun = ca.Function('g_z_all_fun',
-                [self.x, self.z, self.u, self.p],
+        self.g_z_all_fun = ca.Function('g_z_all_fun',
+                [self.x, z, self.u, self.p],
                 [g_z_all],
-                ['x', 'z', 'u', 'p'],
+                ['x', 'z', 'u', 'p' ],
                 ['g_z_all'],{}
             )
 
             # Update std_compl_res_fun to include lam
-            self.std_compl_res_fun = ca.Function('std_compl_res_fun', 
-                [self.x, self.z, self.p] + lam,
+        self.std_compl_res_fun = ca.Function('std_compl_res_fun',
+                [self.x, z, self.p] ,
                 [std_compl_res],
-                ['x', 'z', 'p'] + [f'lam_{i}' for i in range(len(lam))],
+                ['x', 'z', 'p'] ,
                 ['std_compl_res'],{}
             )
             
             # Empty functions for PDS mode
-            self.lambda00_fun = ca.Function('lambda00_fun', [self.x, self.z, self.p], [lambda00_expr])
+        self.lambda00_fun = ca.Function('lambda00_fun', [self.x, z, self.p], [lambda00_expr])
 
         # After self.c_pds is defined and is a list of expressions
         

@@ -196,18 +196,7 @@ class FiniteElementZero(FiniteElementBase):
 
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
-        dims = NosnocDims(
-        n_x=2,  # Number of state variables
-        n_u=0,
-        n_sys=1,
-        n_c_sys=[1],
-        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
-        n_p_time_var=1,  # Number of time-varying parameters
-        n_v_global=0,  # Number of global variables
-        n_z=0,      # Number of algebraic variables
-        n_p_glob=0,
-        n_f_sys=[1]  # Number of functions in the system        
-        )
+        dims = model.dims
 
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
@@ -270,18 +259,7 @@ class FiniteElement(FiniteElementBase):
         self.prev_fe: FiniteElementBase = prev_fe
         self.p = model.p_ctrl_stages[ctrl_idx]
 
-        dims = NosnocDims(
-        n_x=2,  # Number of state variables
-        n_u=0,
-        n_sys=1,
-        n_c_sys=[1],
-        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
-        n_p_time_var=1,  # Number of time-varying parameters
-        n_v_global=0,  # Number of global variables
-        n_z=1,      # Number of algebraic variables
-        n_p_glob=0,
-        n_f_sys=[1]  # Number of functions in the system        
-        )
+        dims = model.dims
 
         # right boundary
         create_right_boundary_point = (opts.use_fesd and not opts.right_boundary_point_explicit and
@@ -386,6 +364,15 @@ class FiniteElement(FiniteElementBase):
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
+            elif opts.dcs_mode == DcsMode.PDS:
+                for ij in range(dims.n_sys):
+                    initial_lambda = np.ones(dims.n_c_sys[ij])  # not used
+                    self.add_variable(
+                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
+                        self.ind_lam,  np.zeros(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]),
+                        initial_lambda,
+                        ii, ij)
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
@@ -440,6 +427,7 @@ class FiniteElement(FiniteElementBase):
             self.add_variable(ca.SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
                               ocp.lbx, ocp.ubx, model.x0, -1)
 
+
     def add_step_size_variable(self, symbolic: ca.SX, lb: float, ub: float, initial: float):
         self.ind_h = [casadi_length(self.w)]
         self.w = ca.vertcat(self.w, symbolic)
@@ -455,11 +443,15 @@ class FiniteElement(FiniteElementBase):
             idx = np.concatenate((flatten(self.ind_theta[stage]), 
                             flatten(self.ind_lam[stage]),
                             flatten(self.ind_mu[stage])))
-        else:
+        elif opts.dcs_mode == DcsMode.STEP:
             idx = np.concatenate((flatten(self.ind_alpha[stage]), 
                             flatten(self.ind_lambda_n[stage]),
                             flatten(self.ind_lambda_p[stage]),  
                             flatten(self.ind_z[stage])))
+
+        else:
+            idx = np.concatenate((flatten(self.ind_lam[stage]),
+                            flatten(self.ind_z[stage])))    
         return self.w[idx]
 
     def Theta(self, stage=slice(None), sys=slice(None)) -> ca.SX:
@@ -538,31 +530,21 @@ class FiniteElement(FiniteElementBase):
             fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-            self.add_constraint(gj)
-            self.add_constraint(fj)
-            if opts.dcs_mode == DcsMode.PDS:
-                # Add PDS-specific constraints using CasADi functions instead of numpy
-                c_pds_val = model.c_pds_fun(X_fe[j])
-                # Create symbolic zeros and inf bounds of appropriate size
-                n_c = c_pds_val.shape[0]
-                lb = np.zeros(n_c)
-                ub = np.inf * np.ones(n_c)
-                self.add_constraint(c_pds_val, lb=lb, ub=ub)
+            
                 
-            else:
                 
-                if opts.irk_representation == IrkRepresentation.INTEGRAL:
-                    xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
-                    for r in range(opts.n_s):
-                        xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
-                    Xk_end += opts.D_irk[j + 1] * X_fe[j]
-                    self.add_constraint(self.h * fj - xj)
-                    self.cost += opts.B_irk[j + 1] * self.h * qj
-                elif (opts.irk_representation
-                      in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
-                    Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
-                    self.add_constraint(fj - self.w[self.ind_v[j]])
-                    self.cost += opts.b_irk[j] * self.h * qj
+            if opts.irk_representation == IrkRepresentation.INTEGRAL:
+                xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(opts.n_s):
+                    xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
+                Xk_end += opts.D_irk[j + 1] * X_fe[j]
+                self.add_constraint(self.h * fj - xj)
+                self.cost += opts.B_irk[j + 1] * self.h * qj
+            elif (opts.irk_representation
+                in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
+                Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
+                self.add_constraint(fj - self.w[self.ind_v[j]])
+                self.cost += opts.b_irk[j] * self.h * qj
 
         # continuity condition: end of fe state - final stage state
         if (not opts.right_boundary_point_explicit or
@@ -593,11 +575,17 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         comp_vec = []
         if opts.dcs_mode == DcsMode.PDS:
+            X_fe = self.X_fe()
             for j in range(opts.n_s):
-                lam = self.w[flatten(self.ind_lam[j])]
-                c_pds_val = self.model.c_pds_fun(self.X_fe()[j])
-                print(f"PDS Complementarity: lambda={lam}, c_pds={c_pds_val}")
-                comp_vec = ca.vertcat(comp_vec, lam * c_pds_val)
+                lam_j = self.w[flatten(self.ind_lam[j])]
+                c_j = self.model.c_pds_fun(X_fe[j])
+                comp_vec = ca.vertcat(comp_vec, c_j * lam_j)
+                if j > 0:
+                    lam_jm1 = self.w[flatten(self.ind_lam[j-1])]
+                    c_jm1 = self.model.c_pds_fun(X_fe[j-1])
+                    # Cross terms:
+                    comp_vec = ca.vertcat(comp_vec, c_j * lam_jm1)
+                    comp_vec = ca.vertcat(comp_vec, c_jm1 * lam_j)
         elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -702,18 +690,7 @@ class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
         
-        dims =NosnocDims(
-        n_x=2,  # Number of state variables
-        n_u=0,
-        n_sys=1,
-        n_c_sys=[1],
-        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
-        n_p_time_var=1,  # Number of time-varying parameters
-        n_v_global=0,  # Number of global variables
-        n_z=1,      # Number of algebraic variables
-        n_p_glob=0,
-        n_f_sys=[1]  # Number of functions in the system        
-        )
+        dims =self.model.dims
         # Create control vars
         Uk = ca.SX.sym(f'U_{ctrl_idx}', dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
