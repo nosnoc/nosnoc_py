@@ -42,7 +42,18 @@ model = NosnocModel(x=x,
 
 
 # Construct options set to PDS mode.
-opts = NosnocOpts(dcs_mode=DcsMode.PDS, n_s=3, terminal_time=10.0, use_fesd=True,sigma_0=1.0)
+opts = NosnocOpts(
+    dcs_mode=DcsMode.PDS,
+    n_s=3,
+    terminal_time=10.0,
+    use_fesd=True,
+    sigma_0=1.0,
+    print_level=2,
+    comp_tol=1e-10,
+    max_iter_homotopy=12,
+    sigma_N=1e-11,
+    # ...add any other relevant options
+)
 #opts.preprocess()
 
 
