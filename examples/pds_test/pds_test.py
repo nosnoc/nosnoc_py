@@ -17,10 +17,10 @@ x0 = [0.0, 1.14159]  # initial state
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics
-f_unconstrained_expr = [ca.vertcat(x[1], -x[0] - 0.1*x[1])]  
+f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = [ca.vertcat(x[0] - 0.5)]  
+c_pds_expr = [ca.vertcat(x[1] +0.2)]  
 
 # Parameters setup for PDS mode (all using time-varying parameters)
 p_time_var = ca.SX.sym('p_time', 1)  
@@ -42,7 +42,7 @@ model = NosnocModel(x=x,
 
 
 # Construct options set to PDS mode.
-opts = NosnocOpts(dcs_mode=DcsMode.PDS, n_s=2, terminal_time=1.0, use_fesd=True,sigma_0=1.0)
+opts = NosnocOpts(dcs_mode=DcsMode.PDS, n_s=3, terminal_time=10.0, use_fesd=True,sigma_0=1.0)
 #opts.preprocess()
 
 
@@ -62,14 +62,17 @@ print(f"Initial parameter vector shape: {solver.p0.shape if hasattr(solver, 'p0'
 
 # Solve the problem
 #results = solver.solve()
-looper = NosnocSimLooper(solver, model.x0, 100)
+looper = NosnocSimLooper(solver, model.x0, 31)
 looper.run()
 results = looper.get_results()
 solver.problem.print()
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
 t_grid = results["t_grid"]
+lambda_sim = np.array(results["lambda_sim"])  # shape: (N, n_x)
 
+print("t_grid shape:", t_grid.shape)
+print("lambda_sim shape:", lambda_sim.shape)
 # Plot the state variables
 plt.figure()
 for i in range(X_sim.shape[1]):
@@ -80,3 +83,4 @@ plt.title('PDS State Trajectory')
 plt.legend()
 plt.grid(True)
 plt.show()
+

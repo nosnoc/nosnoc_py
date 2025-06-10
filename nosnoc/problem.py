@@ -537,9 +537,9 @@ class FiniteElement(FiniteElementBase):
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
-                Xk_end += opts.D_irk[j + 1] * X_fe[j]
-                self.add_constraint(self.h * fj - xj)
-                self.cost += opts.B_irk[j + 1] * self.h * qj
+                    Xk_end += opts.D_irk[j + 1] * X_fe[j]
+                    self.add_constraint(self.h * fj - xj)
+                    self.cost += opts.B_irk[j + 1] * self.h * qj
             elif (opts.irk_representation
                 in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
@@ -577,15 +577,12 @@ class FiniteElement(FiniteElementBase):
         if opts.dcs_mode == DcsMode.PDS:
             X_fe = self.X_fe()
             for j in range(opts.n_s):
-                lam_j = self.w[flatten(self.ind_lam[j])]
+                lam_j = self.prev_fe.Lambda(stage=-1)
                 c_j = self.model.c_pds_fun(X_fe[j])
                 comp_vec = ca.vertcat(comp_vec, c_j * lam_j)
-                if j > 0:
-                    lam_jm1 = self.w[flatten(self.ind_lam[j-1])]
-                    c_jm1 = self.model.c_pds_fun(X_fe[j-1])
-                    # Cross terms:
-                    comp_vec = ca.vertcat(comp_vec, c_j * lam_jm1)
-                    comp_vec = ca.vertcat(comp_vec, c_jm1 * lam_j)
+                for jj in range(opts.n_s):
+                    lam_jj = self.Lambda(stage=jj)
+                    comp_vec = ca.vertcat(comp_vec, c_j * lam_jj)
         elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
