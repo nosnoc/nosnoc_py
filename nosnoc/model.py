@@ -163,9 +163,9 @@ class NosnocModel:
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
         elif self.c_pds:
-            n_c_sys = [casadi_length(self.c_pds[i]) for i in range(n_sys)]
+            n_c_sys = len(self.c_pds)
         else:
-            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]    
+            n_c_sys = len(self.c)
 
         # sanity checks
         if self.F is not None:
@@ -211,7 +211,7 @@ class NosnocModel:
                     raise ValueError("model formulation with PDS is not supported with other DCS modes")
                 if not isinstance(self.c_pds, list):
                     raise ValueError("model.c_pds should be a list.")
-                n_f_sys = [1]
+                n_f_sys = n_x
         # parameters
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
@@ -349,13 +349,14 @@ class NosnocModel:
                 raise ValueError("c_pds must be provided for PDS mode.")
             self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [ca.vertcat(*self.c_pds)])
             self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2  # +2 for sigma and tau
-            f_x = self.f_unconstrained[0] + ca.jacobian(ca.vertcat(*self.c_pds), self.x).T @ lam[0]
-            g_switching = ca.SX([])
+            J_c_pds = ca.jacobian(ca.vertcat(*self.c_pds), self.x)
+            E= ca.SX.eye(self.dims.n_x)
+            f_x = self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
+            g_switching = ca.vertcat(g_switching, self.c_pds_fun(self.x) - lam[0])
             g_z_all = ca.SX([])
-            std_compl_res = ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
-            lambda00_expr = ca.SX([])
-
-          
+            std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
+            lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(ca.vertcat(*self.c_pds), 0),
+                                       ca.fmax(ca.vertcat(*self.c_pds), 0))
 
         self.f_x_fun = ca.Function('f_x_fun',
                 [self.x, z, self.u, self.p, self.v_global]  ,    
@@ -420,8 +421,8 @@ class NosnocModel:
         elif opts.dcs_mode == DcsMode.PDS:
             # add lambda
         
-            n_lam = casadi_length(ca.vertcat(*self.c_pds))
-            lam = [ca.SX.sym(f'lam', n_lam)]  # Symbolic Lagrange multipliers
+            n_lam = self.dims.n_c_sys
+            lam = [ca.SX.sym('lambda', n_lam)]  # Symbolic Lagrange multipliers
 
             # unused
             theta = []

@@ -98,6 +98,8 @@ class NosnocFormulationObject(ABC):
             new_indices = list(range(ng - n, ng))
             index.append(new_indices)
 
+        print(f"[add_constraint] Added constraint: {expr} with lb={lb}, ub={ub}")
+
         return
 
     def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic: ca.SX) -> None:
@@ -229,10 +231,10 @@ class FiniteElementZero(FiniteElementBase):
 
         elif opts.dcs_mode == DcsMode.PDS:
             # In PDS mode we don't need multiple lambda variables per system
-            initial_lambda = np.ones(dims.n_f_sys[0])  # Use first dimension
-            self.add_variable(ca.SX.sym(f'lambda00', dims.n_f_sys[0]), self.ind_lam,
-                              -np.inf * np.ones(dims.n_f_sys[0]),
-                              np.inf * np.ones(dims.n_f_sys[0]),
+            initial_lambda = np.zeros(dims.n_c_sys)  # Use first dimension
+            self.add_variable(ca.SX.sym(f'lambda00', dims.n_c_sys), self.ind_lam,
+                              -np.inf * np.ones(dims.n_c_sys),
+                              np.inf * np.ones(dims.n_c_sys),
                               initial_lambda, 0, 0)  # Only one system slot needed
 
                 
@@ -365,14 +367,14 @@ class FiniteElement(FiniteElementBase):
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
             elif opts.dcs_mode == DcsMode.PDS:
-                for ij in range(dims.n_sys):
-                    initial_lambda = np.ones(dims.n_c_sys[ij])  # not used
-                    self.add_variable(
-                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
-                        self.ind_lam,  np.zeros(dims.n_c_sys[ij]),
-                        np.inf * np.ones(dims.n_c_sys[ij]),
+                
+                initial_lambda = np.zeros(dims.n_c_sys)  # not used
+                self.add_variable(
+                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{1}', dims.n_c_sys),
+                        self.ind_lam,  np.zeros(dims.n_c_sys),
+                        np.inf * np.ones(dims.n_c_sys),
                         initial_lambda,
-                        ii, ij)
+                        ii, 0)
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
@@ -530,16 +532,15 @@ class FiniteElement(FiniteElementBase):
             fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
-            
-                
-                
+
+
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
                     xj += opts.C_irk[r + 1, j + 1] * X_fe[r]
-                    Xk_end += opts.D_irk[j + 1] * X_fe[j]
-                    self.add_constraint(self.h * fj - xj)
-                    self.cost += opts.B_irk[j + 1] * self.h * qj
+                Xk_end += opts.D_irk[j + 1] * X_fe[j]
+                self.add_constraint(self.h * fj - xj)
+                self.cost += opts.B_irk[j + 1] * self.h * qj
             elif (opts.irk_representation
                 in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
@@ -580,9 +581,6 @@ class FiniteElement(FiniteElementBase):
                 lam_j = self.prev_fe.Lambda(stage=-1)
                 c_j = self.model.c_pds_fun(X_fe[j])
                 comp_vec = ca.vertcat(comp_vec, c_j * lam_j)
-                for jj in range(opts.n_s):
-                    lam_jj = self.Lambda(stage=jj)
-                    comp_vec = ca.vertcat(comp_vec, c_j * lam_jj)
         elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -599,14 +597,18 @@ class FiniteElement(FiniteElementBase):
                 comp_vec = ca.vertcat(comp_vec, theta*lam)
         return comp_vec
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: ca.SX) -> None:
+    def create_complementarity_constraints(self, sigma_p, tau, Uk, s_elastic):
         opts = self.opts
-        X_fe = self.X_fe()
-        
-        # Existing complementarity constraints for the RK stages 
+        #if opts.dcs_mode == DcsMode.PDS:
+         #   for j in range(opts.n_s):
+         #       lam_j = self.Lambda(stage=j)
+         #       c_j = self.model.c_pds_fun(self.X_fe()[j])
+         #       self.create_complementarity([lam_j], c_j, sigma_p, tau, s_elastic)
+         #   return
+        # ...rest for other modes...
         for j in range(opts.n_s):
             z = self.rk_stage_z(j)
-            stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)
+            stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
@@ -615,8 +617,6 @@ class FiniteElement(FiniteElementBase):
             a, b = ca.horzsplit(ctrl_comps)
             self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
-        # Complementarity constraints depending on the DCS mode.
-        
         
         if not opts.use_fesd:
             for j in range(opts.n_s):
@@ -678,8 +678,8 @@ class FiniteElement(FiniteElementBase):
             self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau, s_elastic)
         elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA_H_COMP:
             self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau, s_elastic)
-        # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
-        #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
+            self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
         return
 
 
@@ -912,11 +912,13 @@ class NosnocProblem(NosnocFormulationObject):
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        last_fe = self.stages[-1][-1]
-        x_terminal = last_fe.w[last_fe.ind_x[-1]]
-        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
-        self.add_constraint(g_terminal)
-        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
+        # Only add terminal constraint/cost if not simulation
+        if not self.is_sim_problem():
+            last_fe = self.stages[-1][-1]
+            x_terminal = last_fe.w[last_fe.ind_x[-1]]
+            g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
+            self.add_constraint(g_terminal)
+            self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
         # apply elastic costs
         if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:

@@ -232,11 +232,7 @@ class NosnocSolverBase(ABC):
                 self.lambda00, 
                 model.x0.flatten()
             ])
-    
-        # Debug final result
-        print("\nDEBUG: Final Parameter Vector")
-        print(f"p_val shape: {self.p_val.shape}")
-        print(f"p_val contents: {self.p_val}")
+
         return
 
 

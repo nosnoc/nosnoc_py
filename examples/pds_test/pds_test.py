@@ -8,6 +8,7 @@ from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
 from nosnoc.solver import NosnocSolver
 from nosnoc.helpers import NosnocSimLooper
+from nosnoc.utils import casadi_length, casadi_vertcat_list
 
 # Create a minimal model for PDS.
 # Define a state x in R^2 and an unconstrained dynamics function
@@ -48,10 +49,9 @@ opts = NosnocOpts(
     terminal_time=10.0,
     use_fesd=True,
     sigma_0=1.0,
-    print_level=2,
     comp_tol=1e-10,
     max_iter_homotopy=12,
-    sigma_N=1e-11,
+    sigma_N=1e-11
     # ...add any other relevant options
 )
 #opts.preprocess()
@@ -68,29 +68,32 @@ opts = NosnocOpts(
 
 # Create solver with additional debug info
 solver = NosnocSolver(opts, model)
-print("\nDEBUG: Solver Parameters")
-print(f"Initial parameter vector shape: {solver.p0.shape if hasattr(solver, 'p0') else 'No p0'}")
 
 # Solve the problem
 #results = solver.solve()
-looper = NosnocSimLooper(solver, model.x0, 31)
+looper = NosnocSimLooper(solver, model.x0, 10)
 looper.run()
 results = looper.get_results()
 solver.problem.print()
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
 t_grid = results["t_grid"]
-lambda_sim = np.array(results["lambda_sim"])  # shape: (N, n_x)
+lambda_sim = np.array(results["lambda_sim"]) 
+lambda_sim = np.squeeze(lambda_sim)           
+lambda_plot = lambda_sim.flatten()            
 
 print("t_grid shape:", t_grid.shape)
 print("lambda_sim shape:", lambda_sim.shape)
+print("Number of variables:", casadi_length(solver.problem.w))
+print("Number of constraints:", casadi_length(solver.problem.g))
 # Plot the state variables
 plt.figure()
 for i in range(X_sim.shape[1]):
     plt.plot(t_grid, X_sim[:, i], label=f'x[{i}]')
+plt.plot(t_grid[:-1], lambda_plot, label=r'$\lambda(t)$', linewidth=2)
 plt.xlabel('Time')
-plt.ylabel('State')
-plt.title('PDS State Trajectory')
+plt.ylabel('Value')
+plt.title('PDS State and Lambda Trajectory')
 plt.legend()
 plt.grid(True)
 plt.show()
