@@ -198,20 +198,18 @@ class NosnocSolverBase(ABC):
     def setup_p_val(self, sigma, tau) -> None:
         """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
-        
-        if self.opts.dcs_mode == DcsMode.PDS:
-            
-            
+
+        if False:
+
             # Build parameter vector components
             p_ctrl = model.p_val_ctrl_stages.flatten()  # Original parameters
             p_pds = np.array([sigma, tau])             # PDS parameters
-            p_slack = np.ones(1)                       # Slack variable
+                                   # Slack variable
             
             # Construct parameter vector in specific order:
             # [original_params, slack, sigma, tau, x0]
             self.p_val = np.concatenate([
-                p_ctrl,          # Original parameters
-                p_slack,         # Slack variable (always 1)  
+                p_ctrl,          # Original parameters          
                 p_pds,          # Sigma and tau
                 model.x0        # Initial state
             ])
@@ -219,19 +217,20 @@ class NosnocSolverBase(ABC):
             # Debug prints
             print("\nDEBUG: PDS Parameter Structure")
             print(f"Original parameters: {p_ctrl.shape}")
-            print(f"Slack variable: {p_slack.shape}")
+            #print(f"Slack variable: {p_slack.shape}")
             print(f"PDS parameters: {p_pds.shape}")
             #print(f"Initial state: {model.x0.shape}")
             print(f"Total parameters: {self.p_val.shape}")
             print(f"Parameter values: {self.p_val}")
-        else:   
-            
+        else:
+
             self.p_val = np.concatenate([
                 model.p_val_ctrl_stages.flatten(), 
                 np.array([sigma, tau]), 
                 self.lambda00, 
-                model.x0.flatten()
+                model.x0
             ])
+            print("lambda00 = ", self.lambda00 )
 
         return
 
@@ -429,12 +428,7 @@ class NosnocSolver(NosnocSolverBase):
             # tau_val = sigma_k**1.5*1e3
             self.setup_p_val(sigma_k, tau_val)
 
-            print(f"w0: {type(w0)}, {w0}")
-            print(f"lbw: {type(lbw)}, {lbw}")
-            print(f"ubw: {type(ubw)}, {ubw}")
-            print(f"p_val: {type(self.p_val)}, {self.p_val}")
-            print(f"lbg: {type(prob.lbg)}, {prob.lbg}")
-            print(f"ubg: {type(prob.ubg)}, {prob.ubg}")
+        
             # solve NLP
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,

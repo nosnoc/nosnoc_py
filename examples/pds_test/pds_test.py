@@ -21,13 +21,7 @@ x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
 f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = [ca.vertcat(x[1] +0.2)]  
- 
-# Parameters setup for PDS mode (all using time-varying parameters)
-p_time_var = ca.SX.sym('p_time', 1)  
-p_global = ca.SX.sym('p_global', 0)   
-p_time_var_val = np.ones((1,1))
-p_global_val = np.array([])
+c_pds_expr = [ca.vertcat(x[1] + 0.2)]  
 
 
 
@@ -35,24 +29,20 @@ p_global_val = np.array([])
 model = NosnocModel(x=x, 
                    x0=x0, 
                    f_unconstrained=f_unconstrained_expr,
-                   c_pds=c_pds_expr, 
-                   p_time_var=p_time_var, 
-                   p_global=p_global,
-                   p_time_var_val=p_time_var_val, 
-                   p_global_val=p_global_val)
+                   c_pds=c_pds_expr)
 
 
 # Construct options set to PDS mode.
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
     n_s=3,
-    terminal_time=10.0,
+    terminal_time= 0.1,
     use_fesd=True,
-    sigma_0=1.0,
+    sigma_0=1e-3,
     comp_tol=1e-10,
     max_iter_homotopy=12,
-    sigma_N=1e-11
-    # ...add any other relevant options
+    sigma_N=1e-11,
+    print_level=4
 )
 #opts.preprocess()
 
@@ -63,7 +53,7 @@ opts = NosnocOpts(
 #ocp.preprocess_ocp(model)
 
 # Build the problem.
-#problem = NosnocProblem(opts, model, ocp)
+#problem = NosnocProblem(opts, model)
 
 
 # Create solver with additional debug info
@@ -71,7 +61,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve()
-looper = NosnocSimLooper(solver, model.x0, Nsim=31)
+looper = NosnocSimLooper(solver, model.x0, Nsim = 31)
 looper.run()
 results = looper.get_results()
 solver.problem.print()
@@ -82,10 +72,7 @@ lambda_sim = np.array(results["lambda_sim"])
 lambda_sim = np.squeeze(lambda_sim)           
 lambda_plot = lambda_sim.flatten()            
 
-print("t_grid shape:", t_grid.shape)
-print("lambda_sim shape:", lambda_sim.shape)
-print("Number of variables:", casadi_length(solver.problem.w))
-print("Number of constraints:", casadi_length(solver.problem.g))
+
 # Plot the state variables
 plt.figure()
 for i in range(X_sim.shape[1]):

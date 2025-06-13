@@ -75,8 +75,8 @@ class NosnocModel:
                  f_x: Optional[List[ca.SX]] = None,
                  g_z: ca.SX = ca.SX.sym('g_z_dummy', 0, 1),
                  p: ca.SX = ca.SX.sym('p_dummy', 0, 2),
-                 p_time_var: Optional[int] = None,
-                 p_global: Optional[int] = None,
+                 p_time_var: ca.SX = ca.SX.sym('p_time_var_dummy', 0, 1),
+                 p_global: ca.SX = ca.SX.sym('p_global_dummy', 0, 1),
                  p_time_var_val: Optional[np.ndarray] = None,
                  p_global_val: np.ndarray = np.array([]),
                  n_v_global: int = 0,
@@ -106,8 +106,8 @@ class NosnocModel:
         #      raise ValueError("Provide either c and S or g or c_pds !")
 
         self.x0: np.ndarray = x0
-        self.p_time_var: int = p_time_var
-        self.p_global: int = p_global
+        self.p_time_var: ca.SX = p_time_var
+        self.p_global: ca.SX = p_global
         self.p_time_var_val: np.ndarray = p_time_var_val
         self.p_global_val: np.ndarray = p_global_val
         self.v_global = v_global
@@ -355,8 +355,7 @@ class NosnocModel:
             g_switching = ca.vertcat(g_switching, self.c_pds_fun(self.x) - lam[0])
             g_z_all = ca.SX([])
             std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
-            lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(ca.vertcat(*self.c_pds), 0),
-                                       ca.fmax(ca.vertcat(*self.c_pds), 0))
+            lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
 
         self.f_x_fun = ca.Function('f_x_fun',
                 [self.x, z, self.u, self.p, self.v_global]  ,    

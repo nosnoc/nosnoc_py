@@ -532,6 +532,14 @@ class FiniteElement(FiniteElementBase):
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
 
+            if opts.dcs_mode == DcsMode.PDS:
+                # Add PDS-specific constraints using CasADi functions instead of numpy
+                c_pds_val = model.c_pds_fun(X_fe[j])
+                # Create symbolic zeros and inf bounds of appropriate size
+                n_c = c_pds_val.shape[0]
+                lb = np.zeros(n_c)
+                ub = np.inf * np.ones(n_c)
+                self.add_constraint(c_pds_val, lb=lb, ub=ub)
 
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
@@ -575,6 +583,7 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         comp_vec = []
 
+        #do cross comp for pds
         if opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -593,12 +602,12 @@ class FiniteElement(FiniteElementBase):
 
     def create_complementarity_constraints(self, sigma_p, tau, Uk, s_elastic):
         opts = self.opts
-        #if opts.dcs_mode == DcsMode.PDS:
-         #   for j in range(opts.n_s):
-         #       lam_j = self.Lambda(stage=j)
-         #       c_j = self.model.c_pds_fun(self.X_fe()[j])
-         #       self.create_complementarity([lam_j], c_j, sigma_p, tau, s_elastic)
-         #   return
+        if opts.dcs_mode == DcsMode.PDS:
+            for j in range(opts.n_s):
+                lam_j = self.Lambda(stage=j)
+                c_j = self.model.c_pds_fun(self.X_fe()[j])
+                self.create_complementarity([lam_j], c_j, sigma_p, tau, s_elastic)
+    
         # ...rest for other modes...
         for j in range(opts.n_s):
             z = self.rk_stage_z(j)
