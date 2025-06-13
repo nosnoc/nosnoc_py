@@ -233,9 +233,9 @@ class FiniteElementZero(FiniteElementBase):
             # In PDS mode we don't need multiple lambda variables per system
             initial_lambda = np.zeros(dims.n_c_sys)  # Use first dimension
             self.add_variable(ca.SX.sym(f'lambda00', dims.n_c_sys), self.ind_lam,
-                              -np.inf * np.ones(dims.n_c_sys),
-                              np.inf * np.ones(dims.n_c_sys),
-                              initial_lambda, 0, 0)  # Only one system slot needed
+                              np.zeros(dims.n_c_sys),
+                              10 * np.ones(dims.n_c_sys),
+                              initial_lambda)  # Only one system slot needed
 
                 
 class FiniteElement(FiniteElementBase):
@@ -372,9 +372,8 @@ class FiniteElement(FiniteElementBase):
                 self.add_variable(
                         ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{1}', dims.n_c_sys),
                         self.ind_lam,  np.zeros(dims.n_c_sys),
-                        np.inf * np.ones(dims.n_c_sys),
-                        initial_lambda,
-                        ii, 0)
+                        10 * np.ones(dims.n_c_sys),
+                        initial_lambda, ii)
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
@@ -417,10 +416,10 @@ class FiniteElement(FiniteElementBase):
                     raise NotImplementedError("PDS mode does not support DIFFERENTIAL IRK representation")
                 if not opts.right_boundary_point_explicit:
                     raise NotImplementedError("PDS mode requires right_boundary_point_explicit=True")
-                initial_lambda = np.ones(dims.n_f_sys[0]) 
+                initial_lambda = np.ones(dims.n_c_sys) 
                 self.add_variable(
-                    ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_f_sys[0]),
-                    self.ind_lam, -np.inf * np.ones(dims.n_f_sys[0]), np.inf * np.ones(dims.n_f_sys[0]), initial_lambda, opts.n_s, 0)
+                    ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_c_sys),
+                    self.ind_lam,  np.zeros(dims.n_c_sys), 10 * np.ones(dims.n_f_sys), initial_lambda, opts.n_s, 0)
                             
 
         if (not opts.right_boundary_point_explicit or
@@ -575,13 +574,8 @@ class FiniteElement(FiniteElementBase):
     def get_complementarity_vector(self):
         opts = self.opts
         comp_vec = []
-        if opts.dcs_mode == DcsMode.PDS:
-            X_fe = self.X_fe()
-            for j in range(opts.n_s):
-                lam_j = self.prev_fe.Lambda(stage=-1)
-                c_j = self.model.c_pds_fun(X_fe[j])
-                comp_vec = ca.vertcat(comp_vec, c_j * lam_j)
-        elif opts.use_fesd:
+
+        if opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 theta = self.Theta(stage=j)

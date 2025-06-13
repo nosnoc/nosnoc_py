@@ -348,10 +348,10 @@ class NosnocModel:
             if not hasattr(self, 'c_pds') or self.c_pds is None:
                 raise ValueError("c_pds must be provided for PDS mode.")
             self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [ca.vertcat(*self.c_pds)])
-            self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2  # +2 for sigma and tau
+            self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2
             J_c_pds = ca.jacobian(ca.vertcat(*self.c_pds), self.x)
-            E= ca.SX.eye(self.dims.n_x)
-            f_x = self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
+            E= ca.SX.eye(self.dims.n_c_sys)
+            f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
             g_switching = ca.vertcat(g_switching, self.c_pds_fun(self.x) - lam[0])
             g_z_all = ca.SX([])
             std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)

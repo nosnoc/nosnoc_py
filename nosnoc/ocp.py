@@ -62,18 +62,7 @@ class NosnocOcp:
 
     def preprocess_ocp(self, model: NosnocModel):
     
-        dims = NosnocDims(
-        n_x=2,  # Number of state variables
-        n_u=0,
-        n_sys=1,
-        n_c_sys=[1],
-        n_p=1,        # Number of control inputs (set to 0 if no control inputs are used)
-        n_p_time_var=1,  # Number of time-varying parameters
-        n_v_global=0,  # Number of global variables
-        n_z=1,      # Number of algebraic variables
-        n_p_glob=0,
-        n_f_sys=[1]  # Number of functions in the system        
-        )
+        dims = model.dims
         self.g_terminal_fun = ca.Function('g_terminal_fun', [model.x, model.p, model.v_global],
                                           [self.g_terminal],{})
         self.f_q_T_fun = ca.Function('f_q_T_fun', [model.x, model.p, model.v_global],

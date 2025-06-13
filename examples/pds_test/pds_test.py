@@ -14,7 +14,7 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list
 # Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
 x = ca.SX.sym('x', n_x)
-x0 = [0.0, 1.14159]  # initial state
+x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics
@@ -22,7 +22,7 @@ f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]
 
 # c_pds: Simple gap function
 c_pds_expr = [ca.vertcat(x[1] +0.2)]  
-
+ 
 # Parameters setup for PDS mode (all using time-varying parameters)
 p_time_var = ca.SX.sym('p_time', 1)  
 p_global = ca.SX.sym('p_global', 0)   
@@ -71,7 +71,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve()
-looper = NosnocSimLooper(solver, model.x0, 10)
+looper = NosnocSimLooper(solver, model.x0, Nsim=31)
 looper.run()
 results = looper.get_results()
 solver.problem.print()
@@ -95,6 +95,15 @@ plt.xlabel('Time')
 plt.ylabel('Value')
 plt.title('PDS State and Lambda Trajectory')
 plt.legend()
+plt.grid(True)
+plt.show()
+
+# Plot x[0] vs x[1] (phase plot)
+plt.figure()
+plt.plot(X_sim[:, 0], X_sim[:, 1], marker='o')
+plt.xlabel('x[0]')
+plt.ylabel('x[1]')
+plt.title('Phase Plot: x[0] vs x[1]')
 plt.grid(True)
 plt.show()
 
