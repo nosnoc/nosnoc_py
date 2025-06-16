@@ -14,7 +14,7 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list
 # Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
 x = ca.SX.sym('x', n_x)
-x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
+x0 = [np.sqrt(2)/2, np.sqrt(2)/2]  # initial state
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics

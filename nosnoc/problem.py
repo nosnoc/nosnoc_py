@@ -584,7 +584,16 @@ class FiniteElement(FiniteElementBase):
         comp_vec = []
 
         #do cross comp for pds
-        if opts.use_fesd:
+        if opts.dcs_mode == DcsMode.PDS:
+            for j in range(opts.n_s):
+                lam = self.Lambda(stage=-1)
+                c_pds = self.model.c_pds_fun(self.X_fe()[j])
+                comp_vec = ca.vertcat(comp_vec, lam*c_pds)
+                for jj in range(opts.n_s):
+                    lam = self.Lambda(stage=jj)
+                    comp_vec = ca.vertcat(comp_vec, lam*c_pds)
+
+        elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 theta = self.Theta(stage=j)
@@ -604,21 +613,30 @@ class FiniteElement(FiniteElementBase):
         opts = self.opts
         if opts.dcs_mode == DcsMode.PDS:
             for j in range(opts.n_s):
-                lam_j = self.Lambda(stage=j)
+                lam_j = self.Lambda(stage = j)
+                lam_prev_j = self.Lambda(stage=j-1)
                 c_j = self.model.c_pds_fun(self.X_fe()[j])
+                c_n_s = self.model.c_pds_fun(self.X_fe()[opts.n_s-1])
                 self.create_complementarity([lam_j], c_j, sigma_p, tau, s_elastic)
-    
+                self.create_complementarity([lam_prev_j], c_n_s, sigma_p, tau, s_elastic)
+                for jj in range(opts.n_s):
+                    c_jj = self.model.c_pds_fun(self.X_fe()[jj])
+                    lam_n_s = self.Lambda(stage=opts.n_s-1)
+                    self.create_complementarity([lam_n_s], c_jj, sigma_p, tau, s_elastic)
+                    self.create_complementarity([lam_j], c_jj, sigma_p, tau, s_elastic)
+
         # ...rest for other modes...
-        for j in range(opts.n_s):
-            z = self.rk_stage_z(j)
-            stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
-            a, b = ca.horzsplit(stage_comps)
-            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
+        elif opts.use_fesd:
+            for j in range(opts.n_s):
+                z = self.rk_stage_z(j)
+                stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
+                a, b = ca.horzsplit(stage_comps)
+                self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
-        if self.fe_idx == opts.N_finite_elements-1:
-            ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
-            a, b = ca.horzsplit(ctrl_comps)
-            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
+            if self.fe_idx == opts.N_finite_elements-1:
+                ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
+                a, b = ca.horzsplit(ctrl_comps)
+                self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
         
         if not opts.use_fesd:

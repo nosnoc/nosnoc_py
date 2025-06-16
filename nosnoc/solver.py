@@ -199,38 +199,14 @@ class NosnocSolverBase(ABC):
         """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
 
-        if False:
+        
 
-            # Build parameter vector components
-            p_ctrl = model.p_val_ctrl_stages.flatten()  # Original parameters
-            p_pds = np.array([sigma, tau])             # PDS parameters
-                                   # Slack variable
-            
-            # Construct parameter vector in specific order:
-            # [original_params, slack, sigma, tau, x0]
-            self.p_val = np.concatenate([
-                p_ctrl,          # Original parameters          
-                p_pds,          # Sigma and tau
-                model.x0        # Initial state
-            ])
-            
-            # Debug prints
-            print("\nDEBUG: PDS Parameter Structure")
-            print(f"Original parameters: {p_ctrl.shape}")
-            #print(f"Slack variable: {p_slack.shape}")
-            print(f"PDS parameters: {p_pds.shape}")
-            #print(f"Initial state: {model.x0.shape}")
-            print(f"Total parameters: {self.p_val.shape}")
-            print(f"Parameter values: {self.p_val}")
-        else:
-
-            self.p_val = np.concatenate([
+        self.p_val = np.concatenate([
                 model.p_val_ctrl_stages.flatten(), 
                 np.array([sigma, tau]), 
                 self.lambda00, 
                 model.x0
             ])
-            print("lambda00 = ", self.lambda00 )
 
         return
 
