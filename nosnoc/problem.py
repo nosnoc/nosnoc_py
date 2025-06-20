@@ -98,7 +98,6 @@ class NosnocFormulationObject(ABC):
             new_indices = list(range(ng - n, ng))
             index.append(new_indices)
 
-        print(f"[add_constraint] Added constraint: {expr} with lb={lb}, ub={ub}")
 
         return
 
@@ -192,6 +191,9 @@ class FiniteElementBase(NosnocFormulationObject):
         return ca.vertcat(self.w[flatten(self.ind_lam[stage][sys])],
                           self.w[flatten(self.ind_lambda_n[stage][sys])],
                           self.w[flatten(self.ind_lambda_p[stage][sys])])
+    
+    def C_pds(self, stage=slice(None), sys=slice(None)):
+        return ca.vertcat(self.w[flatten(self.ind_c_pds[stage][sys])])
 
 
 class FiniteElementZero(FiniteElementBase):
@@ -204,6 +206,7 @@ class FiniteElementZero(FiniteElementBase):
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
+        self.ind_c_pds = create_empty_list_matrix((1, dims.n_sys))
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
         self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
@@ -461,6 +464,11 @@ class FiniteElement(FiniteElementBase):
             self.w[flatten(self.ind_alpha[stage][sys])],
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
             self.w[flatten(self.ind_alpha[stage][sys])])
+    
+    def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
+        return ca.vertcat(
+            self.w[flatten(self.ind_c_pds[stage][sys])]
+        )
 
     def get_Theta_list(self) -> list:
         return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
@@ -479,9 +487,8 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Lambdas)
 
     def get_c_pds_incl_last_prev_fe(self, sys=slice(None)):
-        c_pds = [self.model.c_pds[sys](self.X_fe()[ii]) for ii in range(len(self.ind_c_pds))]
-        for x_i in self.X_fe():
-            c_pds += [self.model.c_pds_fun(x_i)]
+        c_pds = [self.C_pds[sys](self.X_fe()[ii]) for ii in range(len(self.ind_c_pds))]
+        c_pds += [self.prev_fe.C_pds(stage=-1, sys=sys)]
         return c_pds
 
     def sum_c_pds(self, sys=slice(None)):
@@ -614,29 +621,26 @@ class FiniteElement(FiniteElementBase):
         if opts.dcs_mode == DcsMode.PDS:
             for j in range(opts.n_s):
                 lam_j = self.Lambda(stage = j)
-                lam_prev_j = self.Lambda(stage=j-1)
-                c_j = self.model.c_pds_fun(self.X_fe()[j])
-                c_n_s = self.model.c_pds_fun(self.X_fe()[opts.n_s-1])
-                self.create_complementarity([lam_j], c_j, sigma_p, tau, s_elastic)
-                self.create_complementarity([lam_prev_j], c_n_s, sigma_p, tau, s_elastic)
+                lam_prev = self.prev_fe.Lambda(stage = -1)
+                c_prev = self.prev_fe.C_pds(stage = -1)
+                self.create_complementarity([lam_j], c_prev, sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
-                    c_jj = self.model.c_pds_fun(self.X_fe()[jj])
-                    lam_n_s = self.Lambda(stage=opts.n_s-1)
-                    self.create_complementarity([lam_n_s], c_jj, sigma_p, tau, s_elastic)
+                    c_jj = self.C_pds(stage = jj)
                     self.create_complementarity([lam_j], c_jj, sigma_p, tau, s_elastic)
+                    self.create_complementarity([lam_prev], c_jj, sigma_p, tau, s_elastic)
 
         # ...rest for other modes...
-        elif opts.use_fesd:
-            for j in range(opts.n_s):
-                z = self.rk_stage_z(j)
-                stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
-                a, b = ca.horzsplit(stage_comps)
-                self.create_complementarity([a], b, sigma_p, tau, s_elastic)
+        
+        for j in range(opts.n_s):
+            z = self.rk_stage_z(j)
+            stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
+            a, b = ca.horzsplit(stage_comps)
+            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
-            if self.fe_idx == opts.N_finite_elements-1:
-                ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
-                a, b = ca.horzsplit(ctrl_comps)
-                self.create_complementarity([a], b, sigma_p, tau, s_elastic)
+        if self.fe_idx == opts.N_finite_elements-1:
+            ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
+            a, b = ca.horzsplit(ctrl_comps)
+            self.create_complementarity([a], b, sigma_p, tau, s_elastic)
     
         
         if not opts.use_fesd:
@@ -866,7 +870,6 @@ class NosnocProblem(NosnocFormulationObject):
             s_elastic = None
 
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
-        print(f"Parameter vector (p): {self.p}")
         # Generate all the variables we need
         self.__create_primal_variables()
 
@@ -919,7 +922,7 @@ class NosnocProblem(NosnocFormulationObject):
         # Collect complementarity terms from all finite elements
         for fe in flatten(self.stages):
             comp_vec = ca.vertcat(comp_vec, fe.get_complementarity_vector())
-        print(f"Complementarity vector (comp_vec): {comp_vec}")
+        
 
         # Handle empty complementarity vector
         if comp_vec.numel() == 0:

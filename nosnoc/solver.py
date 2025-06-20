@@ -324,10 +324,6 @@ class NosnocSolver(NosnocSolverBase):
                 'g': self.problem.g,
                 'p': self.problem.p
             }
-            print(f"Cost function (f): {self.problem.cost}")
-            print(f"Decision variables (x): {self.problem.w}")
-            print(f"Constraints (g): {self.problem.g}")
-            print(f"Parameters (p): {self.problem.p}")
             self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
         except Exception as err:
             self.print_problem()

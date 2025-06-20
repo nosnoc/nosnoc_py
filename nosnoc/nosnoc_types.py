@@ -120,8 +120,7 @@ class DcsMode(Enum):
     PDS representaion
 
     f_x_unconstrained - Unconstrained System Dynamics expression  f(x)
-    c - The gap functions c(x) used in the definition of the feasible set.
-    E - Square matrix E that is used as the weighting matrix for the projection operator. By default this is the identity matrix.             
+    c - The gap functions c(x) used in the definition of the feasible set.            
     """
 
 

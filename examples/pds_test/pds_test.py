@@ -14,14 +14,15 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list
 # Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
 x = ca.SX.sym('x', n_x)
-x0 = [np.sqrt(2)/2, np.sqrt(2)/2]  # initial state
+x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
+  
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics
 f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = [ca.vertcat(x[1] + 0.2)]  
+c_pds_expr = [ca.vertcat(x[1] + 1)]  
 
 
 
@@ -36,13 +37,13 @@ model = NosnocModel(x=x,
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
     n_s=3,
-    terminal_time= 0.1,
+    terminal_time= 0.1 ,
     use_fesd=True,
-    sigma_0=1e-3,
+    sigma_0=1e-4,
     comp_tol=1e-10,
-    max_iter_homotopy=12,
+    N_finite_elements=2,
     sigma_N=1e-11,
-    print_level=4
+    print_level=2
 )
 #opts.preprocess()
 
@@ -60,11 +61,11 @@ opts = NosnocOpts(
 solver = NosnocSolver(opts, model)
 
 # Solve the problem
-#results = solver.solve()
-looper = NosnocSimLooper(solver, model.x0, Nsim = 31)
+#results = solver.solve(
+looper = NosnocSimLooper(solver, model.x0, Nsim = 46)
 looper.run()
 results = looper.get_results()
-solver.problem.print()
+#solver.problem.print()
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
 t_grid = results["t_grid"]
@@ -87,10 +88,22 @@ plt.show()
 
 # Plot x[0] vs x[1] (phase plot)
 plt.figure()
-plt.plot(X_sim[:, 0], X_sim[:, 1], marker='o')
+plt.plot(X_sim[:, 0], X_sim[:, 1], label='Phase Plot', color='blue')
 plt.xlabel('x[0]')
 plt.ylabel('x[1]')
 plt.title('Phase Plot: x[0] vs x[1]')
 plt.grid(True)
+plt.legend()
 plt.show()
+
+# Get the final simulated state
+x_final = X_sim[-1, :]  # shape: (2,) 
+print(f"Final state x: {x_final}")
+# Reference point
+x_ref = [-1, 0]
+
+# Compute Euclidean distance
+distance = np.linalg.norm(x_final - x_ref)
+
+print(f"Euclidean distance between final x and (-1, 0): {distance:.6f}")
 
