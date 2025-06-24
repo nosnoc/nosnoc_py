@@ -10,7 +10,8 @@ class NosnocSimLooper:
     def __init__(self,
                  solver: NosnocSolver,
                  x0: np.ndarray,
-                 Nsim: int,
+                 Nsim: Optional[int] = None,
+                 Tsim: Optional[float] = None,
                  p_values: Optional[np.ndarray] = None,
                  w_init: Optional[list] = None,
                  print_level: Optional[int] = None
@@ -35,7 +36,8 @@ class NosnocSimLooper:
 
         # create
         self.solver: NosnocSolver = solver
-        self.Nsim = Nsim
+        self.Nsim = Nsim if Nsim is not None else 0
+        self.Tsim = Tsim
 
         self.xcurrent = x0
         self.X_sim = [x0]
@@ -56,11 +58,22 @@ class NosnocSimLooper:
         self.status = []
         self.switch_times = []
 
-        self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + (1 if solver.opts.do_polishing_step else 0)))
+        if Nsim is not None:
+            self.cpu_nlp = np.zeros((Nsim, solver.opts.max_iter_homotopy + (1 if solver.opts.do_polishing_step else 0)))
+        else:
+            self.cpu_nlp = []
 
     def run(self, stop_on_failure=False) -> None:
         """Run the simulation loop."""
-        for i in range(self.Nsim):
+        total_time = 0.0
+        i = 0
+        while True:
+            if self.Tsim is not None:
+                if total_time >= self.Tsim:
+                    break
+            elif self.Nsim is not None and i >= self.Nsim:
+                break
+
             # set values
             self.solver.set("x0", self.xcurrent)
             if self.w_init is not None:
@@ -78,8 +91,12 @@ class NosnocSimLooper:
             # collect
             self.X_sim += results["x_list"]
             self.xcurrent = self.X_sim[-1]
-            self.cpu_nlp[i, :] = results["cpu_time_nlp"]
+            if isinstance(self.cpu_nlp, list):
+                self.cpu_nlp.append(results["cpu_time_nlp"])
+            else:
+                self.cpu_nlp[i, :] = results["cpu_time_nlp"]
             self.time_steps = np.concatenate((self.time_steps, results["time_steps"]))
+            total_time = np.sum(self.time_steps)
             self.theta_sim.append(results["theta_list"])
             self.lambda_sim.append(results["lambda_list"])
             self.alpha_sim.append(results["alpha_list"])
@@ -91,10 +108,12 @@ class NosnocSimLooper:
             if self.solver.opts.speed_of_time_variables != SpeedOfTimeVariableMode.NONE:
                 self.sot.append(results["sot"])
             if self.print_level > 0:
-                print(f"Sim step {i + 1}/{self.Nsim}\t status: {results['status']}")
+                print(f"Sim step {i + 1}\t status: {results['status']}")
 
             if (stop_on_failure and results["status"] == "Infeasible_Problem_Detected"):
                 return False
+
+            i += 1
 
         return True
 

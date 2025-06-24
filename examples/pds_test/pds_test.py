@@ -15,7 +15,8 @@ from nosnoc.utils import casadi_length, casadi_vertcat_list
 n_x = 2  # number of state variables
 x = ca.SX.sym('x', n_x)
 x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
-  
+
+T = np.sqrt(3) + 11 * np.pi /12 
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics
@@ -62,7 +63,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve(
-looper = NosnocSimLooper(solver, model.x0, Nsim = 461)
+looper = NosnocSimLooper(solver, model.x0, Tsim=T)
 looper.run()
 results = looper.get_results()
 #solver.problem.print()
