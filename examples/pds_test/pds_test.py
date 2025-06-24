@@ -37,9 +37,9 @@ model = NosnocModel(x=x,
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
     n_s=3,
-    terminal_time= 0.1 ,
+    terminal_time= 0.01 ,
     use_fesd=True,
-    sigma_0=1e-4,
+    sigma_0=1e-5,
     comp_tol=1e-10,
     N_finite_elements=2,
     sigma_N=1e-11,
@@ -62,7 +62,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve(
-looper = NosnocSimLooper(solver, model.x0, Nsim = 46)
+looper = NosnocSimLooper(solver, model.x0, Nsim = 461)
 looper.run()
 results = looper.get_results()
 #solver.problem.print()

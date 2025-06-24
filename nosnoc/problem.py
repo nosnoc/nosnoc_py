@@ -198,6 +198,8 @@ class FiniteElementBase(NosnocFormulationObject):
 
 class FiniteElementZero(FiniteElementBase):
 
+    
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
         dims = model.dims
@@ -238,7 +240,9 @@ class FiniteElementZero(FiniteElementBase):
             self.add_variable(ca.SX.sym(f'lambda00', dims.n_c_sys), self.ind_lam,
                               np.zeros(dims.n_c_sys),
                               10 * np.ones(dims.n_c_sys),
-                              initial_lambda)  # Only one system slot needed
+                              initial_lambda)
+            
+        
 
                 
 class FiniteElement(FiniteElementBase):
@@ -423,7 +427,7 @@ class FiniteElement(FiniteElementBase):
                 self.add_variable(
                     ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_c_sys),
                     self.ind_lam,  np.zeros(dims.n_c_sys), 10 * np.ones(dims.n_f_sys), initial_lambda, opts.n_s, 0)
-                            
+            
 
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
@@ -455,6 +459,7 @@ class FiniteElement(FiniteElementBase):
 
         else:
             idx = np.concatenate((flatten(self.ind_lam[stage]),
+                                  flatten(self.ind_c_pds[stage]),
                             flatten(self.ind_z[stage])))    
         return self.w[idx]
 
@@ -466,9 +471,9 @@ class FiniteElement(FiniteElementBase):
             self.w[flatten(self.ind_alpha[stage][sys])])
     
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
-        return ca.vertcat(
-            self.w[flatten(self.ind_c_pds[stage][sys])]
-        )
+        x = self.X_fe()[stage][sys]  # get state at this stage
+        return self.model.c_pds_fun(x)
+        
 
     def get_Theta_list(self) -> list:
         return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
@@ -487,7 +492,7 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Lambdas)
 
     def get_c_pds_incl_last_prev_fe(self, sys=slice(None)):
-        c_pds = [self.C_pds[sys](self.X_fe()[ii]) for ii in range(len(self.ind_c_pds))]
+        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(len(self.ind_c_pds))]
         c_pds += [self.prev_fe.C_pds(stage=-1, sys=sys)]
         return c_pds
 
@@ -539,15 +544,7 @@ class FiniteElement(FiniteElementBase):
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
 
-            if opts.dcs_mode == DcsMode.PDS:
-                # Add PDS-specific constraints using CasADi functions instead of numpy
-                c_pds_val = model.c_pds_fun(X_fe[j])
-                # Create symbolic zeros and inf bounds of appropriate size
-                n_c = c_pds_val.shape[0]
-                lb = np.zeros(n_c)
-                ub = np.inf * np.ones(n_c)
-                self.add_constraint(c_pds_val, lb=lb, ub=ub)
-
+        
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
@@ -593,13 +590,10 @@ class FiniteElement(FiniteElementBase):
         #do cross comp for pds
         if opts.dcs_mode == DcsMode.PDS:
             for j in range(opts.n_s):
-                lam = self.Lambda(stage=-1)
-                c_pds = self.model.c_pds_fun(self.X_fe()[j])
+                lam = self.Lambda(stage=j)
+                c_pds = self.C_pds(stage=j)
                 comp_vec = ca.vertcat(comp_vec, lam*c_pds)
-                for jj in range(opts.n_s):
-                    lam = self.Lambda(stage=jj)
-                    comp_vec = ca.vertcat(comp_vec, lam*c_pds)
-
+               
         elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -621,11 +615,11 @@ class FiniteElement(FiniteElementBase):
         if opts.dcs_mode == DcsMode.PDS:
             for j in range(opts.n_s):
                 lam_j = self.Lambda(stage = j)
-                lam_prev = self.prev_fe.Lambda(stage = -1)
-                c_prev = self.prev_fe.C_pds(stage = -1)
+                lam_prev = self.Lambda(stage = -1)
+                c_prev = self.C_pds(stage = -1)
                 self.create_complementarity([lam_j], c_prev, sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
-                    c_jj = self.C_pds(stage = jj)
+                    c_jj = self.C_pds(stage=jj) 
                     self.create_complementarity([lam_j], c_jj, sigma_p, tau, s_elastic)
                     self.create_complementarity([lam_prev], c_jj, sigma_p, tau, s_elastic)
 

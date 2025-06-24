@@ -211,7 +211,7 @@ class NosnocModel:
                     raise ValueError("model formulation with PDS is not supported with other DCS modes")
                 if not isinstance(self.c_pds, list):
                     raise ValueError("model.c_pds should be a list.")
-                n_f_sys = n_x
+                n_f_sys = len(self.f_unconstrained)
         # parameters
         n_p_glob = casadi_length(self.p_global)
         if not self.p_global_val.shape == (n_p_glob,):
@@ -352,7 +352,7 @@ class NosnocModel:
             J_c_pds = ca.jacobian(ca.vertcat(*self.c_pds), self.x)
             E= ca.SX.eye(self.dims.n_c_sys)
             f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
-            g_switching = ca.vertcat(g_switching, self.c_pds_fun(self.x) - lam[0])
+            g_switching = ca.vertcat(g_switching, ca.vertcat(*self.c_pds) - lam[0])
             g_z_all = ca.SX([])
             std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
             lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
