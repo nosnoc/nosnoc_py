@@ -16,7 +16,7 @@ n_x = 2  # number of state variables
 x = ca.SX.sym('x', n_x)
 x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
 
-T = np.sqrt(3) + 11 * np.pi /12 
+
 
 # For PDS, supply a list for f_unconstrained and c_pds
 # f_unconstrained: Simple linear dynamics
@@ -37,12 +37,12 @@ model = NosnocModel(x=x,
 # Construct options set to PDS mode.
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
-    n_s=3,
-    terminal_time= 0.01 ,
+    n_s=1,
+    terminal_time = 0.01,
     use_fesd=True,
     sigma_0=1e-5,
     comp_tol=1e-10,
-    N_finite_elements=2,
+    N_finite_elements=100,
     sigma_N=1e-11,
     print_level=2
 )
@@ -63,7 +63,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve(
-looper = NosnocSimLooper(solver, model.x0, Tsim=T)
+looper = NosnocSimLooper(solver, model.x0, Tsim=4.612)
 looper.run()
 results = looper.get_results()
 #solver.problem.print()
