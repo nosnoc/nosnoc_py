@@ -5,6 +5,7 @@ import casadi as ca
 import numpy as np
 import time
 
+
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
 from nosnoc.nosnoc_types import InitializationStrategy, DcsMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
@@ -125,6 +126,7 @@ class NosnocSolverBase(ABC):
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             # print(f"updating w0 with RK4 smoothened")
             # NOTE: assume N_stages = 1 and STEWART
+            
             dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
             irk_time_grid = np.array(
                 [opts.irk_time_points[0]] +
@@ -469,6 +471,7 @@ class NosnocSolver(NosnocSolverBase):
         results["w_all"] = w_all
         results["w_sol"] = w_opt
         results["cost_val"] = cost_val
+
 
         if check_ipopt_success(status):
             results["status"] = Status.SUCCESS

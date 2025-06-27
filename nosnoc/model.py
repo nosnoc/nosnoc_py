@@ -353,8 +353,7 @@ class NosnocModel:
             E= ca.SX.eye(self.dims.n_c_sys)
             f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
             g_switching = ca.vertcat(g_switching, ca.vertcat(*self.c_pds) - lam[0])
-            g_z_all = ca.SX([])
-            std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
+            std_compl_res += ca.fabs(ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds))
             lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
 
         self.f_x_fun = ca.Function('f_x_fun',
@@ -364,13 +363,7 @@ class NosnocModel:
                 ['f_x'],{}
             )
 
-            # Add g_z_all_fun for PDS mode (empty constraints)
-        self.g_z_all_fun = ca.Function('g_z_all_fun',
-                [self.x, z, self.u, self.p],
-                [g_z_all],
-                ['x', 'z', 'u', 'p' ],
-                ['g_z_all'],{}
-            )
+        
 
             # Update std_compl_res_fun to include lam
         self.std_compl_res_fun = ca.Function('std_compl_res_fun',
@@ -420,7 +413,7 @@ class NosnocModel:
         elif opts.dcs_mode == DcsMode.PDS:
             # add lambda
         
-            n_lam = self.dims.n_c_sys
+            n_lam = dims.n_c_sys
             lam = [ca.SX.sym('lambda', n_lam)]  # Symbolic Lagrange multipliers
 
             # unused

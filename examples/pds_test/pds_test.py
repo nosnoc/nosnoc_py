@@ -1,6 +1,7 @@
 import casadi as ca
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 from nosnoc.nosnoc_opts import NosnocOpts, DcsMode
 from nosnoc.model import NosnocModel
@@ -38,10 +39,10 @@ model = NosnocModel(x=x,
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
     n_s=1,
-    terminal_time = 0.01,
     use_fesd=True,
+    terminal_time=0.01,
     sigma_0=1e-5,
-    comp_tol=1e-10,
+    comp_tol=1e-12,
     N_finite_elements=100,
     sigma_N=1e-11,
     print_level=2
@@ -63,9 +64,12 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve(
-looper = NosnocSimLooper(solver, model.x0, Tsim=4.612)
+looper = NosnocSimLooper(solver, model.x0, Tsim=4.609)
+t=time.time()
 looper.run()
 results = looper.get_results()
+print(f"Simulation completed in {time.time() - t:.2f} seconds")
+
 #solver.problem.print()
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
@@ -73,7 +77,6 @@ t_grid = results["t_grid"]
 lambda_sim = np.array(results["lambda_sim"]) 
 lambda_sim = np.squeeze(lambda_sim)           
 lambda_plot = lambda_sim.flatten()            
-
 
 # Plot the state variables
 plt.figure()

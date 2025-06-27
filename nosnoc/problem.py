@@ -542,7 +542,7 @@ class FiniteElement(FiniteElementBase):
             # Dynamics excluding complementarities
             fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+            
 
         
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
@@ -591,14 +591,14 @@ class FiniteElement(FiniteElementBase):
         if opts.dcs_mode == DcsMode.PDS:
             for j in range(opts.n_s):
                 lam_prev = self.prev_fe.Lambda(stage=-1)
-                c_pds_prev = self.prev_fe.C_pds(stage=-1)
                 c_pds = self.C_pds(stage=j)
+                c_pds_prev = self.prev_fe.C_pds(stage=-1)
                 comp_vec = ca.vertcat(comp_vec, lam_prev*c_pds)
                 for jj in range(opts.n_s):
                     lam = self.Lambda(stage=jj)
-                    comp_vec = ca.vertcat(comp_vec, lam*c_pds)
                     comp_vec = ca.vertcat(comp_vec, lam*c_pds_prev)
-               
+                    comp_vec = ca.vertcat(comp_vec, lam*c_pds)
+
         elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
@@ -622,11 +622,11 @@ class FiniteElement(FiniteElementBase):
                 lam_j = self.Lambda(stage = j)
                 lam_prev = self.prev_fe.Lambda(stage = -1)
                 c_prev = self.prev_fe.C_pds(stage = -1)
-                self.create_complementarity([lam_j], c_prev, sigma_p, tau, s_elastic)
+                self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
                     c_jj = self.C_pds(stage=jj) 
-                    self.create_complementarity([lam_j], c_jj, sigma_p, tau, s_elastic)
-                    self.create_complementarity([lam_prev], c_jj, sigma_p, tau, s_elastic)
+                    self.create_complementarity([c_jj], lam_prev, sigma_p, tau, s_elastic)
+                    self.create_complementarity([c_jj], lam_j, sigma_p, tau, s_elastic)
 
         # ...rest for other modes...
         

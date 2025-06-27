@@ -22,7 +22,9 @@ class NosnocSimLooper:
         :param Nsim: int: number of simulation steps
         :param p_values: Optional np.ndarray of shape (Nsim, n_p_glob), parameter values p_glob are updated at each simulation step accordingly.
         :param w_init: Optional: a list of np.ndarray with w values to initialize the solver at each step.
-        """
+        
+    """
+        
         # check that NosnocSolver solves a pure simulation problem.
         if not solver.problem.is_sim_problem():
             raise Exception("NosnocSimLooper can only be used with pure simulation problem")
@@ -114,7 +116,6 @@ class NosnocSimLooper:
                 return False
 
             i += 1
-
         return True
 
     def get_results(self) -> dict:
