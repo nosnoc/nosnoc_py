@@ -87,7 +87,7 @@ class NosnocOpts:
     opts_casadi_nlp['verbose'] = False
     opts_casadi_nlp['ipopt'] = dict()
     opts_casadi_nlp['ipopt']['sb'] = 'yes'
-    opts_casadi_nlp['ipopt']['max_iter'] = 500
+    opts_casadi_nlp['ipopt']['max_iter'] = 1000
     opts_casadi_nlp['ipopt']['print_level'] = 0
     opts_casadi_nlp['ipopt']['bound_relax_factor'] = 0
     tol_ipopt = property(

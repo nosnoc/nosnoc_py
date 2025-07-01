@@ -351,9 +351,10 @@ class NosnocModel:
             self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2
             J_c_pds = ca.jacobian(ca.vertcat(*self.c_pds), self.x)
             E= ca.SX.eye(self.dims.n_c_sys)
+            g_z_all = ca.SX([])
             f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
             g_switching = ca.vertcat(g_switching, ca.vertcat(*self.c_pds) - lam[0])
-            std_compl_res += ca.fabs(ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds))
+            std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
             lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
 
         self.f_x_fun = ca.Function('f_x_fun',
@@ -363,7 +364,12 @@ class NosnocModel:
                 ['f_x'],{}
             )
 
-        
+        self.g_z_all_fun = ca.Function('g_z_all_fun',
+                [self.x, z, self.u, self.p],
+                [g_z_all],
+                ['x', 'z', 'u', 'p' ],
+                ['g_z_all'],{}
+            )
 
             # Update std_compl_res_fun to include lam
         self.std_compl_res_fun = ca.Function('std_compl_res_fun',

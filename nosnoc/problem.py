@@ -186,14 +186,36 @@ class NosnocFormulationObject(ABC):
 
 
 class FiniteElementBase(NosnocFormulationObject):
+    def X_fe(self) -> List[ca.SX]:
+        
+        """returns list of all x values in finite element"""
+        opts = NosnocOpts()
+        if opts.irk_representation == IrkRepresentation.INTEGRAL:
+            X_fe = [self.w[ind] for ind in self.ind_x]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            X_fe = []
+            for j in range(opts.n_s):
+                x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(opts.n_s):
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                X_fe.append(x_temp)
+            X_fe.append(self.w[self.ind_x[-1]])
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
+            X_fe = [self.w[ind] for ind in self.ind_x]
+
+        return X_fe
 
     def Lambda(self, stage=slice(None), sys=slice(None)):
         return ca.vertcat(self.w[flatten(self.ind_lam[stage][sys])],
                           self.w[flatten(self.ind_lambda_n[stage][sys])],
                           self.w[flatten(self.ind_lambda_p[stage][sys])])
     
-    def C_pds(self, stage=slice(None), sys=slice(None)):
-        return ca.vertcat(self.w[flatten(self.ind_c_pds[stage][sys])])
+    def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
+    
+        x = self.X_fe()[stage][sys]  
+        c_pds = self.model.c_pds_fun(x)
+        c_pds = ca.if_else(c_pds < 0, 0, c_pds)
+        return c_pds
 
 
 class FiniteElementZero(FiniteElementBase):
@@ -203,6 +225,7 @@ class FiniteElementZero(FiniteElementBase):
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
         dims = model.dims
+        self.model = model
 
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
@@ -212,7 +235,7 @@ class FiniteElementZero(FiniteElementBase):
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
         self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
-
+        
         # lambda00
         if opts.dcs_mode == DcsMode.STEWART:
 
@@ -242,9 +265,7 @@ class FiniteElementZero(FiniteElementBase):
                               10 * np.ones(dims.n_c_sys),
                               initial_lambda)
             
-        
 
-                
 class FiniteElement(FiniteElementBase):
 
     def __init__(self,
@@ -459,7 +480,6 @@ class FiniteElement(FiniteElementBase):
 
         else:
             idx = np.concatenate((flatten(self.ind_lam[stage]),
-                                  flatten(self.ind_c_pds[stage]),
                             flatten(self.ind_z[stage])))    
         return self.w[idx]
 
@@ -471,9 +491,10 @@ class FiniteElement(FiniteElementBase):
             self.w[flatten(self.ind_alpha[stage][sys])])
     
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
-        x = self.X_fe()[stage][sys]  # get state at this stage
-        return self.model.c_pds_fun(x)
-        
+        x = self.X_fe()[stage][sys]  
+        c_pds = self.model.c_pds_fun(x)
+        c_pds = ca.if_else(c_pds < 0, 0, c_pds)
+        return c_pds
 
     def get_Theta_list(self) -> list:
         return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
@@ -492,7 +513,7 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Lambdas)
 
     def get_c_pds_incl_last_prev_fe(self, sys=slice(None)):
-        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(len(self.ind_c_pds))]
+        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(len(self.C_pds))]
         c_pds += [self.prev_fe.C_pds(stage=-1, sys=sys)]
         return c_pds
 
@@ -542,7 +563,8 @@ class FiniteElement(FiniteElementBase):
             # Dynamics excluding complementarities
             fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-            
+            gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+           
 
         
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
@@ -622,10 +644,10 @@ class FiniteElement(FiniteElementBase):
                 lam_j = self.Lambda(stage = j)
                 lam_prev = self.prev_fe.Lambda(stage = -1)
                 c_prev = self.prev_fe.C_pds(stage = -1)
-                self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic)
+                self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic) if self.prev_fe else None
                 for jj in range(opts.n_s):
-                    c_jj = self.C_pds(stage=jj) 
-                    self.create_complementarity([c_jj], lam_prev, sigma_p, tau, s_elastic)
+                    c_jj = self.C_pds(stage=jj)
+                    self.create_complementarity([c_jj], lam_prev, sigma_p, tau, s_elastic) if self.prev_fe else None
                     self.create_complementarity([c_jj], lam_j, sigma_p, tau, s_elastic)
 
         # ...rest for other modes...
@@ -921,7 +943,6 @@ class NosnocProblem(NosnocFormulationObject):
         # Collect complementarity terms from all finite elements
         for fe in flatten(self.stages):
             comp_vec = ca.vertcat(comp_vec, fe.get_complementarity_vector())
-        
 
         # Handle empty complementarity vector
         if comp_vec.numel() == 0:

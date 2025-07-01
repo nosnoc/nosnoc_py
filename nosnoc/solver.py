@@ -433,8 +433,8 @@ class NosnocSolver(NosnocSolverBase):
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
 
-            if complementarity_residual < opts.comp_tol:
-                break
+            # if complementarity_residual < opts.comp_tol:
+            #     break
 
             if sigma_k <= opts.sigma_N:
                 break
