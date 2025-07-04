@@ -433,8 +433,8 @@ class NosnocSolver(NosnocSolverBase):
             if not check_ipopt_success(status):
                 print(f"Warning: IPOPT exited with status {status}")
 
-            # if complementarity_residual < opts.comp_tol:
-            #     break
+            if complementarity_residual < opts.comp_tol:
+                break
 
             if sigma_k <= opts.sigma_N:
                 break
@@ -511,7 +511,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     ]
     results["z_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_z)]
 
-    if opts.use_fesd:
+    if opts.use_fesd is True:
         time_steps = w_opt[prob.ind_h]
     else:
         t_stages = opts.terminal_time / opts.N_stages

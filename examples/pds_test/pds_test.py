@@ -11,6 +11,7 @@ from nosnoc.solver import NosnocSolver
 from nosnoc.helpers import NosnocSimLooper
 from nosnoc.utils import casadi_length, casadi_vertcat_list
 
+T =(11*np.pi/12) + np.sqrt(3)
 # Create a minimal model for PDS.
 # Define a state x in R^2 and an unconstrained dynamics function
 n_x = 2  # number of state variables
@@ -40,7 +41,7 @@ opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
     n_s=3,
     use_fesd=True,
-    terminal_time=0.01,
+    terminal_time=5e-3,
     sigma_0=1e-5,
     sigma_N=1e-10,
     print_level=2
@@ -62,7 +63,7 @@ solver = NosnocSolver(opts, model)
 
 # Solve the problem
 #results = solver.solve(
-looper = NosnocSimLooper(solver, model.x0, Tsim=4.609)
+looper = NosnocSimLooper(solver, model.x0, Tsim=T)
 t=time.time()
 looper.run()
 results = looper.get_results()

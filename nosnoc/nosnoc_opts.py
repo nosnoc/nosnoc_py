@@ -31,7 +31,7 @@ class NosnocOpts:
     # IRK and FESD opts
     n_s: int = 2  #: Number of IRK stages
     irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
-    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA
+    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_C_PDS
     mpcc_mode: MpccMode = MpccMode.SCHOLTES_INEQ
     constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 
@@ -87,7 +87,7 @@ class NosnocOpts:
     opts_casadi_nlp['verbose'] = False
     opts_casadi_nlp['ipopt'] = dict()
     opts_casadi_nlp['ipopt']['sb'] = 'yes'
-    opts_casadi_nlp['ipopt']['max_iter'] = 1000
+    opts_casadi_nlp['ipopt']['max_iter'] = 500
     opts_casadi_nlp['ipopt']['print_level'] = 0
     opts_casadi_nlp['ipopt']['bound_relax_factor'] = 0
     tol_ipopt = property(
