@@ -70,6 +70,7 @@ class NosnocFormulationObject(ABC):
 
     def add_constraint(self, expr: ca.SX, lb=None, ub=None, index: Optional[list] = None):
         # Get constraint dimension
+        expr = ca.reshape(expr, -1, 1) 
         n = expr.shape[0]
 
         # If bounds not provided, use zeros
@@ -102,14 +103,6 @@ class NosnocFormulationObject(ABC):
         return
 
     def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic: ca.SX) -> None:
-        """
-        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
-
-        :param x: list of ca.SX
-        :param y: ca.SX
-        :param sigma: smoothing parameter
-        :param tau: another smoothing parameter
-        """
         opts = self.opts
 
         n = casadi_length(y)
@@ -182,6 +175,7 @@ class NosnocFormulationObject(ABC):
             lb_comp = np.zeros((n_comp,))
             ub_comp = ca.inf * np.ones((n_comp,))
 
+        print(("g_comp", g_comp, "lb_comp", lb_comp, "ub_comp", ub_comp))
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
 
@@ -211,10 +205,8 @@ class FiniteElementBase(NosnocFormulationObject):
                           self.w[flatten(self.ind_lambda_p[stage][sys])])
     
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
-    
-        x = self.X_fe()[stage][sys]  
+        x = self.X_fe()[stage][sys]
         c_pds = self.model.c_pds_fun(x)
-        self.add_constraint(c_pds, lb=np.zeros(self.model.dims.n_c_sys), ub=3 * np.ones(self.model.dims.n_c_sys))
         return c_pds
 
 
@@ -491,9 +483,8 @@ class FiniteElement(FiniteElementBase):
             self.w[flatten(self.ind_alpha[stage][sys])])
     
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
-        x = self.X_fe()[stage][sys]  
+        x = self.X_fe()[stage][sys]
         c_pds = self.model.c_pds_fun(x)
-        self.add_constraint(c_pds, lb=np.zeros(self.model.dims.n_c_sys), ub=3 * np.ones(self.model.dims.n_c_sys))
         return c_pds
     
     def get_Theta_list(self) -> list:
@@ -515,7 +506,7 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(Lambdas)
 
     def get_c_pds(self, sys=slice(None)):
-        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(self.model.dims.n_c_sys)]
+        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(self.opts.n_s)]
         return c_pds
 
     def sum_c_pds(self, sys=slice(None)):
@@ -565,6 +556,10 @@ class FiniteElement(FiniteElementBase):
             fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+
+            if opts.dcs_mode == DcsMode.PDS:
+                c_pds = self.C_pds(stage=j)
+                self.add_constraint(c_pds, lb=np.zeros(c_pds.shape[0]), ub=np.inf * np.ones(c_pds.shape[0]))
            
 
         
@@ -673,6 +668,8 @@ class FiniteElement(FiniteElementBase):
                 lam_j = self.Lambda(stage = j)
                 lam_prev = self.prev_fe.Lambda(stage = -1)
                 c_prev = self.prev_fe.C_pds(stage = -1)
+                print(("c_prev", c_prev))
+                print(("lam_j", lam_j  ))
                 self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic) if self.prev_fe else None
                 for jj in range(opts.n_s):
                     c_jj = self.C_pds(stage=jj)

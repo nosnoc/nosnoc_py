@@ -162,8 +162,9 @@ class NosnocModel:
 
         if self.g_Stewart:
             n_c_sys = [0]  # No c used!
-        elif self.c_pds:
-            n_c_sys = len(self.c_pds)
+        elif self.c_pds is not None:
+            n_c_sys = casadi_length(self.c_pds)
+            print("n_c_sys", n_c_sys)
         else:
             n_c_sys = len(self.c)
 
@@ -206,11 +207,9 @@ class NosnocModel:
                 raise ValueError("model.c and model.alpha should have the same length!")
 
         elif self.f_unconstrained is not None:
-            if self.c_pds:
+            if self.c_pds is not None:
                 if opts.dcs_mode != DcsMode.PDS:
                     raise ValueError("model formulation with PDS is not supported with other DCS modes")
-                if not isinstance(self.c_pds, list):
-                    raise ValueError("model.c_pds should be a list.")
                 n_f_sys = len(self.f_unconstrained)
         # parameters
         n_p_glob = casadi_length(self.p_global)
@@ -347,15 +346,17 @@ class NosnocModel:
         elif opts.dcs_mode == DcsMode.PDS:
             if not hasattr(self, 'c_pds') or self.c_pds is None:
                 raise ValueError("c_pds must be provided for PDS mode.")
-            self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [ca.vertcat(*self.c_pds)])
+            self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [self.c_pds])
             self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2
-            J_c_pds = ca.jacobian(ca.vertcat(*self.c_pds), self.x)
+            J_c_pds = ca.jacobian(self.c_pds, self.x)
             E= ca.SX.eye(self.dims.n_c_sys)
             g_z_all = ca.SX([])
             f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
-            g_switching = ca.vertcat(g_switching, ca.vertcat(*self.c_pds) - lam[0])
-            std_compl_res += ca.transpose(lam[0]) @ ca.vertcat(*self.c_pds)
+            g_switching = ca.SX([])
+            std_compl_res += ca.transpose(lam[0]) @ self.c_pds
             lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
+
+        self.z_all = z
 
         self.f_x_fun = ca.Function('f_x_fun',
                 [self.x, z, self.u, self.p, self.v_global]  ,    

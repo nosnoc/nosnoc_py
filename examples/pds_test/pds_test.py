@@ -25,7 +25,7 @@ x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
 f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = [ca.vertcat(x[1] + 1)]  
+c_pds_expr = ca.vertcat(x[1] + 1, 2 - x[1])  
 
 
 
@@ -39,10 +39,9 @@ model = NosnocModel(x=x,
 # Construct options set to PDS mode.
 opts = NosnocOpts(
     dcs_mode=DcsMode.PDS,
-    n_s=3,
+    n_s=2,
     use_fesd=True,
-    terminal_time=5e-3,
-    sigma_0=1e-5,
+    terminal_time=T/100,
     sigma_N=1e-10,
     print_level=2
 )
@@ -73,15 +72,16 @@ print(f"Simulation completed in {time.time() - t:.2f} seconds")
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
 t_grid = results["t_grid"]
-lambda_sim = np.array(results["lambda_sim"]) 
-lambda_sim = np.squeeze(lambda_sim)           
-lambda_plot = lambda_sim.flatten()            
+lambda_sim = np.array(results["lambda_sim"])          
+           
 
 # Plot the state variables
 plt.figure()
 for i in range(X_sim.shape[1]):
     plt.plot(t_grid, X_sim[:, i], label=f'x[{i}]')
-plt.plot(t_grid[:-1], lambda_plot, label=r'$\lambda(t)$', linewidth=2)
+for i in range(lambda_sim.shape[1]):
+    #plt.plot(t_grid[:-1], lambda_sim[:, i], label=r'$\lambda(t)$', linewidth=2)
+    print(f"lambda_sim[:, {i}]: {lambda_sim[:, i]}")
 plt.xlabel('Time')
 plt.ylabel('Value')
 plt.title('PDS State and Lambda Trajectory')

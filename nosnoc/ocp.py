@@ -98,7 +98,7 @@ class NosnocOcp:
   
         
         
-        z_var = model.z
+        z_var = model.z_all
        
             
         self.g_global_comp_fun = ca.Function('g_global_comp_fun', 
