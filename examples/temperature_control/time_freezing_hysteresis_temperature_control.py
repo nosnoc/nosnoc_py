@@ -46,7 +46,7 @@ def create_options():
     # New setting: time freezing settings
     opts.initial_theta = 0.5
     opts.time_freezing = False
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     return opts
 
 

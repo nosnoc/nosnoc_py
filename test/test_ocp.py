@@ -14,7 +14,7 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
 )
 
 EQUIDISTANT_CONTROLS = [True, False]
-PSS_MODES = [nosnoc.PssMode.STEWART]
+PSS_MODES = [nosnoc.DcsMode.STEWART]
 MPCC_MODES = [
     nosnoc.MpccMode.SCHOLTES_INEQ,
     nosnoc.MpccMode.SCHOLTES_EQ,
@@ -39,7 +39,7 @@ options = [
 
 # test MpccMode separately without cartesian product
 options = [
-    (True, nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART,
+    (True, nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.DcsMode.STEWART,
      nosnoc.HomotopyUpdateRule.LINEAR, mpcc_mode)
     for mpcc_mode in MPCC_MODES
 ]
@@ -47,7 +47,7 @@ options = [
 # test HomotopyUpdateRule.SUPERLINEAR separately without cartesian product
 # options += [
 #     (True, nosnoc.StepEquilibrationMode.L2_RELAXED, nosnoc.IrkRepresentation.DIFFERENTIAL,
-#      nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR, nosnoc.MpccMode.SCHOLTES_EQ),
+#      nosnoc.IrkSchemes.RADAU_IIA, nosnoc.DcsMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR, nosnoc.MpccMode.SCHOLTES_EQ),
 # ]
 
 

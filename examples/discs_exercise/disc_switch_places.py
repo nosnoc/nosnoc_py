@@ -78,7 +78,7 @@ def get_disc_ocp(opts, r1, r2, q_target1, q_target2):
 
 def get_default_options_step():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEP
+    opts.pss_mode = ns.DcsMode.STEP
     opts.use_fesd = True
     opts.homotopy_update_slope = 0.1
     opts.comp_tol = 1e-6

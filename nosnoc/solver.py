@@ -499,7 +499,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
     results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
-    # if opts.pss_mode == PssMode.STEP:
+    # if opts.pss_mode == DcsMode.STEP:
     results["alpha_list"] = [
         w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)
     ]

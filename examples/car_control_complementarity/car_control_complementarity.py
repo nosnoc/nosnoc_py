@@ -62,7 +62,7 @@ def car_model():
 
 def get_default_options():
     opts = nosnoc.NosnocOpts()
-    # opts.pss_mode = nosnoc.PssMode.STEP
+    # opts.pss_mode = nosnoc.DcsMode.STEP
     opts.use_fesd = True
     comp_tol = 1e-6
     opts.comp_tol = comp_tol

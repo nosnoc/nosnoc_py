@@ -31,7 +31,7 @@ def get_default_options():
     opts.N_finite_elements = 2
     opts.n_s = 2
     opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-    opts.pss_mode = nosnoc.PssMode.STEP
+    opts.pss_mode = nosnoc.DcsMode.STEP
     return opts
 
 

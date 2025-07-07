@@ -17,7 +17,7 @@ class TestProblemDimension(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for pss_mode in nosnoc.PssMode:
+                for pss_mode in nosnoc.DcsMode:
                     for irk in nosnoc.IrkSchemes:
                         opts = get_default_options()
                         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
@@ -28,11 +28,11 @@ class TestProblemDimension(unittest.TestCase):
                         opts.pss_mode = pss_mode
                         opts.preprocess()
 
-                        if pss_mode == nosnoc.PssMode.STEWART:
+                        if pss_mode == nosnoc.DcsMode.STEWART:
                             n_x = 1
                             n_z = 5
                             n_h = 1
-                        elif pss_mode == nosnoc.PssMode.STEP:
+                        elif pss_mode == nosnoc.DcsMode.STEP:
                             n_x = 1
                             n_z = 3
                             n_h = 1
@@ -43,9 +43,9 @@ class TestProblemDimension(unittest.TestCase):
                             n_end = 0
                         else:
                             nw_expected += Nfe * n_x
-                            if pss_mode == nosnoc.PssMode.STEWART:
+                            if pss_mode == nosnoc.DcsMode.STEWART:
                                 n_end = n_z - 2
-                            elif pss_mode == nosnoc.PssMode.STEP:
+                            elif pss_mode == nosnoc.DcsMode.STEP:
                                 n_end = n_z - 1
 
                         nw_expected += (Nfe - 1) * (n_end)

@@ -50,7 +50,7 @@ def get_default_options() -> nosnoc.NosnocOpts:
     opts = nosnoc.NosnocOpts()
 
     opts.use_fesd = True
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
     opts.N_finite_elements = 2
     opts.n_s = 2
@@ -166,7 +166,7 @@ def main_rk4_simulation():
     """
     opts = nosnoc.NosnocOpts()
     opts.use_fesd = True
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
 
     Tsim = 10
     Nsim = 200

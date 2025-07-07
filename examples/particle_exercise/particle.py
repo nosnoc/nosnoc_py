@@ -67,7 +67,7 @@ def get_particle_model(opts, friction, x0):
 
 def get_default_options():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEP
+    opts.pss_mode = ns.DcsMode.STEP
     opts.use_fesd = True
     opts.homotopy_update_slope = 0.1
     opts.sigma_0 = 1.

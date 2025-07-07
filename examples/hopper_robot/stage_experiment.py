@@ -29,7 +29,7 @@ def run_dense(n_stages):
     opts.terminal_time = TERMINAL_TIME
     opts.N_stages = n_stages
     opts.n_s = N_S
-    opts.pss_mode = ns.PssMode.STEWART
+    opts.pss_mode = ns.DcsMode.STEWART
     results = solve_ocp(opts=opts, plot=False, dense=True, x_goal=X_GOAL, multijump=True, ref_as_init=True)
     return results, sum(results['cpu_time_nlp']), sum(results['nlp_iter'])
 

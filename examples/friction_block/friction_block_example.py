@@ -104,7 +104,7 @@ def main():
     T_step = Tsim / Nsim
 
     opts.terminal_time = T_step
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     opts.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
     # opts.initialization_strategy = nosnoc.InitializationStrategy.RK4_SMOOTHENED
 

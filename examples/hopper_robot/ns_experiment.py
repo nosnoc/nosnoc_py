@@ -30,7 +30,7 @@ def run_dense(n_s):
     opts.terminal_time = TERMINAL_TIME
     opts.N_stages = N_STAGES
     opts.n_s = n_s
-    opts.pss_mode = ns.PssMode.STEWART
+    opts.pss_mode = ns.DcsMode.STEWART
     results = solve_ocp(opts=opts, plot=False, dense=True, ref_as_init=False, x_goal=X_GOAL)
     return results, sum(results['cpu_time_nlp'])
     

@@ -72,7 +72,7 @@ def create_options():
     opts.nlp_max_iter = 5000
 
     # New setting: time freezing settings
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     opts.mpcc_mode = nosnoc.MpccMode.SCHOLTES_INEQ
     return opts
 

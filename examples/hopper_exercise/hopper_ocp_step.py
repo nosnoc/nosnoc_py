@@ -149,7 +149,7 @@ def get_hopper_ocp_step(opts, lift_algebraic, x_goal, multijump=False):
 
 def get_default_options_step():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEP
+    opts.pss_mode = ns.DcsMode.STEP
     opts.use_fesd = True
     comp_tol = 1e-3
     opts.comp_tol = comp_tol

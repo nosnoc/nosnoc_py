@@ -11,7 +11,7 @@ import nosnoc
 import numpy as np
 
 options = [(step_equilibration, pss_mode)
-           for pss_mode in nosnoc.PssMode
+           for pss_mode in nosnoc.DcsMode
            for step_equilibration in nosnoc.StepEquilibrationMode
            if step_equilibration != nosnoc.StepEquilibrationMode.DIRECT]
 
