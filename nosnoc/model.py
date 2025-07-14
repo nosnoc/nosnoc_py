@@ -164,7 +164,6 @@ class NosnocModel:
             n_c_sys = [0]  # No c used!
         elif self.c_pds is not None:
             n_c_sys = casadi_length(self.c_pds)
-            print("n_c_sys", n_c_sys)
         else:
             n_c_sys = len(self.c)
 
@@ -174,8 +173,8 @@ class NosnocModel:
             if not isinstance(self.F, list):
                 raise ValueError("model.F should be a list.")
             #for i,f in enumerate(self.F):
-                if f.shape[i]== 1:
-                    raise Warning(f"model.F item {i} is not a switching system!")
+                #if f.shape[i]== 1:
+                    #raise Warning(f"model.F item {i} is not a switching system!")
 
             if self.g_Stewart:
                 if opts.dcs_mode != DcsMode.STEWART:
@@ -237,6 +236,7 @@ class NosnocModel:
         self.p_ctrl_stages = [ca.SX.sym(f'p_stage{i}', self.n_p) for i in range(opts.N_stages)]
 
         self.p_val_ctrl_stages = np.zeros((opts.N_stages, self.n_p))
+        print("p_val_ctrl_stages shape: ", self.p_val_ctrl_stages.shape)
         for i in range(opts.N_stages):
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val
@@ -307,6 +307,9 @@ class NosnocModel:
                        casadi_vertcat_list(lambda_n),
                        casadi_vertcat_list(lambda_p),
                        self.z)
+        
+        g_z_all = ca.SX([])
+        
         # Reformulate the Filippov ODE into a DCS
         if self.F is None:
             if self.f_x is not None:
@@ -340,17 +343,17 @@ class NosnocModel:
                     g_switching,
                     self.c[ii] - lambda_p[ii] + lambda_n[ii])
                 std_compl_res += ca.transpose(lambda_n[ii]) @ alpha_ii
-                std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(n_c_sys[ii]) - alpha_ii)
+                std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(self.dims.n_f_sys[ii]) - alpha_ii)
                 lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
+                
         elif opts.dcs_mode == DcsMode.PDS:
             if not hasattr(self, 'c_pds') or self.c_pds is None:
                 raise ValueError("c_pds must be provided for PDS mode.")
             self.c_pds_fun = ca.Function('c_pds_fun', [self.x], [self.c_pds])
-            self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global + 2
+            self.dims.n_p = self.dims.n_p_time_var + self.dims.n_p_global 
             J_c_pds = ca.jacobian(self.c_pds, self.x)
             E= ca.SX.eye(self.dims.n_c_sys)
-            g_z_all = ca.SX([])
             f_x =  self.f_unconstrained[0] +  E @ J_c_pds.T @ lam[0]
             g_switching = ca.SX([])
             std_compl_res += ca.transpose(lam[0]) @ self.c_pds
@@ -406,11 +409,11 @@ class NosnocModel:
             lambda_p = []
         elif opts.dcs_mode == DcsMode.STEP:
             # add alpha
-            alpha = [ca.SX.sym('alpha', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
+            alpha = [ca.SX.sym('alpha', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_n
-            lambda_n = [ca.SX.sym('lambda_n', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
+            lambda_n = [ca.SX.sym('lambda_n', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_p
-            lambda_p = [ca.SX.sym('lambda_p', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
+            lambda_p = [ca.SX.sym('lambda_p', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
 
             # unused
             theta = []

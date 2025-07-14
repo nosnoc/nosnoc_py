@@ -204,12 +204,11 @@ class NosnocSolverBase(ABC):
         
 
         self.p_val = np.concatenate([
-                model.p_val_ctrl_stages.flatten(), 
-                np.array([sigma, tau]), 
-                self.lambda00, 
-                model.x0
-            ])
-
+            model.p_val_ctrl_stages.flatten(),
+            np.array([sigma, tau]),
+            self.lambda00,
+            model.x0
+        ])
         return
 
 
@@ -327,6 +326,7 @@ class NosnocSolver(NosnocSolverBase):
                 'p': self.problem.p
             }
             self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
+            print("p shape: ", self.problem.p.shape)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")
@@ -401,9 +401,9 @@ class NosnocSolver(NosnocSolverBase):
             tau_val = min(sigma_k ** 1.5, sigma_k)
             # tau_val = sigma_k**1.5*1e3
             self.setup_p_val(sigma_k, tau_val)
-
+            print("actual p_val shape: ", self.p_val.shape)
         
-            # solve NLP
+            
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,

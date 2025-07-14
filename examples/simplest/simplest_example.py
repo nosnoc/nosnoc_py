@@ -65,7 +65,7 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     if opts is None:
         opts = get_default_options()
         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-        opts.pss_mode = nosnoc.DcsMode.STEWART
+        opts.dcs_mode = nosnoc.DcsMode.STEWART
     if model is None:
         model = get_simplest_model_sliding()
 
@@ -73,7 +73,7 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     opts.terminal_time = Tstep
 
     solver = nosnoc.NosnocSolver(opts, model)
-    # loop
+    # loopcl
     looper = nosnoc.NosnocSimLooper(solver, x0, Nsim)
     looper.run()
     results = looper.get_results()

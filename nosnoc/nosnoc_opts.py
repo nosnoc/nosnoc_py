@@ -31,7 +31,7 @@ class NosnocOpts:
     # IRK and FESD opts
     n_s: int = 2  #: Number of IRK stages
     irk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
-    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_C_PDS
+    cross_comp_mode: CrossComplementarityMode = CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
     mpcc_mode: MpccMode = MpccMode. ELASTIC_INEQ
     constraint_handling: ConstraintHandling = ConstraintHandling.EXACT
 

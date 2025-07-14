@@ -33,7 +33,7 @@ class NosnocFormulationObject(ABC):
         self.ind_lam: list
         self.ind_lambda_n: list
         self.ind_lambda_p: list
-        self.ind_c_pds: list
+
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -175,7 +175,6 @@ class NosnocFormulationObject(ABC):
             lb_comp = np.zeros((n_comp,))
             ub_comp = ca.inf * np.ones((n_comp,))
 
-        print(("g_comp", g_comp, "lb_comp", lb_comp, "ub_comp", ub_comp))
         self.add_constraint(g_comp, lb=lb_comp, ub=ub_comp, index=self.ind_comp)
 
 
@@ -223,7 +222,7 @@ class FiniteElementZero(FiniteElementBase):
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
-        self.ind_c_pds = create_empty_list_matrix((1, dims.n_sys))
+    
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
         self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
@@ -239,14 +238,14 @@ class FiniteElementZero(FiniteElementBase):
                                   initial_lambda, 0, ij)
         elif opts.dcs_mode == DcsMode.STEP:
             for ij in range(dims.n_sys):
-                initial_lambda = np.ones(dims.n_c_sys[ij]) # not used
-                self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
-                                  self.ind_lambda_n, -np.inf * np.ones(dims.n_c_sys[ij]),
-                                  np.inf * np.ones(dims.n_c_sys[ij]),
+                initial_lambda = np.ones(dims.n_f_sys[ij]) # not used
+                self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_f_sys[ij]),
+                                  self.ind_lambda_n, -np.inf * np.ones(dims.n_f_sys[ij]),
+                                  np.inf * np.ones(dims.n_f_sys[ij]),
                                   initial_lambda, 0, ij)
-                self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]),
-                                  self.ind_lambda_p, -np.inf * np.ones(dims.n_c_sys[ij]),
-                                  np.inf * np.ones(dims.n_c_sys[ij]),
+                self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_f_sys[ij]),
+                                  self.ind_lambda_p, -np.inf * np.ones(dims.n_f_sys[ij]),
+                                  np.inf * np.ones(dims.n_f_sys[ij]),
                                   initial_lambda, 0, ij)
 
         elif opts.dcs_mode == DcsMode.PDS:
@@ -303,7 +302,6 @@ class FiniteElement(FiniteElementBase):
         self.ind_alpha = create_empty_list_matrix((n_s, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
-        self.ind_c_pds = create_empty_list_matrix((n_s + end_allowance, dims.n_sys))
         self.ind_z = create_empty_list_matrix((n_s,))
         self.ind_h = []
 
@@ -369,23 +367,23 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                                  dims.n_c_sys[ij]), self.ind_alpha,
-                        lb_dual * np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
-                        0.5 * np.ones(dims.n_c_sys[ij]), ii, ij)
+                                  dims.n_f_sys[ij]), self.ind_alpha,
+                        lb_dual * np.ones(dims.n_f_sys[ij]), np.ones(dims.n_f_sys[ij]),
+                        0.5 * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
-                        self.ind_lambda_n, lb_dual * np.ones(dims.n_c_sys[ij]),
-                        np.inf * np.ones(dims.n_c_sys[ij]),
-                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
+                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
+                        self.ind_lambda_n, lb_dual * np.ones(dims.n_f_sys[ij]),
+                        np.inf * np.ones(dims.n_f_sys[ij]),
+                        .5 * np.ones(dims.n_f_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                                  dims.n_c_sys[ij]), self.ind_lambda_p,
-                        lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
-                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
+                                  dims.n_f_sys[ij]), self.ind_lambda_p,
+                        lb_dual * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
+                        .5 * np.ones(dims.n_f_sys[ij]), ii, ij)
             elif opts.dcs_mode == DcsMode.PDS:
                 
                 initial_lambda = np.zeros(dims.n_c_sys)  # not used
@@ -439,7 +437,7 @@ class FiniteElement(FiniteElementBase):
                 initial_lambda = np.zeros(dims.n_c_sys)
                 self.add_variable(
                     ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_c_sys),
-                    self.ind_lam,  np.zeros(dims.n_c_sys),  3 * np.ones(dims.n_f_sys), initial_lambda, opts.n_s, 0)
+                    self.ind_lam,  np.zeros(dims.n_c_sys),  3 * np.ones(dims.n_c_sys), initial_lambda, opts.n_s, 0)
             
 
         if (not opts.right_boundary_point_explicit or
@@ -557,6 +555,7 @@ class FiniteElement(FiniteElementBase):
             qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
 
+            self.add_constraint(gj)
             if opts.dcs_mode == DcsMode.PDS:
                 c_pds = self.C_pds(stage=j)
                 self.add_constraint(c_pds, lb=np.zeros(c_pds.shape[0]), ub=np.inf * np.ones(c_pds.shape[0]))
@@ -654,22 +653,20 @@ class FiniteElement(FiniteElementBase):
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
                 # cross comp with previous FE
-                self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1), sigma_p, tau, s_elastic)
+                self.create_complementarity([self.prev_fe.Lambda(stage=-1)], self.Theta(stage=j), sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
                     # within fe
-                    self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj), sigma_p, tau, s_elastic)
+                    self.create_complementarity([self.Lambda(stage=jj)], self.Theta(stage=j), sigma_p, tau, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
                 self.create_complementarity(Lambda_list, self.Theta(stage=j), sigma_p, tau, s_elastic)
 
-        elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_C_PDS:
+        elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS:
             for j in range(opts.n_s):
                 lam_j = self.Lambda(stage = j)
                 lam_prev = self.prev_fe.Lambda(stage = -1)
                 c_prev = self.prev_fe.C_pds(stage = -1)
-                print(("c_prev", c_prev))
-                print(("lam_j", lam_j  ))
                 self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic) if self.prev_fe else None
                 for jj in range(opts.n_s):
                     c_jj = self.C_pds(stage=jj)
@@ -799,7 +796,6 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_lam[ctrl_idx].append(increment_indices(fe.ind_lam, w_len))
         self.ind_mu[ctrl_idx].append(increment_indices(fe.ind_mu, w_len))
         self.ind_alpha[ctrl_idx].append(increment_indices(fe.ind_alpha, w_len))
-        self.ind_c_pds[ctrl_idx].append(increment_indices(fe.ind_c_pds, w_len))
         self.ind_lambda_n[ctrl_idx].append(increment_indices(fe.ind_lambda_n, w_len))
         self.ind_lambda_p[ctrl_idx].append(increment_indices(fe.ind_lambda_p, w_len))
         self.ind_z[ctrl_idx].append(increment_indices(fe.ind_z, w_len))
@@ -862,7 +858,6 @@ class NosnocProblem(NosnocFormulationObject):
         self.ind_alpha = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_n = create_empty_list_matrix((opts.N_stages,))
         self.ind_lambda_p = create_empty_list_matrix((opts.N_stages,))
-        self.ind_c_pds = create_empty_list_matrix((opts.N_stages,))
         self.ind_bool = create_empty_list_matrix((opts.N_stages,))
         self.ind_z = create_empty_list_matrix((opts.N_stages,))
         self.ind_elastic = []

@@ -2,8 +2,10 @@ import casadi as ca
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+from scipy.interpolate import interp1d
 
 from nosnoc.nosnoc_opts import NosnocOpts, DcsMode
+from nosnoc.nosnoc_types import CrossComplementarityMode
 from nosnoc.model import NosnocModel
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
@@ -43,7 +45,8 @@ opts = NosnocOpts(
     use_fesd=True,
     terminal_time=T/100,
     sigma_N=1e-10,
-    print_level=2
+    print_level=2,
+    cross_comp_mode=CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS,    
 )
 #opts.preprocess()
 
@@ -72,22 +75,26 @@ print(f"Simulation completed in {time.time() - t:.2f} seconds")
 # Extract the state trajectory and time grid
 X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
 t_grid = results["t_grid"]
-lambda_sim = np.array(results["lambda_sim"])          
-           
+lambda_sim = np.array(results["lambda_sim"])           
+lambda_plot = lambda_sim[:, 0, :]  # shape: (100, 2)
+t_lambda = np.linspace(t_grid[0], t_grid[-1], lambda_plot.shape[0])
+
+
 
 # Plot the state variables
 plt.figure()
 for i in range(X_sim.shape[1]):
     plt.plot(t_grid, X_sim[:, i], label=f'x[{i}]')
-for i in range(lambda_sim.shape[1]):
-    #plt.plot(t_grid[:-1], lambda_sim[:, i], label=r'$\lambda(t)$', linewidth=2)
-    print(f"lambda_sim[:, {i}]: {lambda_sim[:, i]}")
+for i in range(lambda_plot.shape[1]):
+    plt.plot(t_lambda, lambda_plot[:, i], label=rf'$\lambda_{{{i}}}(t)$')
 plt.xlabel('Time')
-plt.ylabel('Value')
-plt.title('PDS State and Lambda Trajectory')
+plt.ylabel('State')
+plt.title('PDS State Trajectory')
 plt.legend()
 plt.grid(True)
 plt.show()
+
+
 
 # Plot x[0] vs x[1] (phase plot)
 plt.figure()
