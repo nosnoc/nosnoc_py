@@ -420,7 +420,6 @@ class NosnocSolver(NosnocSolverBase):
             tau_val = min(sigma_k ** 1.5, sigma_k)
             # tau_val = sigma_k**1.5*1e3
             self.setup_p_val(sigma_k, tau_val)
-            print("actual p_val shape: ", self.p_val.shape)
         
             
             sol = self.solver(x0=w0,

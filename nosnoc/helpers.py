@@ -46,6 +46,8 @@ class NosnocSimLooper:
         self.time_steps = np.array([])
         self.theta_sim = []
         self.lambda_sim = []
+        self.lambda_n_sim = []
+        self.lambda_p_sim = []
         self.alpha_sim = []
         self.z_sim = []
         self.sot = []
@@ -101,6 +103,8 @@ class NosnocSimLooper:
             total_time = np.sum(self.time_steps)
             self.theta_sim.append(results["theta_list"])
             self.lambda_sim.append(results["lambda_list"])
+            self.lambda_n_sim.append(results["lambda_n_list"])
+            self.lambda_p_sim.append(results["lambda_p_list"])
             self.alpha_sim.append(results["alpha_list"])
             self.z_sim.append(results["z_list"])
             self.w_sim += [results["w_sol"]]
@@ -127,6 +131,8 @@ class NosnocSimLooper:
             "t_grid": self.t_grid,
             "theta_sim": self.theta_sim,
             "lambda_sim": self.lambda_sim,
+            "lambda_n_sim": self.lambda_n_sim,
+            "lambda_p_sim": self.lambda_p_sim,
             "alpha_sim": self.alpha_sim,
             "z_sim": self.z_sim,
             "sot": self.sot,
