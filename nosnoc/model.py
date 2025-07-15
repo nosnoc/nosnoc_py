@@ -296,6 +296,8 @@ class NosnocModel:
         g_switching = ca.SX.zeros((0, 1))
         g_convex = ca.SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
         lambda00_expr = ca.SX.zeros(0, 0)
+        lambda_n00_expr = ca.SX.zeros(0, 0)
+        lambda_p00_expr = ca.SX.zeros(0, 0)
         std_compl_res = ca.SX.zeros(1)  # residual of standard complementarity
         self.dims.n_p_time_var = self.p_time_var.shape[0] if hasattr(self, 'p_time_var') else 0
         self.dims.n_p_global = self.p_global.shape[0] if hasattr(self, 'p_global') else 0
@@ -344,9 +346,11 @@ class NosnocModel:
                     self.c[ii] - lambda_p[ii] + lambda_n[ii])
                 std_compl_res += ca.transpose(lambda_n[ii]) @ alpha_ii
                 std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(self.dims.n_f_sys[ii]) - alpha_ii)
-                lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
+                lambda_n00_expr = ca.vertcat(lambda_n00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
-                
+                lambda_p00_expr = ca.vertcat(lambda_p00_expr, -ca.fmin(self.c[ii], 0),
+                                           ca.fmax(self.c[ii], 0))
+
         elif opts.dcs_mode == DcsMode.PDS:
             if not hasattr(self, 'c_pds') or self.c_pds is None:
                 raise ValueError("c_pds must be provided for PDS mode.")
@@ -383,9 +387,10 @@ class NosnocModel:
                 ['std_compl_res'],{}
             )
             
-            # Empty functions for PDS mode
+            
         self.lambda00_fun = ca.Function('lambda00_fun', [self.x, z, self.p], [lambda00_expr])
-
+        self.lambda_n00_fun = ca.Function('lambda_n00_fun', [self.x, z, self.p], [lambda_n00_expr])
+        self.lambda_p00_fun = ca.Function('lambda_p00_fun', [self.x, z, self.p], [lambda_p00_expr])
         # After self.c_pds is defined and is a list of expressions
         
 
@@ -493,3 +498,21 @@ class NosnocModel:
         else:
             z0 = self.z0
         return self.lambda00_fun(x0, z0, p0).full().flatten()
+    
+    def compute_lambda_n00(self, opts: NosnocOpts):
+        x0 = self.x0
+        p0 = self.p_val_ctrl_stages[0]
+        if opts.rootfinder_for_initial_z:
+            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
+        else:
+            z0 = self.z0
+        return self.lambda_n00_fun(x0, z0, p0).full().flatten()
+    
+    def compute_lambda_p00(self, opts: NosnocOpts):
+        x0 = self.x0
+        p0 = self.p_val_ctrl_stages[0]
+        if opts.rootfinder_for_initial_z:
+            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
+        else:
+            z0 = self.z0
+        return self.lambda_p00_fun(x0, z0, p0).full().flatten()

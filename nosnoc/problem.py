@@ -203,6 +203,13 @@ class FiniteElementBase(NosnocFormulationObject):
                           self.w[flatten(self.ind_lambda_n[stage][sys])],
                           self.w[flatten(self.ind_lambda_p[stage][sys])])
     
+    def Lambda_n(self, stage=slice(None), sys=slice(None)):
+        return self.w[flatten(self.ind_lambda_n[stage][sys])]   
+    
+    def Lambda_p(self, stage=slice(None), sys=slice(None)):
+        return self.w[flatten(self.ind_lambda_p[stage][sys])]
+    
+
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
         x = self.X_fe()[stage][sys]
         c_pds = self.model.c_pds_fun(x)
@@ -755,10 +762,17 @@ class NosnocProblem(NosnocFormulationObject):
         # Initial
         self.fe0 = FiniteElementZero(self.opts, self.model)
         x0 = self.fe0.w[self.fe0.ind_x[0]]
-        lambda00 = self.fe0.Lambda()
+        if self.opts.dcs_mode == DcsMode.STEP:
+            lambda_n00 = self.fe0.Lambda_n()
+            self.p = ca.vertcat(self.p, lambda_n00)
+            lambda_p00 = self.fe0.Lambda_p()
+            self.p = ca.vertcat(self.p, lambda_p00)    
 
-        # lambda00 is parameter
-        self.p = ca.vertcat(self.p, lambda00)
+        else:
+            lambda00 = self.fe0.Lambda()
+            self.p = ca.vertcat(self.p, lambda00)
+
+        
         self.p = ca.vertcat(self.p, x0)
 
         # v_global
@@ -1040,8 +1054,16 @@ class NosnocProblem(NosnocFormulationObject):
             data["p_shape"] = self.p.shape
 
             sigma, tau = 0.0, 0.0
-            lambda00 = self.model.compute_lambda00(self.opts)
-            data["p0"] = np.concatenate(
+            if self.opts.dcs_mode == DcsMode.STEP:
+                lambda_n00 = self.model.compute_lambda_n00(self.opts)
+                lambda_p00 = self.model.compute_lambda_p00(self.opts)
+                data["p0"] = np.concatenate(
+                    (self.model.p_val_ctrl_stages.flatten(),
+                     np.array([sigma, tau]), lambda_n00, lambda_p00, self.model.x0))
+            
+            else:       
+                 lambda00 = self.model.compute_lambda00(self.opts)
+                 data["p0"] = np.concatenate(
                     (self.model.p_val_ctrl_stages.flatten(),
                      np.array([sigma, tau]), lambda00, self.model.x0))
             f.write(pickle.dumps(data))
