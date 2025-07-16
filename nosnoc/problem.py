@@ -246,14 +246,14 @@ class FiniteElementZero(FiniteElementBase):
                                   initial_lambda, 0, ij)
         elif opts.dcs_mode == DcsMode.STEP:
             for ij in range(dims.n_sys):
-                initial_lambda = np.ones(dims.n_f_sys[ij]) # not used
-                self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_f_sys[ij]),
-                                  self.ind_lambda_n, -np.inf * np.ones(dims.n_f_sys[ij]),
-                                  np.inf * np.ones(dims.n_f_sys[ij]),
+                initial_lambda = np.ones(dims.n_c_sys[ij]) # not used
+                self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
+                                  self.ind_lambda_n, -np.inf * np.ones(dims.n_c_sys[ij]),
+                                  np.inf * np.ones(dims.n_c_sys[ij]),
                                   initial_lambda, 0, ij)
-                self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_f_sys[ij]),
-                                  self.ind_lambda_p, -np.inf * np.ones(dims.n_f_sys[ij]),
-                                  np.inf * np.ones(dims.n_f_sys[ij]),
+                self.add_variable(ca.SX.sym(f'lambda00_p_{ij+1}', dims.n_c_sys[ij]),
+                                  self.ind_lambda_p, -np.inf * np.ones(dims.n_c_sys[ij]),
+                                  np.inf * np.ones(dims.n_c_sys[ij]),
                                   initial_lambda, 0, ij)
 
         elif opts.dcs_mode == DcsMode.PDS:
@@ -375,23 +375,23 @@ class FiniteElement(FiniteElementBase):
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'alpha_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                                  dims.n_f_sys[ij]), self.ind_alpha,
-                        lb_dual * np.ones(dims.n_f_sys[ij]), np.ones(dims.n_f_sys[ij]),
-                        0.5 * np.ones(dims.n_f_sys[ij]), ii, ij)
+                                  dims.n_c_sys[ij]), self.ind_alpha,
+                        lb_dual * np.ones(dims.n_c_sys[ij]), np.ones(dims.n_c_sys[ij]),
+                        0.5 * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
-                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_f_sys[ij]),
-                        self.ind_lambda_n, lb_dual * np.ones(dims.n_f_sys[ij]),
-                        np.inf * np.ones(dims.n_f_sys[ij]),
-                        .5 * np.ones(dims.n_f_sys[ij]), ii, ij)
+                        ca.SX.sym(f'lambda_n_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', dims.n_c_sys[ij]),
+                        self.ind_lambda_n, lb_dual * np.ones(dims.n_c_sys[ij]),
+                        np.inf * np.ones(dims.n_c_sys[ij]),
+                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
                 # add lambda_p
                 for ij in range(dims.n_sys):
                     self.add_variable(
                         ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}',
-                                  dims.n_f_sys[ij]), self.ind_lambda_p,
-                        lb_dual * np.ones(dims.n_f_sys[ij]), np.inf * np.ones(dims.n_f_sys[ij]),
-                        .5 * np.ones(dims.n_f_sys[ij]), ii, ij)
+                                  dims.n_c_sys[ij]), self.ind_lambda_p,
+                        lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
+                        .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
             elif opts.dcs_mode == DcsMode.PDS:
                 
                 initial_lambda = np.zeros(dims.n_c_sys)  # not used

@@ -112,11 +112,8 @@ class NosnocSolverBase(ABC):
         prob = self.problem
         x0 = prob.model.x0
 
-        if opts.dcs_mode == DcsMode.STEP:
-            self.compute_lambda_n00()
-            self.compute_lambda_p00()
-        else:
-            self.compute_lambda00()
+        
+        self.compute_lambda00()
 
         if opts.initialization_strategy in [
                 InitializationStrategy.ALL_XCURRENT_W0_START,
@@ -201,28 +198,13 @@ class NosnocSolverBase(ABC):
         self.lambda00 = self.problem.model.compute_lambda00(self.opts)
         return
     
-    def compute_lambda_n00(self) -> None:
-        self.lambda_n00 = self.problem.model.compute_lambda_n00(self.opts)
-        return
-    
-    def compute_lambda_p00(self) -> None:
-        self.lambda_p00 = self.problem.model.compute_lambda_p00(self.opts)
-        return
+   
 
     def setup_p_val(self, sigma, tau) -> None:
         """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
-        if self.opts.dcs_mode == DcsMode.STEP:
-            self.p_val = np.concatenate([
-                model.p_val_ctrl_stages.flatten(),
-                np.array([sigma, tau]),
-                self.lambda_n00,
-                self.lambda_p00,
-                model.x0
-            ])
         
-        else:
-            self.p_val = np.concatenate([
+        self.p_val = np.concatenate([
             model.p_val_ctrl_stages.flatten(),
             np.array([sigma, tau]),
             self.lambda00,

@@ -37,7 +37,6 @@ def solve_and_plot(model, opts, title):
 
 # Define system dimensions and variables
 n_x = 1
-n_theta = 2
 x = ca.SX.sym('x', n_x)
 x0 = np.array([1.0])  # Initial condition for x
 f11 = 3

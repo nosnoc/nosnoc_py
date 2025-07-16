@@ -165,7 +165,7 @@ class NosnocModel:
         elif self.c_pds is not None:
             n_c_sys = casadi_length(self.c_pds)
         else:
-            n_c_sys = len(self.c)
+            n_c_sys = [casadi_length(self.c[i]) for i in range(n_sys)]
 
         # sanity checks
         if self.F is not None:
@@ -295,8 +295,7 @@ class NosnocModel:
         g_switching = ca.SX.zeros((0, 1))
         g_convex = ca.SX.zeros((0, 1))  # equation for the convex multiplers 1 = e' \theta
         lambda00_expr = ca.SX.zeros(0, 0)
-        lambda_n00_expr = ca.SX.zeros(0, 0)
-        lambda_p00_expr = ca.SX.zeros(0, 0)
+        
         std_compl_res = ca.SX.zeros(1)  # residual of standard complementarity
         self.dims.n_p_time_var = self.p_time_var.shape[0] if hasattr(self, 'p_time_var') else 0
         self.dims.n_p_global = self.p_global.shape[0] if hasattr(self, 'p_global') else 0
@@ -343,12 +342,12 @@ class NosnocModel:
                 g_switching = ca.vertcat(
                     g_switching,
                     self.c[ii] - lambda_p[ii] + lambda_n[ii])
+                
                 std_compl_res += ca.transpose(lambda_n[ii]) @ alpha_ii
                 std_compl_res += ca.transpose(lambda_p[ii]) @ (np.ones(self.dims.n_f_sys[ii]) - alpha_ii)
-                lambda_n00_expr = ca.vertcat(lambda_n00_expr, -ca.fmin(self.c[ii], 0),
+                lambda00_expr = ca.vertcat(lambda00_expr, -ca.fmin(self.c[ii], 0),
                                            ca.fmax(self.c[ii], 0))
-                lambda_p00_expr = ca.vertcat(lambda_p00_expr, -ca.fmin(self.c[ii], 0),
-                                           ca.fmax(self.c[ii], 0))
+                
 
         elif opts.dcs_mode == DcsMode.PDS:
             if not hasattr(self, 'c_pds') or self.c_pds is None:
@@ -362,6 +361,7 @@ class NosnocModel:
             std_compl_res += ca.transpose(lam[0]) @ self.c_pds
             lambda00_expr = ca.vertcat(lambda00_expr, np.zeros((self.dims.n_c_sys, 1)))
 
+        g_z_all = ca.vertcat(g_switching, g_convex, g_lift, self.g_z)
         self.z_all = z
 
         self.f_x_fun = ca.Function('f_x_fun',
@@ -388,8 +388,6 @@ class NosnocModel:
             
             
         self.lambda00_fun = ca.Function('lambda00_fun', [self.x, z, self.p], [lambda00_expr])
-        self.lambda_n00_fun = ca.Function('lambda_n00_fun', [self.x, z, self.p], [lambda_n00_expr])
-        self.lambda_p00_fun = ca.Function('lambda_p00_fun', [self.x, z, self.p], [lambda_p00_expr])
         # After self.c_pds is defined and is a list of expressions
         
 
@@ -413,11 +411,11 @@ class NosnocModel:
             lambda_p = []
         elif opts.dcs_mode == DcsMode.STEP:
             # add alpha
-            alpha = [ca.SX.sym('alpha', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
+            alpha = [ca.SX.sym('alpha', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_n
-            lambda_n = [ca.SX.sym('lambda_n', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
+            lambda_n = [ca.SX.sym('lambda_n', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
             # add lambda_p
-            lambda_p = [ca.SX.sym('lambda_p', dims.n_f_sys[ij]) for ij in range(dims.n_sys)]
+            lambda_p = [ca.SX.sym('lambda_p', dims.n_c_sys[ij]) for ij in range(dims.n_sys)]
 
             # unused
             theta = []
@@ -498,20 +496,6 @@ class NosnocModel:
             z0 = self.z0
         return self.lambda00_fun(x0, z0, p0).full().flatten()
     
-    def compute_lambda_n00(self, opts: NosnocOpts):
-        x0 = self.x0
-        p0 = self.p_val_ctrl_stages[0]
-        if opts.rootfinder_for_initial_z:
-            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
-        else:
-            z0 = self.z0
-        return self.lambda_n00_fun(x0, z0, p0).full().flatten()
     
-    def compute_lambda_p00(self, opts: NosnocOpts):
-        x0 = self.x0
-        p0 = self.p_val_ctrl_stages[0]
-        if opts.rootfinder_for_initial_z:
-            z0 = self.z0_rootfinder(self.z0, np.concatenate((self.x0, p0))).full().flatten()
-        else:
-            z0 = self.z0
-        return self.lambda_p00_fun(x0, z0, p0).full().flatten()
+        
+    

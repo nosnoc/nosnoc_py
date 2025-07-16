@@ -73,6 +73,7 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     opts.terminal_time = Tstep
 
     solver = nosnoc.NosnocSolver(opts, model)
+    solver.problem.print()
     # loopcl
     looper = nosnoc.NosnocSimLooper(solver, x0, Nsim)
     looper.run()
@@ -83,7 +84,7 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
 
 
 def plot_results(results):
-    nosnoc.latexify_plot()
+    
 
     plt.figure()
     plt.subplot(3, 1, 1)
@@ -120,6 +121,7 @@ def example():
     model = get_simplest_model_switch()
 
     opts = get_default_options()
+    opts.dcs_mode   = nosnoc.DcsMode.STEP
     opts.print_level = 1
 
     results = solve_simplest_example(opts=opts, model=model)
