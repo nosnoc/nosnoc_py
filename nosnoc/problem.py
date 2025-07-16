@@ -209,6 +209,7 @@ class FiniteElementBase(NosnocFormulationObject):
     def Lambda_p(self, stage=slice(None), sys=slice(None)):
         return self.w[flatten(self.ind_lambda_p[stage][sys])]
     
+    
 
     def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
         x = self.X_fe()[stage][sys]

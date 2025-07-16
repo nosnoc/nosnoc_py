@@ -63,7 +63,7 @@ class StepEquilibrationMode(Enum):
 class CrossComplementarityMode(Enum):
     COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = auto()  # nosnoc 1
     SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = auto()  # nosnoc 3
-    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS = auto()  
+    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS = auto() 
     # NOTE: tested in simple_sim_tests
 
 

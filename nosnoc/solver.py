@@ -345,7 +345,6 @@ class NosnocSolver(NosnocSolverBase):
                 'p': self.problem.p
             }
             self.solver = ca.nlpsol(model.name, 'ipopt', casadi_nlp, opts.opts_casadi_nlp)
-            print("p shape: ", self.problem.p.shape)
         except Exception as err:
             self.print_problem()
             print(f"{opts=}")

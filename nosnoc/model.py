@@ -236,7 +236,6 @@ class NosnocModel:
         self.p_ctrl_stages = [ca.SX.sym(f'p_stage{i}', self.n_p) for i in range(opts.N_stages)]
 
         self.p_val_ctrl_stages = np.zeros((opts.N_stages, self.n_p))
-        print("p_val_ctrl_stages shape: ", self.p_val_ctrl_stages.shape)
         for i in range(opts.N_stages):
             self.p_val_ctrl_stages[i, :n_p_time_var] = self.p_time_var_val[i, :]
             self.p_val_ctrl_stages[i, n_p_time_var:] = self.p_global_val

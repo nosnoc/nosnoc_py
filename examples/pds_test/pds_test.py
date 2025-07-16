@@ -27,7 +27,7 @@ x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
 f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
 
 # c_pds: Simple gap function
-c_pds_expr = ca.vertcat(x[1] + 1, 2 - x[1])  
+c_pds_expr = ca.vertcat(x[1] + 1)  
 
 
 

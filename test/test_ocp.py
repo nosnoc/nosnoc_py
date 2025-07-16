@@ -14,7 +14,9 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
 )
 
 EQUIDISTANT_CONTROLS = [True, False]
-DCS_MODES = [nosnoc.DcsMode.STEWART]
+DCS_MODES = [nosnoc.DcsMode.STEWART,
+             nosnoc.DcsMode.STEP, nosnoc.DcsMode.PDS]
+
 MPCC_MODES = [
     nosnoc.MpccMode.SCHOLTES_INEQ,
     nosnoc.MpccMode.SCHOLTES_EQ,
