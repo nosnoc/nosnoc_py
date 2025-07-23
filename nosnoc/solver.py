@@ -487,7 +487,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
     results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
-
+    results["c_res"] = [prob.model.c_pds_fun(w_opt[ind]) for ind in flatten_layer(prob.ind_x_cont)]
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
@@ -498,7 +498,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
     results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
-    # if opts.pss_mode == DcsMode.STEP:
+    # if opts.dcs_mode == DcsMode.STEP:
     results["alpha_list"] = [
         w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)
     ]
@@ -521,7 +521,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
     # results relevant for OCP:
     results["x_traj"] = [x0] + results["x_list"]
-    results["u_traj"] = results["u_list"]  # duplicate name
+    results["u_traj"] = results["u_list"]  
     t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
     results["t_grid"] = t_grid
     u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
