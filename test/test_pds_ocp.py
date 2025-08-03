@@ -76,10 +76,6 @@ opts = NosnocOpts(
     cross_comp_mode= CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS,
 )
 
-model.preprocess_model(opts)
-
-# 9. Preprocess OCP (sets up cost/constraints functions)
-ocp.preprocess_ocp(model)
 
 # 10. Create and solve the OCP
 solver = NosnocSolver(opts, model,ocp)
@@ -88,14 +84,13 @@ results = solver.solve()
 # 11. Extract and plot results
 X_traj = np.array(results["x_traj"])
 t_grid = results["t_grid"]
-lambda_res = results["lambda_list"]
+lambda_res = np.array(results["lambda_list"])
 c_res = np.array(results["c_res"])
 U_traj = np.array(results["u_traj"])
 t_grid_u = results["t_grid_u"]
 
-
 plt.figure()
-plt.plot(t_grid[:-1], c_res.squeeze(), label='c_res')
+plt.plot(t_grid, c_res.squeeze(), label='c_res')
 plt.title('c_res over time')
 plt.xlabel('Time')  
 plt.ylabel('c_res')
@@ -104,7 +99,7 @@ plt.grid(True)
 plt.show()
 
 plt.figure()
-plt.plot(t_grid[:-1], lambda_res, label='lambda_res')
+plt.plot(t_grid[:-1], lambda_res.squeeze(), label='lambda_res')
 plt.title('Lambda over time')
 plt.xlabel('Time')
 plt.ylabel('Lambda')
@@ -140,7 +135,7 @@ y = y0 + b * np.sin(t)
 ax.plot(x, y, '--r', linewidth=2, label=r'$c(x)$')
 
 # Trajectory
-ax.plot(X_traj[1, :], X_traj[0, :], '-b', linewidth=3, label=r'$x(t)$')
+ax.plot(X_traj[:, 0], X_traj[:, 1], '-b', linewidth=3, label=r'$x(t)$')
 
 ax.set_xlim([-5.5, 5.5])
 ax.set_ylim([-5.5, 5.5])
