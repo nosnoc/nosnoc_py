@@ -159,7 +159,7 @@ def get_hopper_ocp_description(opts, x_goal, dense, multijump=False):
 
 def get_default_options():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEWART
+    opts.pss_mode = ns.DcsMode.STEWART
     opts.use_fesd = True
     comp_tol = 1e-9
     opts.comp_tol = comp_tol

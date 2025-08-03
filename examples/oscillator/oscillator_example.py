@@ -151,7 +151,7 @@ def main_polishing():
     nosnoc.plot_timings(results["cpu_nlp"])
 
 
-def plot_oscillator(X_sim, t_grid, latexify=True, switch_times=None):
+def plot_oscillator(X_sim, t_grid, latexify=False, switch_times=None):
     if latexify:
         nosnoc.latexify_plot()
 

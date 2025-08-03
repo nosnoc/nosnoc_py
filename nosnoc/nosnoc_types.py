@@ -63,6 +63,7 @@ class StepEquilibrationMode(Enum):
 class CrossComplementarityMode(Enum):
     COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = auto()  # nosnoc 1
     SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = auto()  # nosnoc 3
+    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS = auto() 
     # NOTE: tested in simple_sim_tests
 
 
@@ -89,7 +90,7 @@ class SpeedOfTimeVariableMode(Enum):
     GLOBAL = auto()  # Single speed of time variable used across whole problem
 
 
-class PssMode(Enum):
+class DcsMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).
     """
@@ -114,6 +115,20 @@ class PssMode(Enum):
     lambda_p_i >= 0;    for all i = 1,..., n_sys
     alpha_i >= 0;     for all i = 1,..., n_sys
     """
+
+    PDS = auto()
+    """
+    PDS representaion
+
+    f_x_unconstrained - Unconstrained System Dynamics expression  f(x)
+    c - The gap functions c(x) used in the definition of the feasible set.
+    lambda_i'*c_i(x) = 0; for all i = 1,..., n_sys
+    lambda_i >= 0;    for all i = 1,..., n_sys  
+    c_i(x) >= 0;     for all i = 1,..., n_sys            
+    """
+
+
+
 
 
 class Status(Enum):

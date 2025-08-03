@@ -1,0 +1,119 @@
+import casadi as ca
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from scipy.interpolate import interp1d
+
+from nosnoc.nosnoc_opts import NosnocOpts, DcsMode
+from nosnoc.nosnoc_types import CrossComplementarityMode
+from nosnoc.model import NosnocModel
+from nosnoc.ocp import NosnocOcp
+from nosnoc.problem import NosnocProblem
+from nosnoc.solver import NosnocSolver
+from nosnoc.helpers import NosnocSimLooper
+from nosnoc.utils import casadi_length, casadi_vertcat_list
+
+T =(11*np.pi/12) + np.sqrt(3)
+# Create a minimal model for PDS.
+# Define a state x in R^2 and an unconstrained dynamics function
+n_x = 2  # number of state variables
+x = ca.SX.sym('x', n_x)
+x0 = [np.sqrt(2), np.sqrt(2)]  # initial state
+
+
+
+# For PDS, supply a list for f_unconstrained and c_pds
+# f_unconstrained: Simple linear dynamics
+f_unconstrained_expr = [ca.vertcat(x[1], -x[0])]  
+
+# c_pds: Simple gap function
+c_pds_expr = ca.vertcat(x[1] + 1)  
+
+
+
+# Create model instance
+model = NosnocModel(x=x, 
+                   x0=x0, 
+                   f_unconstrained=f_unconstrained_expr,
+                   c_pds=c_pds_expr)
+
+
+# Construct options set to PDS mode.
+opts = NosnocOpts(
+    dcs_mode=DcsMode.PDS,
+    n_s=2,
+    use_fesd=True,
+    terminal_time=T/100,
+    sigma_N=1e-10,
+    print_level=2,
+    cross_comp_mode=CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS,    
+)
+#opts.preprocess()
+
+
+
+# Create a trivial OCP.
+#ocp = NosnocOcp()
+#ocp.preprocess_ocp(model)
+
+# Build the problem.
+#problem = NosnocProblem(opts, model)
+
+
+# Create solver with additional debug info
+solver = NosnocSolver(opts, model)
+
+# Solve the problem
+#results = solver.solve(
+looper = NosnocSimLooper(solver, model.x0, Tsim=T)
+t=time.time()
+looper.run()
+results = looper.get_results()
+print(f"Simulation completed in {time.time() - t:.2f} seconds")
+
+#solver.problem.print()
+# Extract the state trajectory and time grid
+X_sim = np.array(results["X_sim"])  # shape: (N, n_x)
+t_grid = results["t_grid"]
+lambda_sim = np.array(results["lambda_sim"])           
+lambda_plot = lambda_sim[:, 0, :]  # shape: (100, 2)
+t_lambda = np.linspace(t_grid[0], t_grid[-1], lambda_plot.shape[0])
+
+
+
+# Plot the state variables
+plt.figure()
+for i in range(X_sim.shape[1]):
+    plt.plot(t_grid, X_sim[:, i], label=f'x[{i}]')
+for i in range(lambda_plot.shape[1]):
+    plt.plot(t_lambda, lambda_plot[:, i], label=rf'$\lambda_{{{i}}}(t)$')
+plt.xlabel('Time')
+plt.ylabel('State')
+plt.title('PDS State Trajectory')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
+# Plot x[0] vs x[1] (phase plot)
+plt.figure()
+plt.plot(X_sim[:, 0], X_sim[:, 1], label='Phase Plot', color='blue')
+plt.xlabel('x[0]')
+plt.ylabel('x[1]')
+plt.title('Phase Plot: x[0] vs x[1]')
+plt.grid(True)
+plt.legend()
+plt.show()
+
+# Get the final simulated state
+x_final = X_sim[-1, :]  # shape: (2,) 
+print(f"Final state x: {x_final}")
+# Reference point
+x_ref = [-1, 0]
+
+# Compute Euclidean distance
+distance = np.linalg.norm(x_final - x_ref)
+
+print(f"Euclidean distance between final x and (-1, 0): {distance:.6f}")
+

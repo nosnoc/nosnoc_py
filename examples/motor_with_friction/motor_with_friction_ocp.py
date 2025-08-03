@@ -80,7 +80,7 @@ def get_motor_with_friction_ocp_description():
 
 def get_default_options():
     opts = nosnoc.NosnocOpts()
-    # opts.pss_mode = nosnoc.PssMode.STEP
+    # opts.pss_mode = nosnoc.DcsMode.STEP
     opts.use_fesd = True
     comp_tol = 1e-6
     opts.comp_tol = comp_tol
@@ -123,7 +123,7 @@ def example(plot=True):
         plot_time_steps(results["time_steps"])
 
 
-def plot_motor_with_friction(x_traj, u_traj, t_grid, t_grid_u, latexify=True):
+def plot_motor_with_friction(x_traj, u_traj, t_grid, t_grid_u, latexify=False):
     x_traj = np.array(x_traj)
     if latexify:
         nosnoc.latexify_plot()

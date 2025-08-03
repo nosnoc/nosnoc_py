@@ -58,16 +58,18 @@ class NosnocOcp:
         self.lbv_global: np.ndarray = lbv_global
         self.ubv_global: np.ndarray = ubv_global
         self.v_global_guess: np.ndarray = v_global_guess
+        
 
     def preprocess_ocp(self, model: NosnocModel):
-        dims: NosnocDims = model.dims
+    
+        dims = model.dims
         self.g_terminal_fun = ca.Function('g_terminal_fun', [model.x, model.p, model.v_global],
-                                          [self.g_terminal])
+                                          [self.g_terminal],{})
         self.f_q_T_fun = ca.Function('f_q_T_fun', [model.x, model.p, model.v_global],
-                                     [self.f_terminal])
+                                     [self.f_terminal],{})
         self.f_q_fun = ca.Function('f_q_fun', [model.x, model.u, model.p, model.v_global],
-                                   [self.f_q])
-        self.g_path_fun = ca.Function('g_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path])
+                                   [self.f_q],{})
+        self.g_path_fun = ca.Function('g_path_fun', [model.x, model.u, model.p, model.v_global], [self.g_path],{})
 
         # path complementarities
         if self.g_path_comp.shape[1] != 2:
@@ -93,11 +95,21 @@ class NosnocOcp:
             else:
                 self.g_global_comp = ca.vertcat(self.g_global_comp, expr)
 
-        self.g_global_comp_fun = ca.Function('g_global_comp_fun', [model.p_global, model.v_global], [self.g_global_comp])
-        self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', [model.u, model.p, model.v_global], [self.g_ctrl_comp])
+  
+        
+        
+        z_var = model.z_all
+       
+            
+        self.g_global_comp_fun = ca.Function('g_global_comp_fun', 
+            [model.p_global, model.v_global], 
+            [self.g_global_comp],{})
+        self.g_ctrl_comp_fun = ca.Function('g_ctrl_comp_fun', 
+            [model.u, model.p, model.v_global], 
+            [self.g_ctrl_comp],{})
         self.g_rk_comp_fun = ca.Function('g_rk_comp_fun',
-                                            [model.x, model.u, model.z_all, model.p, model.v_global],
-                                            [self.g_stage_comp])
+            [model.x, model.u, z_var, model.p, model.v_global],
+            [self.g_stage_comp],{})
 
         # path constraints
         n_g_path = casadi_length(self.g_path)

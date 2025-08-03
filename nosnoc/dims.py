@@ -11,6 +11,8 @@ class NosnocDims:
     n_z: int
     n_sys: int
     n_p_time_var: int
+    n_p: int
+    n_v_global: int
     n_p_glob: int
     n_c_sys: list
     n_f_sys: list

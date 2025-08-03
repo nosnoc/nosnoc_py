@@ -14,7 +14,9 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
 )
 
 EQUIDISTANT_CONTROLS = [True, False]
-PSS_MODES = [nosnoc.PssMode.STEWART]
+DCS_MODES = [nosnoc.DcsMode.STEWART,
+             nosnoc.DcsMode.STEP, nosnoc.DcsMode.PDS]
+
 MPCC_MODES = [
     nosnoc.MpccMode.SCHOLTES_INEQ,
     nosnoc.MpccMode.SCHOLTES_EQ,
@@ -28,18 +30,18 @@ STEP_EQUILIBRATION_MODES = [
 ]
 
 options = [
-    (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, pss_mode,
+    (equidistant_control_grid, step_equilibration, irk_representation, irk_scheme, dcs_mode,
      nosnoc.HomotopyUpdateRule.LINEAR, nosnoc.MpccMode.SCHOLTES_INEQ)
     for equidistant_control_grid in EQUIDISTANT_CONTROLS
     for step_equilibration in STEP_EQUILIBRATION_MODES
     for irk_representation in nosnoc.IrkRepresentation
     for irk_scheme in nosnoc.IrkSchemes
-    for pss_mode in PSS_MODES
+    for dcs_mode in DCS_MODES
 ]
 
 # test MpccMode separately without cartesian product
 options = [
-    (True, nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART,
+    (True, nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.IrkRepresentation.DIFFERENTIAL, nosnoc.IrkSchemes.RADAU_IIA, nosnoc.DcsMode.STEWART,
      nosnoc.HomotopyUpdateRule.LINEAR, mpcc_mode)
     for mpcc_mode in MPCC_MODES
 ]
@@ -47,7 +49,7 @@ options = [
 # test HomotopyUpdateRule.SUPERLINEAR separately without cartesian product
 # options += [
 #     (True, nosnoc.StepEquilibrationMode.L2_RELAXED, nosnoc.IrkRepresentation.DIFFERENTIAL,
-#      nosnoc.IrkSchemes.RADAU_IIA, nosnoc.PssMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR, nosnoc.MpccMode.SCHOLTES_EQ),
+#      nosnoc.IrkSchemes.RADAU_IIA, nosnoc.DcsMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR, nosnoc.MpccMode.SCHOLTES_EQ),
 # ]
 
 
@@ -58,7 +60,7 @@ class TestOcp(unittest.TestCase):
 
     @parameterized.expand(options)
     def test_combination(self, equidistant_control_grid, step_equilibration, irk_representation,
-                         irk_scheme, pss_mode, homotopy_update_rule, mpcc_mode):
+                         irk_scheme, dcs_mode, homotopy_update_rule, mpcc_mode):
         opts = get_default_options()
         opts.comp_tol = 1e-5
         opts.N_stages = 5
@@ -67,13 +69,13 @@ class TestOcp(unittest.TestCase):
         opts.step_equilibration = step_equilibration
         opts.irk_representation = irk_representation
         opts.irk_scheme = irk_scheme
-        opts.pss_mode = pss_mode
+        opts.dcs_mode = dcs_mode
         opts.homotopy_update_rule = homotopy_update_rule
         opts.mpcc_mode = mpcc_mode
 
         message = (
             f"Test setting: equidistant_control_grid {equidistant_control_grid}" +
-            f"\n{step_equilibration}\n{irk_representation}\n{irk_scheme}\n{pss_mode}\n{homotopy_update_rule}"
+            f"\n{step_equilibration}\n{irk_representation}\n{irk_scheme}\n{dcs_mode}\n{homotopy_update_rule}"
             f"\n{mpcc_mode}"
         )
         print(message)

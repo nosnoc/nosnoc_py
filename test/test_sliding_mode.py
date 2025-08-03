@@ -18,8 +18,8 @@ IRK_REPRESENTATIONS = [
 ]
 
 PSS_MODES = [
-    nosnoc.PssMode.STEP,
-    nosnoc.PssMode.STEWART
+    nosnoc.DcsMode.STEP,
+    nosnoc.DcsMode.STEWART
 ]
 
 CROSS_COMP_MODES = [

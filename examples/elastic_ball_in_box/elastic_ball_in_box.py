@@ -133,7 +133,7 @@ def get_ball_ocp(omega, opts):
 
 def get_default_options_step():
     opts = ns.NosnocOpts()
-    opts.pss_mode = ns.PssMode.STEWART
+    opts.pss_mode = ns.DcsMode.STEWART
     opts.comp_tol = 1e-6
     opts.use_fesd = True
     opts.homotopy_update_slope = 0.1

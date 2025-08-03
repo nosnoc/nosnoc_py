@@ -68,7 +68,7 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for pss_mode in nosnoc.PssMode:
+                for pss_mode in nosnoc.DcsMode:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
                         opts = get_default_options()
                         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
@@ -89,7 +89,7 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for pss_mode in nosnoc.PssMode:
+                for pss_mode in nosnoc.DcsMode:
                     for irk_scheme in nosnoc.IrkSchemes:
                         opts = get_default_options()
                         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN

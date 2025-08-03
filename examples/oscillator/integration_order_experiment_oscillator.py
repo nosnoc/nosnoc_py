@@ -60,7 +60,7 @@ def get_opts(Nsim, n_s, N_fe, scheme, use_fesd):
 
     opts.n_s = n_s
     opts.N_finite_elements = N_fe
-    opts.pss_mode = nosnoc.PssMode.STEP
+    opts.pss_mode = nosnoc.DcsMode.STEP
     opts.use_fesd = use_fesd
     return opts
 

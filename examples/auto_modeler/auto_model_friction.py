@@ -71,7 +71,7 @@ def get_motor_with_friction_ocp_description_with_auto_model():
 
 def get_default_options():
     opts = nosnoc.NosnocOpts()
-    # opts.pss_mode = nosnoc.PssMode.STEP
+    # opts.pss_mode = nosnoc.DcsMode.STEP
     opts.use_fesd = True
     comp_tol = 1e-6
     opts.comp_tol = comp_tol
@@ -82,7 +82,7 @@ def get_default_options():
 
     opts.N_stages = 30
     opts.N_finite_elements = 2
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     return opts
 
 

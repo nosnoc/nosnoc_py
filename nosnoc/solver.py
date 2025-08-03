@@ -5,9 +5,10 @@ import casadi as ca
 import numpy as np
 import time
 
+
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import InitializationStrategy, PssMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
+from nosnoc.nosnoc_types import InitializationStrategy, DcsMode, HomotopyUpdateRule, ConstraintHandling, Status, SpeedOfTimeVariableMode
 from nosnoc.ocp import NosnocOcp
 from nosnoc.problem import NosnocProblem
 from nosnoc.rk_utils import rk4_on_timegrid
@@ -111,6 +112,7 @@ class NosnocSolverBase(ABC):
         prob = self.problem
         x0 = prob.model.x0
 
+        
         self.compute_lambda00()
 
         if opts.initialization_strategy in [
@@ -125,6 +127,7 @@ class NosnocSolverBase(ABC):
         elif opts.initialization_strategy == InitializationStrategy.RK4_SMOOTHENED:
             # print(f"updating w0 with RK4 smoothened")
             # NOTE: assume N_stages = 1 and STEWART
+            
             dt_fe = opts.terminal_time / (opts.N_stages * opts.N_finite_elements)
             irk_time_grid = np.array(
                 [opts.irk_time_points[0]] +
@@ -194,12 +197,19 @@ class NosnocSolverBase(ABC):
     def compute_lambda00(self) -> None:
         self.lambda00 = self.problem.model.compute_lambda00(self.opts)
         return
+    
+   
 
     def setup_p_val(self, sigma, tau) -> None:
+        """Setup parameter vector for solver."""
         model: NosnocModel = self.problem.model
-        self.p_val = np.concatenate(
-                (model.p_val_ctrl_stages.flatten(),
-                 np.array([sigma, tau]), self.lambda00, model.x0))
+        
+        self.p_val = np.concatenate([
+            model.p_val_ctrl_stages.flatten(),
+            np.array([sigma, tau]),
+            self.lambda00,
+            model.x0
+        ])
         return
 
 
@@ -270,7 +280,7 @@ class NosnocSolverBase(ABC):
 
     def create_function_calculate_vector_field(self, sigma, p=[], v=[]):
         """Create a function to calculate the vector field."""
-        if self.opts.pss_mode != PssMode.STEWART:
+        if self.opts.dcs_mode != DcsMode.STEWART:
             raise NotImplementedError()
 
         shape = self.model.g_Stewart_fun.size_out(0)
@@ -349,7 +359,7 @@ class NosnocSolver(NosnocSolverBase):
 
         sigma_k = opts.sigma_0
 
-        if opts.fix_active_set_fe0 and opts.pss_mode == PssMode.STEWART:
+        if opts.fix_active_set_fe0 and opts.dcs_mode == DcsMode.STEWART:
             lbw = prob.lbw.copy()
             ubw = prob.ubw.copy()
 
@@ -391,8 +401,8 @@ class NosnocSolver(NosnocSolverBase):
             tau_val = min(sigma_k ** 1.5, sigma_k)
             # tau_val = sigma_k**1.5*1e3
             self.setup_p_val(sigma_k, tau_val)
-
-            # solve NLP
+        
+            
             sol = self.solver(x0=w0,
                               lbg=prob.lbg,
                               ubg=prob.ubg,
@@ -461,6 +471,7 @@ class NosnocSolver(NosnocSolverBase):
         results["w_sol"] = w_opt
         results["cost_val"] = cost_val
 
+
         if check_ipopt_success(status):
             results["status"] = Status.SUCCESS
         else:
@@ -476,7 +487,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
     results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
-
+    results["c_res"] = [prob.model.c_pds_fun(prob.model.x0)] + [prob.model.c_pds_fun(w_opt[ind]) for ind in flatten_layer(prob.ind_x_cont)]
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
@@ -487,7 +498,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["theta_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_theta)]
     results["lambda_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_lam)]
     # results["mu_list"] = [w_opt[ind] for ind in ind_mu_all]
-    # if opts.pss_mode == PssMode.STEP:
+    # if opts.dcs_mode == DcsMode.STEP:
     results["alpha_list"] = [
         w_opt[flatten_layer(ind)] for ind in get_cont_algebraic_indices(prob.ind_alpha)
     ]
@@ -499,7 +510,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     ]
     results["z_list"] = [w_opt[ind] for ind in get_cont_algebraic_indices(prob.ind_z)]
 
-    if opts.use_fesd:
+    if opts.use_fesd is True:
         time_steps = w_opt[prob.ind_h]
     else:
         t_stages = opts.terminal_time / opts.N_stages
@@ -510,7 +521,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
 
     # results relevant for OCP:
     results["x_traj"] = [x0] + results["x_list"]
-    results["u_traj"] = results["u_list"]  # duplicate name
+    results["u_traj"] = results["u_list"]  
     t_grid = np.concatenate((np.array([0.0]), np.cumsum(time_steps)))
     results["t_grid"] = t_grid
     u_grid = [0] + np.cumsum(opts.Nfe_list).tolist()
@@ -521,7 +532,7 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     # NOTE: this doesn't handle sliding modes well. But seems nontrivial.
     # compute based on changes in alpha or theta
     switch_indices = []
-    if opts.pss_mode == PssMode.STEP:
+    if opts.dcs_mode == DcsMode.STEP:
         alpha_prev = results["alpha_list"][0]
         for i, alpha in enumerate(results["alpha_list"][1:]):
             if any(np.abs(alpha - alpha_prev) > 0.1):

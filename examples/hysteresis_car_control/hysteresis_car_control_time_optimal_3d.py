@@ -70,7 +70,7 @@ def create_options():
 
     opts.initial_theta = 0.5
     opts.time_freezing = False
-    opts.pss_mode = nosnoc.PssMode.STEWART
+    opts.pss_mode = nosnoc.DcsMode.STEWART
     opts.mpcc_mode = nosnoc.MpccMode.ELASTIC_TWO_SIDED
     return opts
 

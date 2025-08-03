@@ -4,19 +4,17 @@ from copy import copy
 
 import numpy as np
 import casadi as ca
-
+from nosnoc.dims import NosnocDims
 from nosnoc.model import NosnocModel
 from nosnoc.nosnoc_opts import NosnocOpts
-from nosnoc.nosnoc_types import MpccMode, CrossComplementarityMode, StepEquilibrationMode, PssMode, IrkRepresentation, ConstraintHandling, SpeedOfTimeVariableMode
+from nosnoc.nosnoc_types import MpccMode, CrossComplementarityMode, StepEquilibrationMode, DcsMode, IrkRepresentation, ConstraintHandling, SpeedOfTimeVariableMode
 from nosnoc.ocp import NosnocOcp
 from nosnoc.utils import casadi_length, casadi_vertcat_list, casadi_sum_list, flatten, increment_indices, create_empty_list_matrix
 
 
 class NosnocFormulationObject(ABC):
-
-    @abstractmethod
     def __init__(self):
-        # optimization variables with initial guess, bounds
+        
         self.w: ca.SX = ca.SX([])
         self.w0: np.array = np.array([])
         self.lbw: np.array = np.array([])
@@ -35,6 +33,7 @@ class NosnocFormulationObject(ABC):
         self.ind_lam: list
         self.ind_lambda_n: list
         self.ind_lambda_p: list
+
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -69,37 +68,41 @@ class NosnocFormulationObject(ABC):
                 index[stage] = new_indices
         return
 
-    def add_constraint(self, symbolic: ca.SX, lb=None, ub=None, index: Optional[list] = None):
-        n = casadi_length(symbolic)
-        if n == 0:
-            return
+    def add_constraint(self, expr: ca.SX, lb=None, ub=None, index: Optional[list] = None):
+        # Get constraint dimension
+        expr = ca.reshape(expr, -1, 1) 
+        n = expr.shape[0]
+
+        # If bounds not provided, use zeros
         if lb is None:
-            lb = np.zeros((n,))
+            lb = np.zeros(n)  # Ensure numeric lower bound
+        elif isinstance(lb, ca.SX):
+            lb = np.array(lb).flatten()  # Convert SX to numeric
+
         if ub is None:
-            ub = np.zeros((n,))
+            ub = np.zeros(n)  # Ensure numeric upper bound
+        elif isinstance(ub, ca.SX):
+            ub = np.array(ub).flatten()  # Convert SX to numeric
+
+        # Check dimensions using numpy's shape property
         if len(lb) != n or len(ub) != n:
-            raise Exception(f'add_constraint, inconsistent dimension: {symbolic=}, {lb=}, {ub=}')
+            raise ValueError(f"Bound dimension mismatch. Expected {n}, got lb: {len(lb)}, ub: {len(ub)}")
 
-        if index is not None:
-            ng = casadi_length(self.g)
-            new_indices = list(range(ng, ng + n))
-            index.append(new_indices)
-
-        self.g = ca.vertcat(self.g, symbolic)
+        # Add constraint and bounds
+        self.g = ca.vertcat(self.g, expr)
         self.lbg = np.concatenate((self.lbg, lb))
         self.ubg = np.concatenate((self.ubg, ub))
+
+        # Add indices if provided
+        if index is not None:
+            ng = casadi_length(self.g)
+            new_indices = list(range(ng - n, ng))
+            index.append(new_indices)
+
 
         return
 
     def create_complementarity(self, x: List[ca.SX], y: ca.SX, sigma: ca.SX, tau: ca.SX, s_elastic: ca.SX) -> None:
-        """
-        adds complementarity constraints corresponding to (x_i, y) for x_i in x to the FiniteElement.
-
-        :param x: list of ca.SX
-        :param y: ca.SX
-        :param sigma: smoothing parameter
-        :param tau: another smoothing parameter
-        """
         opts = self.opts
 
         n = casadi_length(y)
@@ -176,37 +179,72 @@ class NosnocFormulationObject(ABC):
 
 
 class FiniteElementBase(NosnocFormulationObject):
+    def X_fe(self) -> List[ca.SX]:
+        
+        """returns list of all x values in finite element"""
+        opts = NosnocOpts()
+        if opts.irk_representation == IrkRepresentation.INTEGRAL:
+            X_fe = [self.w[ind] for ind in self.ind_x]
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+            X_fe = []
+            for j in range(opts.n_s):
+                x_temp = self.prev_fe.w[self.prev_fe.ind_x[-1]]
+                for r in range(opts.n_s):
+                    x_temp += self.h * opts.A_irk[j, r] * self.w[self.ind_v[r]]
+                X_fe.append(x_temp)
+            X_fe.append(self.w[self.ind_x[-1]])
+        elif opts.irk_representation == IrkRepresentation.DIFFERENTIAL_LIFT_X:
+            X_fe = [self.w[ind] for ind in self.ind_x]
+
+        return X_fe
 
     def Lambda(self, stage=slice(None), sys=slice(None)):
         return ca.vertcat(self.w[flatten(self.ind_lam[stage][sys])],
                           self.w[flatten(self.ind_lambda_n[stage][sys])],
                           self.w[flatten(self.ind_lambda_p[stage][sys])])
+    
+    def Lambda_n(self, stage=slice(None), sys=slice(None)):
+        return self.w[flatten(self.ind_lambda_n[stage][sys])]   
+    
+    def Lambda_p(self, stage=slice(None), sys=slice(None)):
+        return self.w[flatten(self.ind_lambda_p[stage][sys])]
+    
+    
+
+    def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
+        x = self.X_fe()[stage][sys]
+        c_pds = self.model.c_pds_fun(x)
+        return c_pds
 
 
 class FiniteElementZero(FiniteElementBase):
 
+    
+
     def __init__(self, opts: NosnocOpts, model: NosnocModel):
         super().__init__()
         dims = model.dims
+        self.model = model
 
         self.ind_x = create_empty_list_matrix((1,))
         self.ind_lam = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_n = create_empty_list_matrix((1, dims.n_sys))
         self.ind_lambda_p = create_empty_list_matrix((1, dims.n_sys))
-
+    
         # NOTE: bounds are actually not used, maybe rewrite without add_vairable
         # X0
         self.add_variable(ca.SX.sym('X0', dims.n_x), self.ind_x, model.x0, model.x0, model.x0, 0)
-
+        
         # lambda00
-        if opts.pss_mode == PssMode.STEWART:
+        if opts.dcs_mode == DcsMode.STEWART:
+
             for ij in range(dims.n_sys):
                 initial_lambda = np.ones(dims.n_f_sys[ij]) # not used
                 self.add_variable(ca.SX.sym(f'lambda00_{ij+1}', dims.n_f_sys[ij]), self.ind_lam,
                                   -np.inf * np.ones(dims.n_f_sys[ij]),
                                   np.inf * np.ones(dims.n_f_sys[ij]),
                                   initial_lambda, 0, ij)
-        elif opts.pss_mode == PssMode.STEP:
+        elif opts.dcs_mode == DcsMode.STEP:
             for ij in range(dims.n_sys):
                 initial_lambda = np.ones(dims.n_c_sys[ij]) # not used
                 self.add_variable(ca.SX.sym(f'lambda00_n_{ij+1}', dims.n_c_sys[ij]),
@@ -218,6 +256,14 @@ class FiniteElementZero(FiniteElementBase):
                                   np.inf * np.ones(dims.n_c_sys[ij]),
                                   initial_lambda, 0, ij)
 
+        elif opts.dcs_mode == DcsMode.PDS:
+            # In PDS mode we don't need multiple lambda variables per system
+            initial_lambda = np.zeros(dims.n_c_sys)  # Use first dimension
+            self.add_variable(ca.SX.sym(f'lambda00', dims.n_c_sys), self.ind_lam,
+                              np.zeros(dims.n_c_sys),
+                              3 * np.ones(dims.n_c_sys),
+                              initial_lambda)
+            
 
 class FiniteElement(FiniteElementBase):
 
@@ -242,7 +288,7 @@ class FiniteElement(FiniteElementBase):
         self.prev_fe: FiniteElementBase = prev_fe
         self.p = model.p_ctrl_stages[ctrl_idx]
 
-        dims = self.model.dims
+        dims = model.dims
 
         # right boundary
         create_right_boundary_point = (opts.use_fesd and not opts.right_boundary_point_explicit and
@@ -300,7 +346,7 @@ class FiniteElement(FiniteElementBase):
                 self.add_variable(ca.SX.sym(f'X_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_x), self.ind_x,
                                   ocp.lbx, ocp.ubx, model.x0, ii)
             # algebraic variables
-            if opts.pss_mode == PssMode.STEWART:
+            if opts.dcs_mode == DcsMode.STEWART:
                 # add thetas
                 for ij in range(dims.n_sys):
                     initial_theta = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
@@ -324,7 +370,7 @@ class FiniteElement(FiniteElementBase):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_{ii+1}_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
                                       1.0 * np.ones(1), ii, ij)
-            elif opts.pss_mode == PssMode.STEP:
+            elif opts.dcs_mode == DcsMode.STEP:
                 # add alpha
                 for ij in range(dims.n_sys):
                     self.add_variable(
@@ -346,15 +392,23 @@ class FiniteElement(FiniteElementBase):
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
                         .5 * np.ones(dims.n_c_sys[ij]), ii, ij)
+            elif opts.dcs_mode == DcsMode.PDS:
+                
+                initial_lambda = np.zeros(dims.n_c_sys)  # not used
+                self.add_variable(
+                        ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_{ii+1}_{1}', dims.n_c_sys),
+                        self.ind_lam,  np.zeros(dims.n_c_sys),
+                        3 * np.ones(dims.n_c_sys),
+                        initial_lambda, ii)
             # user algebraic variables
             self.add_variable(
                 ca.SX.sym(f'z_{ctrl_idx}_{fe_idx}_{ii+1}', dims.n_z), self.ind_z,
                 model.lbz, model.ubz, model.z0, ii
-            )
-
+            )        
+        # add slack variables
         # Add right boundary points if needed
         if create_right_boundary_point:
-            if opts.pss_mode == PssMode.STEWART:
+            if opts.dcs_mode == DcsMode.STEWART:
                 # add lambdas
                 for ij in range(dims.n_sys):
                     initial_lambda = (opts.sigma_0/dims.n_f_sys[ij]) * np.ones(dims.n_f_sys[ij])
@@ -368,7 +422,7 @@ class FiniteElement(FiniteElementBase):
                     self.add_variable(ca.SX.sym(f'mu_{ctrl_idx}_{fe_idx}_end_{ij+1}', 1),
                                       self.ind_mu, -np.inf * np.ones(1), np.inf * np.ones(1),
                                       np.ones(1), opts.n_s, ij)
-            elif opts.pss_mode == PssMode.STEP:
+            elif opts.dcs_mode == DcsMode.STEP:
                 # add lambda_n
                 for ij in range(dims.n_sys):
                     self.add_variable(
@@ -382,13 +436,24 @@ class FiniteElement(FiniteElementBase):
                         ca.SX.sym(f'lambda_p_{ctrl_idx}_{fe_idx}_end_{ij+1}',
                                   dims.n_c_sys[ij]), self.ind_lambda_p,
                         lb_dual * np.ones(dims.n_c_sys[ij]), np.inf * np.ones(dims.n_c_sys[ij]),
-                        .5 * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+                        3 * np.ones(dims.n_c_sys[ij]), opts.n_s, ij)
+            elif opts.dcs_mode == DcsMode.PDS:
+                if opts.irk_representation == IrkRepresentation.DIFFERENTIAL:
+                    raise NotImplementedError("PDS mode does not support DIFFERENTIAL IRK representation")
+                if not opts.right_boundary_point_explicit:
+                    raise NotImplementedError("PDS mode requires right_boundary_point_explicit=True")
+                initial_lambda = np.zeros(dims.n_c_sys)
+                self.add_variable(
+                    ca.SX.sym(f'lambda_{ctrl_idx}_{fe_idx}_end_{1}', dims.n_c_sys),
+                    self.ind_lam,  np.zeros(dims.n_c_sys),  3 * np.ones(dims.n_c_sys), initial_lambda, opts.n_s, 0)
+            
 
         if (not opts.right_boundary_point_explicit or
                 opts.irk_representation == IrkRepresentation.DIFFERENTIAL):
             # add final X variables
             self.add_variable(ca.SX.sym(f'X_end_{ctrl_idx}_{fe_idx+1}', dims.n_x), self.ind_x,
                               ocp.lbx, ocp.ubx, model.x0, -1)
+
 
     def add_step_size_variable(self, symbolic: ca.SX, lb: float, ub: float, initial: float):
         self.ind_h = [casadi_length(self.w)]
@@ -400,10 +465,20 @@ class FiniteElement(FiniteElementBase):
         return
 
     def rk_stage_z(self, stage) -> ca.SX:
-        idx = np.concatenate((flatten(self.ind_theta[stage]), flatten(self.ind_lam[stage]),
-                              flatten(self.ind_mu[stage]), flatten(self.ind_alpha[stage]),
-                              flatten(self.ind_lambda_n[stage]), flatten(self.ind_lambda_p[stage]),
-                              self.ind_z[stage]))
+        opts = self.opts
+        if opts.dcs_mode == DcsMode.STEWART:
+            idx = np.concatenate((flatten(self.ind_theta[stage]), 
+                            flatten(self.ind_lam[stage]),
+                            flatten(self.ind_mu[stage])))
+        elif opts.dcs_mode == DcsMode.STEP:
+            idx = np.concatenate((flatten(self.ind_alpha[stage]), 
+                            flatten(self.ind_lambda_n[stage]),
+                            flatten(self.ind_lambda_p[stage]),  
+                            flatten(self.ind_z[stage])))
+
+        else:
+            idx = np.concatenate((flatten(self.ind_lam[stage]),
+                            flatten(self.ind_z[stage])))    
         return self.w[idx]
 
     def Theta(self, stage=slice(None), sys=slice(None)) -> ca.SX:
@@ -412,7 +487,12 @@ class FiniteElement(FiniteElementBase):
             self.w[flatten(self.ind_alpha[stage][sys])],
             np.ones(len(flatten(self.ind_alpha[stage][sys]))) -
             self.w[flatten(self.ind_alpha[stage][sys])])
-
+    
+    def C_pds(self, stage=slice(None), sys=slice(None)) -> ca.SX:
+        x = self.X_fe()[stage][sys]
+        c_pds = self.model.c_pds_fun(x)
+        return c_pds
+    
     def get_Theta_list(self) -> list:
         return [self.Theta(stage=ii) for ii in range(len(self.ind_theta))]
 
@@ -420,8 +500,10 @@ class FiniteElement(FiniteElementBase):
         return casadi_sum_list(self.get_Theta_list())
 
     def get_Lambdas_incl_last_prev_fe(self, sys=slice(None)):
+
         Lambdas = [self.Lambda(stage=ii, sys=sys) for ii in range(len(self.ind_lam))]
-        Lambdas += [self.prev_fe.Lambda(stage=-1, sys=sys)]
+        if self.opts.dcs_mode != DcsMode.PDS:
+            Lambdas += [self.prev_fe.Lambda(stage=-1, sys=sys)]
         return Lambdas
 
     def sum_Lambda(self, sys=slice(None)):
@@ -429,6 +511,15 @@ class FiniteElement(FiniteElementBase):
         Lambdas = self.get_Lambdas_incl_last_prev_fe(sys)
         return casadi_sum_list(Lambdas)
 
+    def get_c_pds(self, sys=slice(None)):
+        c_pds = [self.C_pds(stage = ii, sys = sys) for ii in range(self.opts.n_s)]
+        return c_pds
+
+    def sum_c_pds(self, sys=slice(None)):
+        """NOTE: includes the prev fes last stage lambda"""
+        c_pds = self.get_c_pds(sys)
+        return casadi_sum_list(c_pds)
+    
     def X_fe(self) -> List[ca.SX]:
         """returns list of all x values in finite element"""
         opts = self.opts
@@ -468,11 +559,17 @@ class FiniteElement(FiniteElementBase):
 
         for j in range(opts.n_s):
             # Dynamics excluding complementarities
-            fj = sot*model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
-            qj = sot*ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
-            # path constraint
+            fj = sot * model.f_x_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p, model.v_global)
+            qj = sot * ocp.f_q_fun(X_fe[j], Uk, self.p, model.v_global)
             gj = model.g_z_all_fun(X_fe[j], self.rk_stage_z(j), Uk, self.p)
+
             self.add_constraint(gj)
+            if opts.dcs_mode == DcsMode.PDS:
+                c_pds = self.C_pds(stage=j)
+                self.add_constraint(c_pds, lb=np.zeros(c_pds.shape[0]), ub=np.inf * np.ones(c_pds.shape[0]))
+           
+
+        
             if opts.irk_representation == IrkRepresentation.INTEGRAL:
                 xj = opts.C_irk[0, j + 1] * self.prev_fe.w[self.prev_fe.ind_x[-1]]
                 for r in range(opts.n_s):
@@ -481,7 +578,7 @@ class FiniteElement(FiniteElementBase):
                 self.add_constraint(self.h * fj - xj)
                 self.cost += opts.B_irk[j + 1] * self.h * qj
             elif (opts.irk_representation
-                  in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
+                in [IrkRepresentation.DIFFERENTIAL, IrkRepresentation.DIFFERENTIAL_LIFT_X]):
                 Xk_end += self.h * opts.b_irk[j] * self.w[self.ind_v[j]]
                 self.add_constraint(fj - self.w[self.ind_v[j]])
                 self.cost += opts.b_irk[j] * self.h * qj
@@ -514,7 +611,20 @@ class FiniteElement(FiniteElementBase):
     def get_complementarity_vector(self):
         opts = self.opts
         comp_vec = []
-        if opts.use_fesd:
+
+        #do cross comp for pds
+        if opts.dcs_mode == DcsMode.PDS:
+            for j in range(opts.n_s):
+                lam_prev = self.prev_fe.Lambda(stage=-1)
+                c_pds = self.C_pds(stage=j)
+                c_pds_prev = self.prev_fe.C_pds(stage=-1)
+                comp_vec = ca.vertcat(comp_vec, lam_prev*c_pds)
+                for jj in range(opts.n_s):
+                    lam = self.Lambda(stage=jj)
+                    comp_vec = ca.vertcat(comp_vec, lam*c_pds_prev)
+                    comp_vec = ca.vertcat(comp_vec, lam*c_pds)
+
+        elif opts.use_fesd:
             for j in range(opts.n_s):
                 # cross comp with prev_fe
                 theta = self.Theta(stage=j)
@@ -530,37 +640,47 @@ class FiniteElement(FiniteElementBase):
                 comp_vec = ca.vertcat(comp_vec, theta*lam)
         return comp_vec
 
-    def create_complementarity_constraints(self, sigma_p: ca.SX, tau: ca.SX, Uk: ca.SX, s_elastic: ca.SX) -> None:
+    def create_complementarity_constraints(self, sigma_p, tau, Uk, s_elastic):
         opts = self.opts
-        X_fe = self.X_fe()
+        
         for j in range(opts.n_s):
             z = self.rk_stage_z(j)
-            stage_comps = self.ocp.g_rk_comp_fun(X_fe[j], Uk, z, self.p, self.model.v_global)  # TODO maybe should include stage z
+            stage_comps = self.ocp.g_rk_comp_fun(self.X_fe()[j], Uk, z, self.p, self.model.v_global)
             a, b = ca.horzsplit(stage_comps)
             self.create_complementarity([a], b, sigma_p, tau, s_elastic)
+    
         if self.fe_idx == opts.N_finite_elements-1:
             ctrl_comps = self.ocp.g_ctrl_comp_fun(Uk, self.p, self.model.v_global)
             a, b = ca.horzsplit(ctrl_comps)
             self.create_complementarity([a], b, sigma_p, tau, s_elastic)
-
+    
+        
         if not opts.use_fesd:
             for j in range(opts.n_s):
-                self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p,
-                                            tau, s_elastic)
+                self.create_complementarity([self.Lambda(stage=j)], self.Theta(stage=j), sigma_p, tau, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER:
             for j in range(opts.n_s):
-                # cross comp with prev_fe
-                self.create_complementarity([self.Theta(stage=j)], self.prev_fe.Lambda(stage=-1),
-                                            sigma_p, tau, s_elastic)
+                # cross comp with previous FE
+                self.create_complementarity([self.prev_fe.Lambda(stage=-1)], self.Theta(stage=j), sigma_p, tau, s_elastic)
                 for jj in range(opts.n_s):
                     # within fe
-                    self.create_complementarity([self.Theta(stage=j)], self.Lambda(stage=jj),
-                                                sigma_p, tau, s_elastic)
+                    self.create_complementarity([self.Lambda(stage=jj)], self.Theta(stage=j), sigma_p, tau, s_elastic)
         elif opts.cross_comp_mode == CrossComplementarityMode.SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA:
             for j in range(opts.n_s):
-                # Note: sum_Lambda contains last stage of prev_fe
                 Lambda_list = self.get_Lambdas_incl_last_prev_fe()
-                self.create_complementarity(Lambda_list, (self.Theta(stage=j)), sigma_p, tau, s_elastic)
+                self.create_complementarity(Lambda_list, self.Theta(stage=j), sigma_p, tau, s_elastic)
+
+        elif opts.cross_comp_mode == CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER_PDS:
+            for j in range(opts.n_s):
+                lam_j = self.Lambda(stage = j)
+                lam_prev = self.prev_fe.Lambda(stage = -1)
+                c_prev = self.prev_fe.C_pds(stage = -1)
+                self.create_complementarity([c_prev], lam_j, sigma_p, tau, s_elastic) if self.prev_fe else None
+                for jj in range(opts.n_s):
+                    c_jj = self.C_pds(stage=jj)
+                    self.create_complementarity([c_jj], lam_prev, sigma_p, tau, s_elastic) if self.prev_fe else None
+                    self.create_complementarity([c_jj], lam_j, sigma_p, tau, s_elastic)
+
         return
 
     def step_equilibration(self, sigma_p: ca.SX, tau: ca.SX, s_elastic: Optional[ca.SX]) -> None:
@@ -585,7 +705,13 @@ class FiniteElement(FiniteElementBase):
             return
 
         # modes that need nu_k
-        eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+        if opts.dcs_mode == DcsMode.PDS:
+            # For PDS, we need to use the c_pds instead of the theta
+            eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
+                    prev_fe.sum_c_pds() * self.sum_c_pds()
+        
+        else :
+            eta_k = prev_fe.sum_Lambda() * self.sum_Lambda() + \
                 prev_fe.sum_Theta() * self.sum_Theta()
         nu_k = 1
         for jjj in range(casadi_length(eta_k)):
@@ -601,16 +727,18 @@ class FiniteElement(FiniteElementBase):
             self.create_complementarity([nu_k], delta_h_ki, sigma_p, tau, s_elastic)
         elif opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA_H_COMP:
             self.create_complementarity([ca.SX.zeros()], delta_h_ki, sigma_p, tau, s_elastic)
-        # elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
-        #     self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT_TANH:
+            self.add_constraint(ca.tanh(nu_k)*delta_h_ki)
         return
 
 
 class NosnocProblem(NosnocFormulationObject):
 
     def __create_control_stage(self, ctrl_idx, prev_fe):
+        
+        dims =self.model.dims
         # Create control vars
-        Uk = ca.SX.sym(f'U_{ctrl_idx}', self.model.dims.n_u)
+        Uk = ca.SX.sym(f'U_{ctrl_idx}', dims.n_u)
         self.add_variable(Uk, self.ind_u, self.ocp.lbu, self.ocp.ubu, self.ocp.u_guess)
 
         # Create stage local speed of time variables
@@ -635,10 +763,17 @@ class NosnocProblem(NosnocFormulationObject):
         # Initial
         self.fe0 = FiniteElementZero(self.opts, self.model)
         x0 = self.fe0.w[self.fe0.ind_x[0]]
-        lambda00 = self.fe0.Lambda()
+        if self.opts.dcs_mode == DcsMode.STEP:
+            lambda_n00 = self.fe0.Lambda_n()
+            self.p = ca.vertcat(self.p, lambda_n00)
+            lambda_p00 = self.fe0.Lambda_p()
+            self.p = ca.vertcat(self.p, lambda_p00)    
 
-        # lambda00 is parameter
-        self.p = ca.vertcat(self.p, lambda00)
+        else:
+            lambda00 = self.fe0.Lambda()
+            self.p = ca.vertcat(self.p, lambda00)
+
+        
         self.p = ca.vertcat(self.p, x0)
 
         # v_global
@@ -764,7 +899,6 @@ class NosnocProblem(NosnocFormulationObject):
             s_elastic = None
 
         self.p = ca.vertcat(casadi_vertcat_list(model.p_ctrl_stages), sigma_p, tau)
-
         # Generate all the variables we need
         self.__create_primal_variables()
 
@@ -813,18 +947,27 @@ class NosnocProblem(NosnocFormulationObject):
 
         # Scalar-valued complementarity residual
         comp_vec = []
+
+        # Collect complementarity terms from all finite elements
         for fe in flatten(self.stages):
             comp_vec = ca.vertcat(comp_vec, fe.get_complementarity_vector())
+
+        # Handle empty complementarity vector
         J_comp = ca.mmax(comp_vec)
+
+    
+        
 
         # terminal constraint and cost
         # NOTE: this was evaluated at Xk_end (expression for previous state before)
         # which should be worse for convergence.
-        last_fe = self.stages[-1][-1]
-        x_terminal = last_fe.w[last_fe.ind_x[-1]]
-        g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
-        self.add_constraint(g_terminal)
-        self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
+        # Only add terminal constraint/cost if not simulation
+        if not self.is_sim_problem():
+            last_fe = self.stages[-1][-1]
+            x_terminal = last_fe.w[last_fe.ind_x[-1]]
+            g_terminal = ocp.g_terminal_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
+            self.add_constraint(g_terminal)
+            self.cost += ocp.f_q_T_fun(x_terminal, model.p_ctrl_stages[-1], model.v_global)
 
         # apply elastic costs
         if opts.mpcc_mode in [MpccMode.ELASTIC_TWO_SIDED, MpccMode.ELASTIC_EQ, MpccMode.ELASTIC_INEQ]:
@@ -912,8 +1055,16 @@ class NosnocProblem(NosnocFormulationObject):
             data["p_shape"] = self.p.shape
 
             sigma, tau = 0.0, 0.0
-            lambda00 = self.model.compute_lambda00(self.opts)
-            data["p0"] = np.concatenate(
+            if self.opts.dcs_mode == DcsMode.STEP:
+                lambda_n00 = self.model.compute_lambda_n00(self.opts)
+                lambda_p00 = self.model.compute_lambda_p00(self.opts)
+                data["p0"] = np.concatenate(
+                    (self.model.p_val_ctrl_stages.flatten(),
+                     np.array([sigma, tau]), lambda_n00, lambda_p00, self.model.x0))
+            
+            else:       
+                 lambda00 = self.model.compute_lambda00(self.opts)
+                 data["p0"] = np.concatenate(
                     (self.model.p_val_ctrl_stages.flatten(),
                      np.array([sigma, tau]), lambda00, self.model.x0))
             f.write(pickle.dumps(data))
