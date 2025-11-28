@@ -10,8 +10,7 @@ LINEAR_CONTROL = True
 X0 = np.array([0, 0, 0, 0, 0])
 X_TARGET = np.array([0.01, 0, 0.01, 0, 0])
 
-
-def get_motor_with_friction_ocp_description():
+def get_motor_with_friction_ocp_description(USE_FO_DYNAMICS):
 
     # Parameters
     m1 = 1.03  # slide mass
@@ -52,11 +51,18 @@ def get_motor_with_friction_ocp_description():
     C1 = np.array([0, -F_R / m1, 0, 0, 0])  # v1 >0
     C2 = -C1  # v1<0
 
-    # switching dynamics with different friction froces
-    f_1 = A @ x + B @ u + C1
-    # v1>0
-    f_2 = A @ x + B @ u + C2
-    # v1<0
+    if USE_FO_DYNAMICS:
+        f_0 = A @ x + B @ u
+        f_1 = C1
+        # v1>0
+        f_2 = C2
+        # v1<0
+    else:
+        # switching dynamics with different friction froces
+        f_1 = A @ x + B @ u + C1
+        # v1>0
+        f_2 = A @ x + B @ u + C2
+        # v1<0
 
     # All modes
     F = [horzcat(f_1, f_2)]
@@ -71,8 +77,10 @@ def get_motor_with_friction_ocp_description():
 
     # Stage cost
     f_q = u**2
-
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u)
+    if USE_FO_DYNAMICS:
+        model = nosnoc.NosnocModel(x=x, f_0=f_0, F=F, S=S, c=c, x0=X0, u=u)
+    else:
+        model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u)
     ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal)
 
     return model, ocp
@@ -98,7 +106,7 @@ def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
 
-    [model, ocp] = get_motor_with_friction_ocp_description()
+    [model, ocp] = get_motor_with_friction_ocp_description(USE_FO_DYNAMICS=True)
 
     opts.terminal_time = 0.08
 

@@ -6,7 +6,7 @@ on:
 
 jobs:
   test_nosnoc:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -19,6 +19,7 @@ jobs:
         virtualenv --python=python3 env
         source env/bin/activate
         which python
+        pip install setuptools
         pip install -e .
         pip install -r requirements-test.txt
 
@@ -37,7 +38,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: test-results/
