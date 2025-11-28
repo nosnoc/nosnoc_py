@@ -5,21 +5,21 @@ setup(name='nosnoc',
    python_requires='>=3.8',
    description='Nonsmooth Numerical Optimal Control for Python',
 #    url='',
-   author='Jonathan Frey, Armin Nurkanovic',
+   author='Anton Pozharskiy, Jonathan Frey, Armin Nurkanovic',
    # use_scm_version={
    #   "fallback_version": "0.1-local",
    #   "root": "../..",
    #   "relative_to": __file__
    # },
    license='BSD',
-#    packages = find_packages(),
+   packages = ["nosnoc"],
    include_package_data = True,
    py_modules=[],
    setup_requires=['setuptools_scm'],
    install_requires=[
-      'numpy>=1.20.0,<2.0.0',
+      'numpy>=1.20.0',
       'scipy',
-      'casadi==3.6.3',
+      'casadi',
       'matplotlib',
    ]
 )

@@ -27,6 +27,7 @@ class NosnocModel:
     :param x: state variables
     :param x0: initial state
     :param F: set of state equations for the different regions
+    :param f_0: part of rhs in the PSS that remains unchanged/smooth. default zero.
     :param c: set of region boundaries
     :param S: determination of the boundaries region connecting
         different state equations with each boundary zone
@@ -58,6 +59,7 @@ class NosnocModel:
                  x: ca.SX,
                  x0: Optional[np.ndarray],
                  F: Optional[List[ca.SX]] = None,
+                 f_0: Optional[ca.SX] = None,
                  c: Optional[List[ca.SX]] = None,
                  S: Optional[List[np.ndarray]] = None,
                  g_Stewart: Optional[List[ca.SX]] = None,
@@ -82,6 +84,7 @@ class NosnocModel:
         self.theta: List[ca.SX] = theta
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
+        self.f_0: ca.SX = f_0
         self.g_z: ca.SX = g_z
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
@@ -272,7 +275,10 @@ class NosnocModel:
             f_x = casadi_vertcat_list(self.f_x)
             z[0:sum(n_c_sys)] = casadi_vertcat_list(self.alpha)
         else:
-            f_x = ca.SX.zeros((n_x, 1))
+            if self.f_0 is None:
+                f_x = ca.SX.zeros((n_x, 1))
+            else:
+                f_x = self.f_0 # initalize f_x with base dynamics f_0
 
         if opts.pss_mode == PssMode.STEWART:
             for ii in range(n_sys):
