@@ -19,6 +19,7 @@ jobs:
         virtualenv --python=python3 env
         source env/bin/activate
         which python
+        pip install setuptools
         pip install -e .
         pip install -r requirements-test.txt
 
