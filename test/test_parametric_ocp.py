@@ -11,7 +11,7 @@ class TestParametericOcp(unittest.TestCase):
         results_parametric = solve_paramteric_example(with_global_var=False)
 
         self.assertTrue(np.allclose(ref_results["w_sol"], results_parametric["w_sol"], atol=1e-6))
-        self.assertTrue(np.alltrue(ref_results["nlp_iter"] == results_parametric["nlp_iter"]))
+        self.assertTrue(np.all(ref_results["nlp_iter"] == results_parametric["nlp_iter"]))
         self.assertEqual(results_parametric["v_global"].shape, (1, 0))
         self.assertEqual(ref_results["v_global"].shape, (1, 0))
 

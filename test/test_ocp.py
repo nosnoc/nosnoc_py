@@ -87,8 +87,8 @@ class TestOcp(unittest.TestCase):
         self.assertTrue(np.allclose(x_traj[-1][:2], X_TARGET, atol=1e-4), message)
         self.assertTrue(np.allclose(t_grid[-1], TERMINAL_TIME, atol=1e-6), message)
         self.assertTrue(np.allclose(t_grid[0], 0.0, atol=1e-6), message)
-        self.assertTrue(np.alltrue(u_traj < UBU), message)
-        self.assertTrue(np.alltrue(u_traj > LBU), message)
+        self.assertTrue(np.all(u_traj < UBU), message)
+        self.assertTrue(np.all(u_traj > LBU), message)
 
 
 if __name__ == "__main__":
