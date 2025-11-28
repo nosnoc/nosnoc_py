@@ -84,7 +84,7 @@ class NosnocModel:
         self.theta: List[ca.SX] = theta
         self.F: Optional[List[ca.SX]] = F
         self.f_x: List[ca.SX] = f_x
-        self.f_0: ca.SX = f_0
+        self.f_0: Optional[ca.SX] = f_0
         self.g_z: ca.SX = g_z
         self.c: List[ca.SX] = c
         self.S: List[np.ndarray] = S
