@@ -487,7 +487,8 @@ def get_results_from_primal_vector(prob: NosnocProblem, w_opt: np.ndarray) -> di
     results["x_out"] = w_opt[prob.ind_x[-1][-1][-1]]
     # TODO: improve naming here?
     results["x_list"] = [w_opt[ind] for ind in flatten_layer(prob.ind_x_cont)]
-    results["c_res"] = [prob.model.c_pds_fun(prob.model.x0)] + [prob.model.c_pds_fun(w_opt[ind]) for ind in flatten_layer(prob.ind_x_cont)]
+    if opts.dcs_mode == DcsMode.PDS:
+        results["c_res"] = [prob.model.c_pds_fun(prob.model.x0)] + [prob.model.c_pds_fun(w_opt[ind]) for ind in flatten_layer(prob.ind_x_cont)]
     x0 = prob.model.x0
     ind_x_all = flatten_outer_layers(prob.ind_x, 2)
     results["x_all_list"] = [x0] + [w_opt[np.array(ind)] for ind in ind_x_all]
