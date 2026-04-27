@@ -1,0 +1,27 @@
+[project]
+name = "nosnoc"
+version = "0.2"
+dependencies = [
+  'numpy>=1.20.0',
+  'scipy',
+  'casadi',
+  'matplotlib',
+  'vdx_py'
+]
+requires-python = ">=3.8"
+authors = [
+  {name = "Anton Pozharskiy", email = "anton.pozharskiy@imtek.uni-freiburg.de"},
+  {name = "Jonathan Frey", email = "jonathan.frey@imtek.uni-freiburg.de"},
+  {name = "Armin Nurkanovic", email = "armin.nurkanovic@imtek.uni-freiburg.de"},
+]
+maintainers = [
+  {name = "Anton Pozharskiy", email = "anton.pozharskiy@imtek.uni-freiburg.de"}
+]
+description = "Nonsmooth Numerical Optimal Control for Python"
+readme = "README.md"
+license = "BSD-2-Clause"
+
+[project.optional-dependencies]
+test = ['pytest',
+        'pytest-cov',
+        'parametrized']

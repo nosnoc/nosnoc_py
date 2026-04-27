@@ -6,13 +6,8 @@ setup(
     python_requires='>=3.8',
     description='Nonsmooth Numerical Optimal Control for Python',
     #    url='',
-   author='Anton Pozharskiy, Jonathan Frey, Armin Nurkanovic',
-    # use_scm_version={
-    #   "fallback_version": "0.1-local",
-    #   "root": "../..",
-    #   "relative_to": __file__
-    # },
-   license='BSD',
+    author='Anton Pozharskiy, Jonathan Frey, Armin Nurkanovic',
+    license='BSD',
     packages = ["nosnoc"],
     include_package_data = True,
     py_modules=[],
