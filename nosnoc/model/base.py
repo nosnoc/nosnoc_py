@@ -131,7 +131,7 @@ class Base(ABC):
         self.z = z; self.lbz = lbz; self.ubz = ubz; self.z0 = z0
         self._populate_vectors("z", [("lbz", -np.inf), ("ubz", np.inf), ("z0", 0.0)])
         self.dims.n_z = self.z.size(1)
-        self.g_z = g_z
+        self.g_z = g_z; self._populate_scalar("g_z", [])
         self.u = u; self.lbu = lbu; self.ubu = ubu; self.u0 = u0
         self._populate_vectors("u", [("lbu", -np.inf), ("ubu", np.inf), ("u0", 0.0)])
         self.dims.n_u = self.u.size(1)
@@ -144,6 +144,7 @@ class Base(ABC):
         self.p_time_var = p_time_var; self.p_time_var_val = p_time_var_val
         self._populate_vectors("p_time_var", [("p_time_var_val", 0.0)])
         self.dims.n_p_time_var = self.p_time_var.size(1)
+        self.p = ca.vertcat(self.p_global, self.p_time_var)
         self.g_path = g_path; self.lbg_path = lbg_path; self.ubg_path = ubg_path
         self._populate_vectors("g_path", [("lbg_path", -np.inf), ("ubg_path", np.inf)])
         self.dims.n_g_paty = self.g_path.size(1)
@@ -157,7 +158,7 @@ class Base(ABC):
 
         # Scalars
         self.f_q = f_q; self._populate_scalar("f_q", 0.0)
-        self.f_q_T = f_q_T; self._populate_scalar("f_q", 0.0)
+        self.f_q_T = f_q_T; self._populate_scalar("f_q_T", 0.0)
 
         # TODO(@anton) implement this reasonably.
         self.lsq_x = lsq_x

@@ -17,7 +17,7 @@ class Dims:
             object.__setattr__(self, name, value)
 
     def __getattr__(self, name):
-        getattr(object.__getattribute__(self,"parent"), name)
+        return getattr(object.__getattribute__(self,"parent"), name)
 
     def __repr__(self):
         kws = [f"{key}={value!r}" for key, value in self.__dict__.items()]
