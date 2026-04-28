@@ -1,9 +1,18 @@
-from .base import Base
+from .base import Base, BaseDims
+from ..dims import Dims
 
 from typing import Optional, List
 
 import casadi as ca
 import numpy as np
+
+class PssDims(Dims):
+    def __init__(self, parent: BaseDims):
+        super().__init__(parent)
+        self.n_sys = 0
+        self.n_c_sys = list()
+        self.n_f_sys = list()
+
 
 class Pss(Base):
     r"""
@@ -23,6 +32,7 @@ class Pss(Base):
                  **kwargs
                  ):
         super().__init__(**kwargs)
+        self.dims = PssDims(self.dims)
         self.F = F
         self.S = S
         self.c = c
@@ -36,6 +46,7 @@ class Pss(Base):
         if isinstance(self.S, np.ndarray): # Make self.S a list
             self.S = [self.S]
         n_sys = len(self.F)
+        self.dims.n_sys = n_sys
         if self.g_indicator is None: # using S*c formulation
             self.g_indicator = list()
             if len(self.S) != n_sys: # S must have n_sys elements
@@ -55,3 +66,6 @@ class Pss(Base):
 
         if len(self.g_indicator) != n_sys:
             RuntimeError("Number of different expressions for g_indicator does not match number of subsystems (taken to be number of matrices F_i which collect the modes of every subsystem).")
+
+        self.dims.n_c_sys = [c.size(1) for c in self.c]
+        self.dims.n_f_sys = [f.size(2) for f in self.F]

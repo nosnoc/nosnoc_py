@@ -22,3 +22,13 @@ class Base(ABC):
 
     def __init__(self, model: ModelBase):
         self.model = model
+
+    @abstractmethod
+    def _generate_variables(self, opts):
+        """Generate the required variables for the dcs"""
+        pass
+
+    @abstractmethod
+    def _generate_expressions(self, opts):
+        """Generate the required equations and functions for the dcs"""
+        pass

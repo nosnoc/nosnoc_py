@@ -11,6 +11,7 @@
 # from .rk_utils import rk4, generate_butcher_tableu_integral, generate_butcher_tableu
 from . import model
 from . import dcs
+from .dims import Dims
 
 import warnings
 warnings.simplefilter("always")

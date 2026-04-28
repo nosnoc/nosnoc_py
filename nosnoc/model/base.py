@@ -1,10 +1,23 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from ..dims import Dims
 
 import casadi as ca
 import numpy as np
 
+class BaseDims(Dims):
+    def __init__(self):
+        super().__init__(None)
+        self.n_x = 0
+        self.n_u = 0
+        self.n_z = 0
+        self.n_v_global = 0
+        self.n_p_global = 0
+        self.n_p_time_var = 0
+        self.n_g_path = 0
+        self.n_g_terminal = 0
+        self.n_g_comp = 0
 
 class Base(ABC):
     r"""
@@ -110,27 +123,37 @@ class Base(ABC):
             G_path: Optional[ca.SX] = None,
             H_path: Optional[ca.SX] = None,
     ):
+        self.dims = BaseDims()
         # Vectors
         self.x = x; self.lbx = lbx; self.ubx = ubx; self.x0 = x0
         self._populate_vectors("x", [("lbx", -np.inf), ("ubx", np.inf), ("x0", 0.0)])
+        self.dims.n_x = self.x.size(1)
         self.z = z; self.lbz = lbz; self.ubz = ubz; self.z0 = z0
         self._populate_vectors("z", [("lbz", -np.inf), ("ubz", np.inf), ("z0", 0.0)])
+        self.dims.n_z = self.z.size(1)
         self.g_z = g_z
         self.u = u; self.lbu = lbu; self.ubu = ubu; self.u0 = u0
         self._populate_vectors("u", [("lbu", -np.inf), ("ubu", np.inf), ("u0", 0.0)])
+        self.dims.n_u = self.u.size(1)
         self.v_global = v_global; self.lbv_global = lbv_global; self.ubv_global = ubv_global; self.v0_global = v0_global
         self._populate_vectors("v_global", [("lbv_global", -np.inf), ("ubv_global", np.inf), ("v0_global", 0.0)])
+        self.dims.n_v_global = self.v_global.size(1)
         self.p_global = p_global; self.p_global_val = p_global_val
         self._populate_vectors("p_global", [("p_global_val", 0.0)])
+        self.dims.n_p_global = self.p_global.size(1)
         self.p_time_var = p_time_var; self.p_time_var_val = p_time_var_val
         self._populate_vectors("p_time_var", [("p_time_var_val", 0.0)])
+        self.dims.n_p_time_var = self.p_time_var.size(1)
         self.g_path = g_path; self.lbg_path = lbg_path; self.ubg_path = ubg_path
         self._populate_vectors("g_path", [("lbg_path", -np.inf), ("ubg_path", np.inf)])
+        self.dims.n_g_paty = self.g_path.size(1)
         self.g_terminal = g_terminal; self.lbg_terminal = lbg_terminal; self.ubg_terminal = ubg_terminal
         self._populate_vectors("g_terminal", [("lbg_terminal", -np.inf), ("ubg_terminal", np.inf)])
+        self.dims.n_g_terminal = self.g_terminal.size(1)
 
         self.G_path = G_path; self._populate_vectors("G_path")
         self.H_path = H_path; self._populate_vectors("H_path")
+        self.dims.n_g_comp = self.G_path.size(1)
 
         # Scalars
         self.f_q = f_q; self._populate_scalar("f_q", 0.0)

@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, override
 from ..model import Pss as PssModel
 from .base import Base
 
@@ -11,3 +11,13 @@ class Stewart(Base):
     """
     def __init__(self, model:PssModel):
         super().__init__(model)
+
+    @override
+    def _generate_variables(self, opts):
+        """Generate the required variables for the dcs"""
+        pass
+
+    @override
+    def _generate_expressions(self, opts):
+        """Generate the required equations and functions for the dcs"""
+        pass
