@@ -1,4 +1,7 @@
+from typing import Optional, List
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 import casadi as ca
 import numpy as np
 
@@ -67,44 +70,96 @@ class Base(ABC):
     :param dims:  struct: Dimensions struct, the contents of which depends on the subclass.
     """
 
-    def __init__(self,
-                 x: ca.SX,
-                 lbx: Optional[np.ndarray] = None,
-                 ubx: Optional[np.ndarray] = None,
-                 x0: Optional[np.ndarray] = None,
-                 z: Optional[ca.SX] = None,
-                 z0: Optional[np.ndarray] = None,
-                 lbz: Optional[np.ndarray] = None,
-                 ubz: Optional[np.ndarray] = None,
-                 g_z: Optional[ca.SX] = None,
-                 u: Optional[ca.SX] = None,
-                 lbu: Optional[np.ndarray] = None,
-                 ubu: Optional[np.ndarray] = None,
-                 u0: Optional[np.ndarray] = None,
-                 v_global: Optional[ca.SX] = None,
-                 v0_global: Optional[np.ndarray] = None,
-                 lbv_global: Optional[np.ndarray] = None,
-                 ubv_global: Optional[np.ndarray] = None,
-                 p_global: Optional[ca.SX] = None,
-                 p_global_val: Optional[np.ndarray] = None,
-                 p_time_var: Optional[ca.SX] = None,
-                 p_time_var_val: Optional[np.ndarray] = None,
-                 p: Optional[ca.SX] = None,
-                 f_q: Optional[ca.SX] = None,
-                 f_q_T: Optional[ca.SX] = None,
-                 lsq_x: Optional[np.ndarray] = None,
-                 x_ref_val: Optional[np.ndarray] = None,
-                 lsq_u: Optional[np.ndarray] = None,
-                 u_ref_val: Optional[np.ndarray] = None,
-                 lsq_T: Optional[np.ndarray] = None,
-                 x_ref_end_val: Optional[np.ndarray] = None,
-                 g_path: Optional[ca.SX] = None,
-                 lbg_path: Optional[np.ndarray] = None,
-                 ubg_path: Optional[np.ndarray] = None,
-                 g_terminal: Optional[ca.SX] = None,
-                 lbg_terminal: Optional[np.ndarray] = None,
-                 ubg_terminal: Optional[np.ndarray] = None,
-                 G_path: Optional[ca.SX] = None,
-                 H_path: Optional[ca.SX] = None,
-                 ):
-        pass
+    def __init__(
+            self,
+            x: ca.SX,
+            lbx: Optional[np.ndarray] = None,
+            ubx: Optional[np.ndarray] = None,
+            x0: Optional[np.ndarray] = None,
+            z: Optional[ca.SX] = None,
+            z0: Optional[np.ndarray] = None,
+            lbz: Optional[np.ndarray] = None,
+            ubz: Optional[np.ndarray] = None,
+            g_z: Optional[ca.SX] = None,
+            u: Optional[ca.SX] = None,
+            lbu: Optional[np.ndarray] = None,
+            ubu: Optional[np.ndarray] = None,
+            u0: Optional[np.ndarray] = None,
+            v_global: Optional[ca.SX] = None,
+            v0_global: Optional[np.ndarray] = None,
+            lbv_global: Optional[np.ndarray] = None,
+            ubv_global: Optional[np.ndarray] = None,
+            p_global: Optional[ca.SX] = None,
+            p_global_val: Optional[np.ndarray] = None,
+            p_time_var: Optional[ca.SX] = None,
+            p_time_var_val: Optional[np.ndarray] = None,
+            f_q: Optional[ca.SX] = None,
+            f_q_T: Optional[ca.SX] = None,
+            lsq_x: Optional[np.ndarray] = None,
+            x_ref_val: Optional[np.ndarray] = None,
+            lsq_u: Optional[np.ndarray] = None,
+            u_ref_val: Optional[np.ndarray] = None,
+            lsq_T: Optional[np.ndarray] = None,
+            x_ref_end_val: Optional[np.ndarray] = None,
+            g_path: Optional[ca.SX] = None,
+            lbg_path: Optional[np.ndarray] = None,
+            ubg_path: Optional[np.ndarray] = None,
+            g_terminal: Optional[ca.SX] = None,
+            lbg_terminal: Optional[np.ndarray] = None,
+            ubg_terminal: Optional[np.ndarray] = None,
+            G_path: Optional[ca.SX] = None,
+            H_path: Optional[ca.SX] = None,
+    ):
+        # Vectors
+        self.x = x; self.lbx = lbx; self.ubx = ubx; self.x0 = x0
+        self._populate_vectors("x", [("lbx", -np.inf), ("ubx", np.inf), ("x0", 0.0)])
+        self.z = z; self.lbz = lbz; self.ubz = ubz; self.z0 = z0
+        self._populate_vectors("z", [("lbz", -np.inf), ("ubz", np.inf), ("z0", 0.0)])
+        self.g_z = g_z
+        self.u = u; self.lbu = lbu; self.ubu = ubu; self.u0 = u0
+        self._populate_vectors("u", [("lbu", -np.inf), ("ubu", np.inf), ("u0", 0.0)])
+        self.v_global = v_global; self.lbv_global = lbv_global; self.ubv_global = ubv_global; self.v0_global = v0_global
+        self._populate_vectors("v_global", [("lbv_global", -np.inf), ("ubv_global", np.inf), ("v0_global", 0.0)])
+        self.p_global = p_global; self.p_global_val = p_global_val
+        self._populate_vectors("p_global", [("p_global_val", 0.0)])
+        self.p_time_var = p_time_var; self.p_time_var_val = p_time_var_val
+        self._populate_vectors("p_time_var", [("p_time_var_val", 0.0)])
+        self.g_path = g_path; self.lbg_path = lbg_path; self.ubg_path = ubg_path
+        self._populate_vectors("g_path", [("lbg_path", -np.inf), ("ubg_path", np.inf)])
+        self.g_terminal = g_terminal; self.lbg_terminal = lbg_terminal; self.ubg_terminal = ubg_terminal
+        self._populate_vectors("g_terminal", [("lbg_terminal", -np.inf), ("ubg_terminal", np.inf)])
+
+        self.G_path = G_path; self._populate_vectors("G_path")
+        self.H_path = H_path; self._populate_vectors("H_path")
+
+        # Scalars
+        self.f_q = f_q; self._populate_scalar("f_q", 0.0)
+        self.f_q_T = f_q_T; self._populate_scalar("f_q", 0.0)
+
+        # TODO(@anton) implement this reasonably.
+        self.lsq_x = lsq_x
+        self.x_ref_val = x_ref_val
+        self.lsq_u = lsq_u
+        self.u_ref_val = u_ref_val
+        self.lsq_T = lsq_T
+        self.x_ref_end_val = x_ref_end_val
+
+    def _populate_vectors(self, sym: str, vec_init_list = []):
+        """
+        Take a symbolic vector and a list of its related numerical vectors and populate them all.
+        """
+        if getattr(self, sym) is None: # if empty sym throw away
+            setattr(self, sym, ca.SX([]))
+        n,m = getattr(self, sym).size()
+        for (vec, init) in vec_init_list:
+            if getattr(self, vec) is None:
+                setattr(self, vec,init*np.ones(n))
+            elif getattr(self, vec).shape[0] != n:
+                raise RuntimeError("Dimension missmatch in model creation") # TODO(@anton) make this error more traceable
+
+    def _populate_scalar(self, sym: str, default=0.0):
+        """
+        Take a symbolic scalar and populate it with a default if necessary
+        """
+        if getattr(self, sym) is None:
+            setattr(self, sym, ca.SX(default))

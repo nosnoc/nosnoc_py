@@ -12,6 +12,7 @@ env
 private*
 external
 *~
+TAGS
 
 test-results
 
