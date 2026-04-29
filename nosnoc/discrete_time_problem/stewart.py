@@ -9,6 +9,9 @@ class Stewart(Base):
     def __init__(self, dcs, opts):
         super().__init__(dcs, opts)
 
+    def _create_problem_parameters(self):
+        pass
+
     @override
     def _create_variables(self):
         """Create Optimization Variables"""

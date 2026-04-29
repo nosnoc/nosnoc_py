@@ -61,8 +61,10 @@ class StepEquilibrationMode(Enum):
 
 
 class CrossComplementarityMode(Enum):
-    COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER = auto()  # nosnoc 1
-    SUM_LAMBDAS_COMPLEMENT_WITH_EVERY_THETA = auto()  # nosnoc 3
+    STAGE_STAGE = auto()  # nosnoc 1
+    FE_STAGE = auto()  # nosnoc 3
+    STAGE_FE = auto()  # nosnoc 3
+    FE_FE = auto()  # nosnoc 3
     # NOTE: tested in simple_sim_tests
 
 
@@ -89,7 +91,7 @@ class SpeedOfTimeVariableMode(Enum):
     GLOBAL = auto()  # Single speed of time variable used across whole problem
 
 
-class PssMode(Enum):
+class DcsMode(Enum):
     """
     Mode to represent the Piecewise Smooth System (PSS).
     """
