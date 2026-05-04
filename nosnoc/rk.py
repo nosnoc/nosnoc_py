@@ -36,8 +36,28 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
 
 
     @override
-    def collocation_constraints(self, x0, z, h, f_x, f_q, g, sot=1.0):
-        pass
+    def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):
+        x_end = self.D[0]*x0
+        nx = x0.size(1)
+        q_end = 0.0
+        dynamic = []
+        algebraic = []
+        for ii in range(self.n_s):
+            z_ii = z[ii]
+            x_ii = z_ii[0:nx] # NOTE: Assume first nx entries in z are x
+            f_ii = sot*f_x(z_ii, p)
+            q_ii = sot*f_q(z_ii, p)
+            g_ii = g(z_ii, p)
+            x_ii = self.C[0,ii+1]*x0
+            for jj in range(self.n_s):
+                x_jj = z[jj][0:nx] # NOTE: Assume first nx entries in z are x
+                x_ii += self.C[jj+1, ii+1]*x_jj
+            dynamic.append(h*f_ii - x_ii)
+            algebraic.append(g_ii)
+            q_end += self.B[ii+1]*h*q_ii
+            x_end += self.D[ii+1]*x_ii
+        return x_end, q_end, dynamic, algebraic,
+
 
     def __repr__(self):
         return f"Integral representation of {super().__repr__()}"
@@ -73,7 +93,7 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
             # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
             pint = np.polyint(coeff)
             B[j] = np.polyval(pint, 1.0)
-        return B, C, D, tau_root
+        return B.round(12), C.round(12), D.round(12), tau_root
 
 
 class DifferentialRKRepresentation(AbstractRKRepresentation):
