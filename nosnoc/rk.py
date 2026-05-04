@@ -26,18 +26,23 @@ class AbstractRKRepresentation(ABC):
         else:
             raise NotImplementedError()
 
+    def __repr__(self):
+        return f"{self.rk_scheme} type Runge-Kutta scheme with {self.n_s} collocation points"
 
 class IntegralRKRepresentation(AbstractRKRepresentation):
     def __init__(self, n_s: int, rk_scheme: RKScheme):
         super().__init__(n_s, rk_scheme)
-        self.B, self.C, self.D, self.tau_root, = self._generate_butcher_tableu_integral(n_s, rk_scheme)
+        self.B, self.C, self.D, self.tau_root, = self._generate_butcher_tableau_integral(n_s, rk_scheme)
 
 
     @override
     def collocation_constraints(self, x0, z, h, f_x, f_q, g, sot=1.0):
         pass
 
-    def _generate_butcher_tableu_integral(self, n_s: int, rk_scheme: RKScheme):
+    def __repr__(self):
+        return f"Integral representation of {super().__repr__()}"
+
+    def _generate_butcher_tableau_integral(self, n_s: int, rk_scheme: RKScheme):
         RK_SCHEME_TO_STRING = {RKScheme.GAUSS_LEGENDRE: "legendre", RKScheme.RADAU_IIA: "radau"}
         points = ca.collocation_points(n_s, RK_SCHEME_TO_STRING[rk_scheme])
         tau_root = np.array([0.0] + points)
@@ -70,16 +75,20 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
             B[j] = np.polyval(pint, 1.0)
         return B, C, D, tau_root
 
+
 class DifferentialRKRepresentation(AbstractRKRepresentation):
     def __init__(self, n_s: int, rk_scheme: RKScheme):
         super().__init__(n_s, rk_scheme)
-        self.A, self.b, self.c = _generate_butcher_tableau(n_s, rk_scheme)
+        self.A, self.b, self.c = self._generate_butcher_tableau(n_s, rk_scheme)
 
     @override
     def collocation_constraints(self, x0, z, h, f_x, f_q, g, sot=1.0):
         pass
 
-    def _generate_butcher_tableu(n_s, irk_scheme):
+    def __repr__(self):
+        return f"Differential representation of {super().__repr__()}"
+
+    def _generate_butcher_tableau(self, n_s, irk_scheme):
         if irk_scheme == RKScheme.RADAU_IIA:
             if n_s == 1:
                 A = np.array([[1.0]])
@@ -1087,3 +1096,6 @@ class LiftedDifferentialRKRepresentation(DifferentialRKRepresentation):
     @override
     def collocation_constraints(self, x0, z, h, f_x, f_q, g, sot=1.0):
         pass
+
+    def __repr__(self):
+        return f"Differential representation with lifted states of {super().__repr__()}"

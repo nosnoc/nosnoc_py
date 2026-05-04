@@ -37,7 +37,11 @@ class RKScheme(Enum):
     RADAU_IIA = auto()
     GAUSS_LEGENDRE = auto()
     # NOTE: tested in simple_sim_tests
-
+    def __repr__(self):
+        if self == RKScheme.RADAU_IIA:
+            return "Radau-IIA"
+        elif self == RKScheme.GAUSS_LEGENDRE:
+            return "Gauss-Legendre"
 
 class InitializationStrategy(Enum):
     ALL_XCURRENT_W0_START = auto()
