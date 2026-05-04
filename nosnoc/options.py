@@ -98,40 +98,40 @@ class Options():
 
     #--------------------- Max Values ---------------------#
 
-    ub_lambda_gcs: float  = inf # double: Max value for $\lambda$ in the Gradient Comlementarity System.
+    ub_lambda_gcs: float  = np.inf # double: Max value for $\lambda$ in the Gradient Comlementarity System.
 
-    ub_Lambda_normal: float  = inf # double: Max value for $\Lambda_n$ in FESD-J reformulation.
-    ub_P_vn: float           = inf # double: Max value for positive normal velocity slack in FESD-J reformulation impulse calculation.
-    ub_N_vn: float           = inf # double: Max value for negative normal velocity slack in FESD-J reformulation impulse calculation.
-    ub_Y_gap: float          = inf # double: Max value for gap function in FESD-J reformulation impulse calculation.
-    ub_Lambda_tangent: float = inf # double: Max value for $\Lambda_t$ in FESD-J reformulation impulse calculation.
-    ub_Gamma_d: float        = inf # double: Max value for $\Gamma_d$ in FESD-J reformulation impulse calculation.
-    ub_Beta_d: float         = inf # double: Max value for $\Beta_d$ in FESD-J reformulation impulse calculation.
-    ub_Delta_d: float        = inf # double: Max value for $\Delta_d$ in FESD-J reformulation impulse calculation.
-    ub_Gamma: float          = inf # double: Max value for $\Gamma$ in FESD-J reformulation impulse calculation.
-    ub_Beta: float           = inf # double: Max value for $\Beta$ in FESD-J reformulation impulse calculation.
-    ub_P_vt: float           = inf # double: Max value for positive tangential velocity slack in FESD-J reformulation impulse calculation.
-    ub_N_vt: float           = inf # double: Max value for negative tangential velocity slack in FESD-J reformulation impulse calculation.
-    ub_Alpha_vt: float       = inf # double: Max value fo tangential velocity step function in FESD-J reformulation impulse calculation.
+    ub_Lambda_normal: float  = np.inf # double: Max value for $\Lambda_n$ in FESD-J reformulation.
+    ub_P_vn: float           = np.inf # double: Max value for positive normal velocity slack in FESD-J reformulation impulse calculation.
+    ub_N_vn: float           = np.inf # double: Max value for negative normal velocity slack in FESD-J reformulation impulse calculation.
+    ub_Y_gap: float          = np.inf # double: Max value for gap function in FESD-J reformulation impulse calculation.
+    ub_Lambda_tangent: float = np.inf # double: Max value for $\Lambda_t$ in FESD-J reformulation impulse calculation.
+    ub_Gamma_d: float        = np.inf # double: Max value for $\Gamma_d$ in FESD-J reformulation impulse calculation.
+    ub_Beta_d: float         = np.inf # double: Max value for $\Beta_d$ in FESD-J reformulation impulse calculation.
+    ub_Delta_d: float        = np.inf # double: Max value for $\Delta_d$ in FESD-J reformulation impulse calculation.
+    ub_Gamma: float          = np.inf # double: Max value for $\Gamma$ in FESD-J reformulation impulse calculation.
+    ub_Beta: float           = np.inf # double: Max value for $\Beta$ in FESD-J reformulation impulse calculation.
+    ub_P_vt: float           = np.inf # double: Max value for positive tangential velocity slack in FESD-J reformulation impulse calculation.
+    ub_N_vt: float           = np.inf # double: Max value for negative tangential velocity slack in FESD-J reformulation impulse calculation.
+    ub_Alpha_vt: float       = np.inf # double: Max value fo tangential velocity step function in FESD-J reformulation impulse calculation.
 
-    ub_lambda_normal: float  = inf # double: Max value for $\lambda_n$ in FESD-J reformulation.
-    ub_p_vn: float           = inf # double: Max value for positive normal velocity slack in FESD-J reformulation.
-    ub_n_vn: float           = inf # double: Max value for negative normal velocity slack in FESD-J reformulation.
-    ub_y_gap: float          = inf # double: Max value for gap function in FESD-J reformulation.
-    ub_lambda_tangent: float = inf # double: Max value for $\lambda_t$ in FESD-J reformulation.
-    ub_gamma_d: float        = inf # double: Max value for $\gamma_d$ in FESD-J reformulation.
-    ub_beta_d: float         = inf # double: Max value for $\beta_d$ in FESD-J reformulation.
-    ub_delta_d: float        = inf # double: Max value for $\delta_d$ in FESD-J reformulation.
-    ub_gamma: float          = inf # double: Max value for $\gamma$ in FESD-J reformulation.
-    ub_beta: float           = inf # double: Max value for $\beta$ in FESD-J reformulation.
-    ub_p_vt: float           = inf # double: Max value for positive tangential velocity slack in FESD-J reformulation.
-    ub_n_vt: float           = inf # double: Max value for negative tangential velocity slack in FESD-J reformulation.
-    ub_alpha_vt: float       = inf # double: Max value fo tangential velocity step function in FESD-J reformulation.
+    ub_lambda_normal: float  = np.inf # double: Max value for $\lambda_n$ in FESD-J reformulation.
+    ub_p_vn: float           = np.inf # double: Max value for positive normal velocity slack in FESD-J reformulation.
+    ub_n_vn: float           = np.inf # double: Max value for negative normal velocity slack in FESD-J reformulation.
+    ub_y_gap: float          = np.inf # double: Max value for gap function in FESD-J reformulation.
+    ub_lambda_tangent: float = np.inf # double: Max value for $\lambda_t$ in FESD-J reformulation.
+    ub_gamma_d: float        = np.inf # double: Max value for $\gamma_d$ in FESD-J reformulation.
+    ub_beta_d: float         = np.inf # double: Max value for $\beta_d$ in FESD-J reformulation.
+    ub_delta_d: float        = np.inf # double: Max value for $\delta_d$ in FESD-J reformulation.
+    ub_gamma: float          = np.inf # double: Max value for $\gamma$ in FESD-J reformulation.
+    ub_beta: float           = np.inf # double: Max value for $\beta$ in FESD-J reformulation.
+    ub_p_vt: float           = np.inf # double: Max value for positive tangential velocity slack in FESD-J reformulation.
+    ub_n_vt: float           = np.inf # double: Max value for negative tangential velocity slack in FESD-J reformulation.
+    ub_alpha_vt: float       = np.inf # double: Max value fo tangential velocity step function in FESD-J reformulation.
 
     #--------------------- End Max Values ---------------------#
 
-    lb_sdf_pts: float = -inf;
-    ub_sdf_pts: float = inf;
+    lb_sdf_pts: float = -np.inf;
+    ub_sdf_pts: float = np.inf;
 
     # boolean: If true then the convex multiplier expressions are lifted in the Heaviside step reformulation.
     #
