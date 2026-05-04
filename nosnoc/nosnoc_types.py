@@ -33,7 +33,7 @@ class MpccMode(Enum):
     # NOTE: tested in simple_sim_tests
 
 
-class IrkSchemes(Enum):
+class RKScheme(Enum):
     RADAU_IIA = auto()
     GAUSS_LEGENDRE = auto()
     # NOTE: tested in simple_sim_tests
