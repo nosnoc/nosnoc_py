@@ -1,8 +1,9 @@
 from typing import Type
+from dataclasses import dataclass
+
 import casadi as ca
 import numpy as np
 
-from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
 from .nosnoc_types import MpccMode, RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
 
 @dataclass
@@ -41,7 +42,7 @@ class Options():
     #
     # See Also:
     #     `RKRepresentation` for a description of the representations.
-    rk_representation: IrkRepresentation = IrkRepresentation.INTEGRAL
+    rk_representation: RKRepresentation = RKRepresentation.INTEGRAL
 
     # CrossCompMode: Which cross complementarity mode to use.
     #
@@ -232,7 +233,7 @@ class Options():
     #    `ConstraintRelaxationMode` for a detailed description of the available relaxation modes.
     #relax_terminal_constraint: ConstraintRelaxationMode = ConstraintRelaxationMode.NONE;
     #relax_terminal_constraint_from_above: bool = 0; # boolean: If true we only relax the upper bound of the terminal constraint.
-    #rho_terminal: float  = 1e2; # double: Weight used to penalize terminal constraint violation.
+    rho_terminal: float  = 1e2; # double: Weight used to penalize terminal constraint violation.
 
     # NOTIMPLEMENTED
     # ConstraintRelaxationMode: What (if any) relaxation to apply to the path constraints.
@@ -309,9 +310,12 @@ class Options():
     # Time Freezing constants
     a_n: float = 100;
     k_aux: float = 10;
-    time_freezing_Heaviside_lifting: bool = true; # boolean: Exploit the time-freezing PSS structure for tailored lifting in Heaviside reformulation, and drastically reduce the number of  algebraic variables.
+    time_freezing_Heaviside_lifting: bool = True; # boolean: Exploit the time-freezing PSS structure for tailored lifting in Heaviside reformulation, and drastically reduce the number of  algebraic variables.
 
     # experimental:
     #---------------------------------------------------------------------#
 
-    use_numerical_clock_state: bool = false # logical: instead of sum of $h$ being used for equidistant control steps use a simple integrated state.
+    use_numerical_clock_state: bool = False # logical: instead of sum of $h$ being used for equidistant control steps use a simple integrated state.
+
+    def time_rescaling(self):
+        return (self.time_freezing and self.impose_terminal_phyisical_time) or self.time_optimal_problem;
