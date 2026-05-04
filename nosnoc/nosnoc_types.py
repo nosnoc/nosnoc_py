@@ -72,7 +72,7 @@ class CrossComplementarityMode(Enum):
     # NOTE: tested in simple_sim_tests
 
 
-class IrkRepresentation(Enum):
+class RKRepresentation(Enum):
     INTEGRAL = auto()
     DIFFERENTIAL = auto()
     DIFFERENTIAL_LIFT_X = auto()

@@ -29,6 +29,10 @@ class AbstractRKRepresentation(ABC):
     def __repr__(self):
         return f"{self.rk_scheme} type Runge-Kutta scheme with {self.n_s} collocation points"
 
+    @abstractmethod
+    def is_right_boundary_explicit(self):
+        pass
+
 class IntegralRKRepresentation(AbstractRKRepresentation):
     def __init__(self, n_s: int, rk_scheme: RKScheme):
         super().__init__(n_s, rk_scheme)
@@ -58,6 +62,9 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
             x_end += self.D[ii+1]*x_ii
         return x_end, q_end, dynamic, algebraic
 
+    @override
+    def is_right_boundary_explicit(self):
+        return np.abs(self.tau_root[-1] - 1.0) < 1e-9
 
     def __repr__(self):
         return f"Integral representation of {super().__repr__()}"
@@ -128,7 +135,9 @@ class DifferentialRKRepresentation(AbstractRKRepresentation):
 
         return x_end, q_end, dynamic, algebraic
 
-
+    @override
+    def is_right_boundary_explicit(self):
+        return False
 
     def __repr__(self):
         return f"Differential representation of {super().__repr__()}"
@@ -1165,6 +1174,11 @@ class LiftedDifferentialRKRepresentation(DifferentialRKRepresentation):
             x_end += h*self.b[ii]*v_ii
 
         return x_end, q_end, dynamic, algebraic
+
+    @override
+    def is_right_boundary_explicit(self):
+        return np.abs(self.c[-1] - 1.0) < 1e-9
+
 
     def __repr__(self):
         return f"Differential representation with lifted states of {super().__repr__()}"

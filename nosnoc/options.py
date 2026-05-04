@@ -3,7 +3,7 @@ import casadi as ca
 import numpy as np
 
 from .rk_utils import generate_butcher_tableu, generate_butcher_tableu_integral
-from .nosnoc_types import MpccMode, IrkSchemes, StepEquilibrationMode, CrossComplementarityMode, IrkRepresentation, DcsMode, IrkRepresentation, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
+from .nosnoc_types import MpccMode, RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
 
 @dataclass
 class Options():
@@ -15,11 +15,11 @@ class Options():
 
     # TODO(@anton) these shouldn't be hard coded with defaults and shouldn't live in these options
     T_sim: float = 1.0
-    N_sim: int = 10
+    N_sim: int   = 10
     h_sim: float = 0.1
-    h: float = 1.0 # double: Control stage Step size.
-    h_k: float = 1.0/2  # double: Finite element step size.
-    T: float = 1.0 # double: Terminal time.
+    h: float     = 1.0 # double: Control stage Step size.
+    h_k: float   = 1.0/2  # double: Finite element step size.
+    T: float     = 1.0 # double: Terminal time.
 
     N_stages: int = 1 # int: Number of control stages.
 
@@ -35,7 +35,7 @@ class Options():
     # See Also:
     #    `RKSchemes` for more details as to the how to choose a Runge-Kutta Scheme and
     #    for differences between them.
-    rk_scheme: IrkSchemes = IrkSchemes.RADAU_IIA
+    rk_scheme: RKScheme = RKScheme.RADAU_IIA
 
     # RKRepresentation: Which representation of Runge-Kutta discretization to use.
     #
@@ -52,10 +52,11 @@ class Options():
     # double: Fraction in the range $\gamma_h \in [0,1]$ by which the step size is relaxed:
     # $$(1-\gamma_h) h_0\le h \le (1+\gamma_h) h_0$$
     gamma_h: float  = 1
+
     dcs_mode: DcsMode = DcsMode.STEWART # DcsMode: Which DCS to reformulate the problem into.
 
     lift_complementarities: bool = 0 # boolean: Whether complementarities are lifted. TODO(@anton) should this still live in MPCC generation?
-    lower_bound_comp_lift: bool = 0 # boolean: If true we add additional lower bounds to the lifted variables.
+    lower_bound_comp_lift: bool  = 0 # boolean: If true we add additional lower bounds to the lifted variables.
 
     #--------------------- Initial Values ---------------------#
 
@@ -138,69 +139,64 @@ class Options():
     # Warning:
     #     This is not currently implemented for generic Heaviside step DCS.
     pss_lift_step_functions: bool = 0
-    n_depth_step_lifting: int = 2 # int: Depth to which the Heaviside step convex multipliers are lifted.
+    n_depth_step_lifting: int     = 2 # int: Depth to which the Heaviside step convex multipliers are lifted.
 
     gcs_lift_gap_functions: bool = 1 # boolean: If true the step functions $c(x)$ are lifted in the gradient complementarity system reformulation.
 
     linear_complemtarity_M: float = 1000 # double: $M$ multiplier used in the linear complementarity step equilibration fromulation. Larger values alleviate infeasibility for smaller step sizes.
 
-    g_path_at_fe: bool = 0 # boolean: If true we evaluate nonlinear path constraint at every finte element boundary.
+    g_path_at_fe: bool  = 0 # boolean: If true we evaluate nonlinear path constraint at every finte element boundary.
     g_path_at_stg: bool = 0 # boolean: If true evaluate nonlinear path constraint at every stage.
-
-    x_box_at_fe: bool = 1 # boolean: If true we evaluate box constraint for diff states at every finite element boundary point.
+    x_box_at_fe: bool   = 1 # boolean: If true we evaluate box constraint for diff states at every finite element boundary point.
 
     # boolean: If true we evaluate box constraint for diff states at every stage point.
     #
     # Note:
     #    This is set to zero per default in differential rk mode, as it becomes a linear instead of box constraint.
-    x_box_at_stg: bool = 1
-    time_optimal_problem: = 0 # boolean: If true for an OCP we automatically reformulate the problem to be time optimal.
+    x_box_at_stg: bool         = 1
+    time_optimal_problem: bool = 0 # boolean: If true for an OCP we automatically reformulate the problem to be time optimal.
 
-    rho_h: float  = 1 # double: Weight used in heuristic or relaxed step equilibration modes.
+    rho_h: float = 1 # double: Weight used in heuristic or relaxed step equilibration modes.
 
     # StepEquilibrationMode: Which step equilibration mode to use.
     #
     # See Also:
     #     `StepEquilibrationMode` for more details on how each mode works.
     step_equilibration: StepEquilibrationMode = StepEquilibrationMode.HEURISTIC_MEAN
-    step_equilibration_sigma: float  = 0.1 # double: Slope at zero for the sigmoid used to rescale the indicator function, nu_ki_rescaled = tanh(nu_ki/step_equilibration_sigma).
+    step_equilibration_sigma: float           = 0.1 # double: Slope at zero for the sigmoid used to rescale the indicator function, nu_ki_rescaled = tanh(nu_ki/step_equilibration_sigma).
 
     equidistant_control_grid: bool = 1 # boolean: If true each control stage is fixed length.
 
-    time_freezing: bool = 0 # boolean: Use a time freezing reformulation for the given model.
+    time_freezing: bool           = 0 # boolean: Use a time freezing reformulation for the given model.
     time_freezing_inelastic: bool = 0 # boolean: Use the specailized time freezing reformulation for systems with inelastic collisions and friction.
 
-    use_speed_of_time_variables: bool = 0 # boolean: If true speed of time variables are used for the time freezing reformulation or time optimal problem
-    local_speed_of_time_variable: bool = 0 # boolean: If true then each control stage has a speed of time variable. Otherwise a single speed of time variable is used.
-    stagewise_clock_constraint: bool = 1 # boolean: If true the control grid is fixed with constraints for each control stage.
+    use_speed_of_time_variables: bool    = 0 # boolean: If true speed of time variables are used for the time freezing reformulation or time optimal problem
+    local_speed_of_time_variable: bool   = 0 # boolean: If true then each control stage has a speed of time variable. Otherwise a single speed of time variable is used.
+    stagewise_clock_constraint: bool     = 1 # boolean: If true the control grid is fixed with constraints for each control stage.
     impose_terminal_phyisical_time: bool = 1 # boolean: If true the terminal physical time in a time freezing system is constrained to be exactly the desired horizon length.
-    s_sot0: float  = 1 # double: Initial value for speed of time variables.
-    s_sot_max: float  = 25 # double: Maximum for speed of time variables.
-    s_sot_min: float  = 1 # double: Minimum for speed of time variables.
-    S_sot_nominal: float  = 1 # double: Nominal speed of time used for regularizing the speed of time variables.
-    rho_sot: float  = 0 # double: Weight used for the speed of time regularization.
+    s_sot0: float                        = 1 # double: Initial value for speed of time variables.
+    s_sot_max: float                     = 25 # double: Maximum for speed of time variables.
+    s_sot_min: float                     = 1 # double: Minimum for speed of time variables.
+    S_sot_nominal: float                 = 1 # double: Nominal speed of time used for regularizing the speed of time variables.
+    rho_sot: float                       = 0 # double: Weight used for the speed of time regularization.
 
     T_final_max: float  = 1e2 # double: Maximum final time for a time optimal problem.
     T_final_min: float  = 0 # double: Minimum final time for a time optimal problem.
 
 
-    time_freezing_reduced_model: bool = 0 # boolean: Analytic reduction of lifter formulation, less algebraic variables (experimental). TODO(@armin) What was this supposed to be?
-    time_freezing_hysteresis: bool = 0
+    time_freezing_reduced_model: bool           = 0 # boolean: Analytic reduction of lifter formulation, less algebraic variables (experimental). TODO(@armin) What was this supposed to be?
+    time_freezing_hysteresis: bool              = 0
     time_freezing_nonlinear_friction_cone: bool = 1 # boolean: If true we use the nonlinear friction cone, otherwise use polyhedral l_inf approximation.
-
-    time_freezing_quadrature_state: bool = 0 # boolean: If true make a nonsmooth quadrature state to integrate only if physical time is running.
-    time_freezing_lift_forces: bool = 0 # If true replace $\dot = M(q)^f(q,v,u)$ by $dot = z,  M(q)z - f(q,v,u) = 0$.
-
+    time_freezing_quadrature_state: bool        = 0 # boolean: If true make a nonsmooth quadrature state to integrate only if physical time is running.
+    time_freezing_lift_forces: bool             = 0 # If true replace $\dot = M(q)^f(q,v,u)$ by $dot = z,  M(q)z - f(q,v,u) = 0$.
     # boolean: Experimental, use $c = \max(c1,c2)$ insetad of $c = c_1c_2$.
     # This is used to reduce the number of switching functions needed to generate the T shaped intersections
     # in inelastic time freezing reformulation.
     time_freezing_nonsmooth_switching_fun: bool = 0
-
     # boolean: Stabilize auxiliary dynamics in \nabla f_c(q) direction in the style of Baumgartner stabilization.
-    stabilizing_q_dynamics: bool = 0
-
+    stabilizing_q_dynamics: bool                = 0
     # double: Constant used for stabilizing auxiliary dynamics in \nabla f_c(q) direction.
-    kappa_stabilizing_q_dynamics: float  = 1e-5
+    kappa_stabilizing_q_dynamics: float         = 1e-5
 
     ############################# NOT IMPLEMENTED
     # FrictionModel: Which Friction model to use for the Complementarity Lagrangian System.
@@ -308,22 +304,12 @@ class Options():
     has_clock_state: bool = 0
 
     T_val: float = 1
-    p_val
+    #p_val
 
     # Time Freezing constants
     a_n: float = 100;
     k_aux: float = 10;
     time_freezing_Heaviside_lifting: bool = true; # boolean: Exploit the time-freezing PSS structure for tailored lifting in Heaviside reformulation, and drastically reduce the number of  algebraic variables.
-
-    # Butcher Tableu
-    A_rk: Optional[np.ndarray] = None
-    B_rk: Optional[np.ndarray] = None
-    b_rk: Optional[np.ndarray] = None
-    C_rk: Optional[np.ndarray] = None
-    D_rk: Optional[np.ndarray] = None
-    c_rk: Optional[np.ndarray] = None
-
-    right_boundary_point_explicit: bool
 
     # experimental:
     #---------------------------------------------------------------------#
