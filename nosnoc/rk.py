@@ -102,13 +102,13 @@ class DifferentialRKRepresentation(AbstractRKRepresentation):
         self.A, self.b, self.c = self._generate_butcher_tableau(n_s, rk_scheme)
 
     @override
-    def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0, v_prefix="v"):
+    def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):
         x_end = x0
         nx = x0.size(1)
         q_end = 0.0
         dynamic = []
         algebraic = []
-        v = [ca.SX.sym(f"{v_prefix}_{ii}") for ii in range(1,self.n_s+1)]
+        v = [z[ii][:nx,:] for ii in range(self.n_s)]
 
         # build dynamics
         for ii in range(self.n_s):
@@ -117,7 +117,7 @@ class DifferentialRKRepresentation(AbstractRKRepresentation):
                 v_jj = v[jj]
                 x_ii += h*self.A[ii,jj]*v_jj
             v_ii = v[ii]
-            z_ii = ca.vertcat(x_ii, z[ii])
+            z_ii = ca.vertcat(x_ii, z[ii][nx:,:])
             f_ii = f_x(z_ii, p)
             q_ii = f_q(z_ii, p)
             g_ii = g(z_ii, p)
@@ -126,7 +126,7 @@ class DifferentialRKRepresentation(AbstractRKRepresentation):
             q_end += self.b[ii]*h*q_ii
             x_end += h*self.b[ii]*v_ii
 
-        return x_end, q_end, dynamic, algebraic, v
+        return x_end, q_end, dynamic, algebraic
 
 
 
@@ -1139,8 +1139,32 @@ class LiftedDifferentialRKRepresentation(DifferentialRKRepresentation):
         super().__init__(n_s, rk_scheme)
 
     @override
-    def collocation_constraints(self, x0, z, h, f_x, f_q, g, sot=1.0):
-        pass
+    def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):
+        x_end = x0
+        nx = x0.size(1)
+        q_end = 0.0
+        dynamic = []
+        algebraic = []
+        v = [z[ii][:nx,:] for ii in range(self.n_s)]
+
+        # build dynamics
+        for ii in range(self.n_s):
+            x_ii_val = x0
+            for jj in range(self.n_s):
+                v_jj = v[jj]
+                x_ii_val += h*self.A[ii,jj]*v_jj
+            x_ii = z[ii][nx:2*nx,:]
+            v_ii = v[ii]
+            z_ii = z[ii][nx:,:]
+            f_ii = f_x(z_ii, p)
+            q_ii = f_q(z_ii, p)
+            g_ii = g(z_ii, p)
+            dynamic.append(ca.vertcat(x_ii - x_ii_val, v_ii - f_ii))
+            algebraic.append(g_ii)
+            q_end += self.b[ii]*h*q_ii
+            x_end += h*self.b[ii]*v_ii
+
+        return x_end, q_end, dynamic, algebraic
 
     def __repr__(self):
         return f"Differential representation with lifted states of {super().__repr__()}"
