@@ -135,4 +135,8 @@ if __name__ == "__main__":
     print(model_switch)
     dcs_switch = nosnoc.dcs.Stewart(model_switch)
     print(dcs_switch)
+    opts = nosnoc.Options(N_stages=10, N_finite_elements=[3]*10, h_k=[1/30]*10)
+    dtp = nosnoc.discrete_time_problem.Stewart(dcs_switch, opts)
+    dtp.populate_problem()
+    print(str(dtp))
     import pdb; pdb.set_trace()
