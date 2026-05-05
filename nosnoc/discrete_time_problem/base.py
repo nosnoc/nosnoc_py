@@ -1,9 +1,10 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
-from vdx_py.mpcc import MPCC
 
 import casadi as ca
 import numpy as np
+from vdx_py.mpcc import MPCC
+from vdx_py.vartypes import *
 
 from ..nosnoc_types import RKRepresentation
 from ..rk import IntegralRKRepresentation, DifferentialRKRepresentation, LiftedDifferentialRKRepresentation
@@ -24,12 +25,210 @@ class Base(ABC,MPCC):
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL_LIFT_X:
             self.rk = LiftedDifferentialRKRepresentation(self.opts.n_s, self.opts.rk_scheme)
 
+        self.rbp = 1 if not self.rk.is_right_boundary_explicit() else 0
+
     def populate_problem(self):
         self._create_variables()
         self._create_parameters()
         self._generate_direct_transcription_constraints()
         self._generate_complementarity_constraints()
         self._generate_step_equilibration_constraints()
+
+    def _create_parameters(self):
+        self.p.rho_h[()] = Parameter("rho_h", 1, val=self.opts.rho_h)
+        self.p.rho_terminal[()] = Parameter("rho_terminal", 1, val=self.opts.rho_terminal)
+        self.p.T[()] = Parameter("T", 1, val=self.opts.T)
+        self.p.p_global[()] = Parameter("p_global", self.dcs.dims.n_p_global, val=self.model.p_global_val)
+        self.p.p_time_var[range(self.opts.N_stages)] = Parameter(f"p_time_var", self.dcs.dims.n_p_time_var, val=self.model.p_time_var_val)
+
+    def _create_global_variables(self):
+        opts = self.opts
+        dcs = self.dcs
+        model = self.model
+        dims = self.dcs.dims
+
+        self.w.v_global[()] = Primal("v_global",
+                                     dims.n_v_global,
+                                     init=model.v0_global,
+                                     lb=model.lbv_global,
+                                     ub=model.ubv_global)
+        if opts.time_optimal_problem:
+            self.w.T_final[()] = Primal("T_final", 1, lb=opts.T_final_min, ub=opts.T_final_max, init=opts.T)
+            self.f += self.w.T_final[()]
+
+    def _create_speed_of_time_variables(self):
+        opts = self.opts
+        if opts.use_speed_of_time_variables:
+            if opts.local_speed_of_time_variable:
+                self.w.sot[range(1,opts.N_stages+1)] = Primal("sot",
+                                                             1,
+                                                             init=opts.s_sot0,
+                                                             lb=model.s_sot_min,
+                                                             ub=model.s_sot_max)
+            else:
+                self.w.sot[()] = Primal("sot",
+                                        1,
+                                        init=opts.s_sot0,
+                                        lb=model.s_sot_min,
+                                        ub=model.s_sot_max)
+
+
+    def _create_initial_variables(self):
+        opts = self.opts
+        dcs = self.dcs
+        model = self.model
+        dims = self.dcs.dims
+        self.w.x[(0,0,opts.n_s)] = Primal(f"x_0", dims.n_x,
+                                          lb=model.x0,
+                                          ub=model.x0,
+                                          init=model.x0)
+        self.w.z[(0,0,opts.n_s)] = Primal(f"z_0", dims.n_z,
+                                          lb=model.z0,
+                                          ub=model.z0,
+                                          init=model.z0)
+
+    def _create_h(self, ii):
+        opts = self.opts
+        dcs = self.dcs
+        model = self.model
+        dims = self.dcs.dims
+        h0 = opts.h_k[ii-1]
+        if opts.use_fesd:
+            ubh = (1 + opts.gamma_h) * h0 # upper bound for FE length
+            lbh = (1 - opts.gamma_h) * h0 # lower bound for FE length
+            if opts.time_rescaling() and not opts.use_speed_of_time_variables:
+                # if only time_rescaling is true, speed of time and step size all lumped together, e.g., \hat{h}_{k,i} = s_n * h_{k,i}, hence the bounds need to be extended.
+                ubh = ubh*opts.s_sot_max
+                lbh = lbh/opts.s_sot_min
+            elif opts.time_optimal_problem:
+                ubh = ubh*(opts.T_final_max/opts.T)
+                lbh = lbh/((opts.T_final_min+eps)/opts.T)
+
+            self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)] = Primal(f"h", 1,
+                                                                          lb=lbh,
+                                                                          ub=ubh,
+                                                                          init=h0)
+
+    def _create_u(self):
+        self.w.u[range(1,self.opts.N_stages+1)] = Primal(f"u", self.dcs.dims.n_u,
+                                                    lb=self.model.lbu,
+                                                    ub=self.model.ubu,
+                                                    init=self.model.u0)
+
+    def _handle_x_box_constraints(self):
+        opts = self.opts
+        dcs = self.dcs
+        model = self.model
+        dims = self.dcs.dims
+        rbp = self.rbp
+        # Handle x_box settings (i.e., manage at which points the box constraints are enforced)
+        for ii in range(1,opts.N_stages+1):
+            if not opts.x_box_at_stg and not opts.rk_representation == RKRepresentation.DIFFERENTIAL:
+                self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1, opts.n_s-rbp)](lb=-np.inf, ub=np.inf)
+
+            if not opts.x_box_at_fe:
+                self.w.x[ii,range(1, opts.N_finite_elements[ii-1]),opts.n_s+rbp](lb=-np.inf, ub=np.inf)
+
+    def _create_xz(self, ii):
+        opts = self.opts
+        dcs = self.dcs
+        model = self.model
+        dims = self.dcs.dims
+        rbp = self.rbp
+        self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"x", dims.n_x,
+                                                                                              lb=model.lbx,
+                                                                                              ub=model.ubx,
+                                                                                              init=model.x0)
+        self.w.z[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"z", dims.n_z,
+                                                                                              lb=model.lbz,
+                                                                                              ub=model.ubz,
+                                                                                              init=model.z0)
+
+    def _get_stage_parameters(self, ii):
+        p_global = self.p.p_global[()].sym
+        p_time_var = self.p.p_time_var[ii].sym
+        return ca.vertcat(p_global, p_time_var)
+
+    def _get_stage_sot(self, ii):
+        if self.opts.use_speed_of_time_variables and self.opts.local_speed_of_time_variable:
+            s_sot = self.w.sot(ii) # here, sot is a vector
+        elif self.opts.use_speed_of_time_variables:
+            s_sot = se;f.w.sot() # here, sot is a scalar
+        else:
+            s_sot = 1
+        return s_sot
+
+    def _get_stage_t(self,ii):
+        if self.opts.time_optimal_problem and not self.opts.use_speed_of_time_variables:
+            t_stage = self.w.T_final[()]/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
+        elif self.opts.time_optimal_problem:
+            t_stage = s_sot*self.p.T[()]/self.opts.N_stages
+        else:
+            t_stage = self.p.T[()]/self.opts.N_stages
+        return t_stage
+
+    def _get_fe_h(self, ii, jj):
+        if self.opts.use_fesd:
+            h = self.w.h[ii,jj]
+        elif self.opts.time_optimal_problem and not self.opts.use_speed_of_time_variables:
+            h = self.w.T_final()/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
+        else:
+            h = self.p.T[()].val/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
+        return h
+
+    def _get_x_end(self, ii, jj):
+        return self.w.x[ii,jj,self.opts.n_s+self.rbp];
+
+    def _build_prk(self, ii, jj):
+        return ca.vertcat(
+            self.w.u[ii],
+            self.w.v_global[()],
+            self._get_stage_parameters(ii)
+        )
+
+    def _build_z(self, ii, jj):
+        z = []
+        for kk in range(1,self.opts.n_s+1):
+            z.append(self._get_rk_stage_z(ii,jj,kk))
+        return z
+
+    def _rk_stage_path_constraints(self, ii, jj, kk):
+        if not self.opts.g_path_at_stg:
+            return
+        x = self.w.x[ii,jj,kk]
+        z = self.w.x[ii,jj,kk]
+        u = self.w.u[ii]
+        v_global = self.w.v_global[()]
+        p = self._get_stage_parameters(ii)
+        self.g.path[ii,jj,kk] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+
+    def _fe_path_constraints(self, ii, jj):
+        if self.opts.g_path_at_stg or not self.opts.g_path_at_fe:
+            return
+        x = self.w.x[ii,jj,self.opts.n_s+self.rbp]
+        z = self.w.x[ii,jj,self.opts.n_s+self.rbp]
+        u = self.w.u[ii]
+        v_global = self.w.v_global[()]
+        p = self._get_stage_parameters(ii)
+        self.g.path[ii,jj] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+
+    def _stage_path_constraints(self, ii):
+        if self.opts.g_path_at_stg or self.opts.g_path_at_fe:
+            return
+        x = self.w.x[ii,self.opts.N_finite_elements[ii-1],self.opts.n_s+self.rbp]
+        z = self.w.x[ii,self.opts.N_finite_elements[ii-1],self.opts.n_s+self.rbp]
+        u = self.w.u[ii]
+        v_global = self.w.v_global[()]
+        p = self._get_stage_parameters(ii)
+        self.g.path[ii] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+
+    def _numerical_time_constraints(self,ii,jj):
+        pass
+
+    @abstractmethod
+    def _get_rk_stage_z(self, ii, jj, kk):
+        """Get the 'z' variables for a given rk stage"""
+        pass
 
     @abstractmethod
     def _create_variables(self):

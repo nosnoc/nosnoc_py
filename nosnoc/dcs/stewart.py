@@ -76,6 +76,31 @@ class Stewart(Base):
         self.H_path_fun  = ca.Function('H_path', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.H_path])
         self.g_terminal_fun  = ca.Function('g_terminal', [self.model.x, self.model.z, self.model.v_global, self.model.p_global], [self.model.g_terminal])
         self.f_q_T_fun = ca.Function('f_q_T', [self.model.x, self.model.z, self.model.v_global, self.model.p], [self.model.f_q_T])
+
+        self.f_x_rk = ca.Function(
+            'f_x_rk',
+            [ca.vertcat(self.model.x, self.model.z, self.lam, self.theta, self.mu),
+             ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
+            [self.f_x]
+        )
+        self.f_q_rk = ca.Function(
+            'f_q_rk',
+            [ca.vertcat(self.model.x, self.model.z, self.lam, self.theta, self.mu),
+             ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
+            [self.model.f_q]
+        )
+        self.g_rk = ca.Function(
+            'g_rk',
+            [ca.vertcat(self.model.x, self.model.z, self.lam, self.theta, self.mu),
+             ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
+            [ca.vertcat(self.model.g_z, self.g_alg)]
+        )
+        self.g_rk_stationarity = ca.Function(
+            'g_rk',
+            [ca.vertcat(self.model.x, self.model.z, self.lam, self.mu),
+             ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
+            [ca.vertcat(self.model.g_z, *g_lp_stationarity)]
+        )
         # TODO(@anton) implement
         # self.f_lsq_x_fun = ca.Function('f_lsq_x_fun',[self.model.x,self.model.x_ref,self.model.p],[self.model.f_lsq_x])
         # self.f_lsq_u_fun = ca.Function('f_lsq_u_fun',[self.model.u,self.model.u_ref,self.model.p],[self.model.f_lsq_u])
