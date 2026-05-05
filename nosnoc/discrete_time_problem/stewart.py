@@ -5,7 +5,7 @@ import casadi as ca
 import numpy as np
 
 from .base import Base
-
+from ..nosnoc_types import RKRepresentation
 
 class Stewart(Base):
 
@@ -17,8 +17,7 @@ class Stewart(Base):
         self.p.rho_terminal[()] = Parameter("rho_terminal", 1, val=self.opts.rho_terminal)
         self.p.T[()] = Parameter("T", 1, val=self.opts.T)
         self.p.p_global[()] = Parameter("p_global", self.dcs.dims.n_p_global, val=self.model.p_global_val)
-        for ii in range(self.opts.N_stages):
-            self.p.p_time_var[ii] = Parameter(f"p_time_var_{ii}", self.dcs.dims.n_p_time_var, val=self.model.p_time_var_val)
+        self.p.p_time_var[range(self.opts.N_stages)] = Parameter(f"p_time_var", self.dcs.dims.n_p_time_var, val=self.model.p_time_var_val)
 
     @override
     def _create_variables(self):
@@ -51,7 +50,7 @@ class Stewart(Base):
                                               lb=model.z0,
                                               ub=model.z0,
                                               init=model.z0)
-        self.w.lam[(0,0,opts.n_s)]   = Primal(f"lam_0", dims.n_lambda,
+        self.w.lam[(0,0,opts.n_s)]   = Primal(f"lambda_0", dims.n_lambda,
                                               lb=0.0,
                                               ub=np.inf,
                                               init=1.0)
@@ -60,6 +59,9 @@ class Stewart(Base):
                                               ub=np.inf,
                                               init=1.0/dims.n_theta)
         self.w.mu[(0,0,opts.n_s)]    = Primal(f"mu_0", dims.n_mu)
+
+
+        rbp = 1 if not self.rk.is_right_boundary_explicit() else 0
 
         for ii in range(1,opts.N_stages+1):
             self.w.u[ii] = Primal(f"u_{ii}", dims.n_u,
@@ -72,44 +74,46 @@ class Stewart(Base):
                 lbh = (1 - opts.gamma_h) * h0 # lower bound for FE length
                 if opts.time_rescaling() and not opts.use_speed_of_time_variables:
                     # if only time_rescaling is true, speed of time and step size all lumped together, e.g., \hat{h}_{k,i} = s_n * h_{k,i}, hence the bounds need to be extended.
-                    ubh = ubh*opts.s_sot_max;
-                    lbh = lbh/opts.s_sot_min;
+                    ubh = ubh*opts.s_sot_max
+                    lbh = lbh/opts.s_sot_min
                 elif opts.time_optimal_problem:
-                    ubh = ubh*(opts.T_final_max/opts.T);
-                    lbh = lbh/((opts.T_final_min+eps)/opts.T);end
-                    
-            for jj in range(1,opts.N_finite_elements[ii-1]+1):
-                if opts.use_fesd:
-                    self.w.h[ii,jj] = Primal(f"h_{ii}_{jj}", 1,
-                                             lb=lbh,
-                                             ub=ubh,
-                                             init=h0)
-                for kk in range(1,opts.n_s+1):
-                    self.w.x[ii,jj,kk] = Primal(f"x_{ii}_{jj}_{kk}", dims.n_x,
-                                                  lb=model.lbx,
-                                                  ub=model.ubx,
-                                                  init=model.x0)
-                    self.w.z[ii,jj,kk] = Primal(f"z_{ii}_{jj}_{kk}", dims.n_z,
-                                                  lb=model.lbz,
-                                                  ub=model.ubz,
-                                                  init=model.z0)
-                    self.w.lam[ii,jj,kk] = Primal(f"lambda_{ii}_{jj}_{kk}", dims.n_lambda,
-                                                    lb=0.0,
-                                                    ub=np.inf,
-                                                    init=1.0)
-                    self.w.theta[ii,jj,kk] = Primal(f"theta_{ii}_{jj}_{kk}", dims.n_theta,
-                                                      lb=0.0,
-                                                      ub=np.inf,
-                                                      init=1.0/dims.n_theta)
-                    self.w.mu[ii,jj,kk] = Primal(f"mu_{ii}_{jj}_{kk}", dims.n_mu,
-                                                   lb=-np.inf,
-                                                   ub=-np.inf)
-                if not self.rk.is_right_boundary_explicit():
-                    self.w.x[(ii,jj)] =  Primal(f"x_{ii}_{jj}", dims.n_x,
-                                                  lb=model.lbx,
-                                                  ub=model.ubx,
-                                                  init=model.x0)
+                    ubh = ubh*(opts.T_final_max/opts.T)
+                    lbh = lbh/((opts.T_final_min+eps)/opts.T)
 
+                self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)]                       = Primal(f"h", 1,
+                                                                                                    lb=lbh,
+                                                                                                    ub=ubh,
+                                                                                                    init=h0)
+            self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)]     = Primal(f"x", dims.n_x,
+                                                                                                  lb=model.lbx,
+                                                                                                  ub=model.ubx,
+                                                                                                  init=model.x0)
+            self.w.z[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)]     = Primal(f"z", dims.n_z,
+                                                                                                  lb=model.lbz,
+                                                                                                  ub=model.ubz,
+                                                                                                  init=model.z0)
+            self.w.lam[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)]   = Primal(f"lambda", dims.n_lambda,
+                                                                                                  lb=0.0,
+                                                                                                  ub=np.inf,
+                                                                                                  init=1.0)
+            self.w.theta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(f"theta", dims.n_theta,
+                                                                                                  lb=0.0,
+                                                                                                  ub=np.inf,
+                                                                                                  init=1.0/dims.n_theta)
+            self.w.mu[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)]    = Primal(f"mu", dims.n_mu,
+                                                                                                  lb=-np.inf,
+                                                                                                  ub=-np.inf)
+            if not self.rk.is_right_boundary_explicit():
+                self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1), opts.n_s+1] =  Primal(f"x", dims.n_x,
+                                                                                           lb=model.lbx,
+                                                                                           ub=model.ubx,
+                                                                                           init=model.x0)
+            # Handle x_box settings (i.e., manage at which points the box constraints are enforced)
+            if not opts.x_box_at_stg and not opts.rk_representation == RKRepresentation.DIFFERENTIAL:
+                self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1, opts.n_s-rbp)](lb=-np.inf, ub=np.inf)
+
+            if not opts.x_box_at_fe:
+                self.w.x[ii,range(1, opts.N_finite_elements[ii-1]),opts.n_s+rbp](lb=-np.inf, ub=np.inf)
 
 
     @override

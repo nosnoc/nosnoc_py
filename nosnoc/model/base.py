@@ -1,10 +1,12 @@
 from typing import Optional, List
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from ..dims import Dims
+from numbers import Real
 
 import casadi as ca
 import numpy as np
+
+from ..dims import Dims
 
 class BaseDims(Dims):
     def __init__(self):
@@ -86,40 +88,40 @@ class Base(ABC):
     def __init__(
             self,
             x: ca.SX,
-            lbx: Optional[np.ndarray] = None,
-            ubx: Optional[np.ndarray] = None,
-            x0: Optional[np.ndarray] = None,
+            lbx: Optional[np.ndarray|Real] = None,
+            ubx: Optional[np.ndarray|Real] = None,
+            x0: Optional[np.ndarray|Real] = None,
             z: Optional[ca.SX] = None,
-            z0: Optional[np.ndarray] = None,
-            lbz: Optional[np.ndarray] = None,
-            ubz: Optional[np.ndarray] = None,
+            z0: Optional[np.ndarray|Real] = None,
+            lbz: Optional[np.ndarray|Real] = None,
+            ubz: Optional[np.ndarray|Real] = None,
             g_z: Optional[ca.SX] = None,
             u: Optional[ca.SX] = None,
-            lbu: Optional[np.ndarray] = None,
-            ubu: Optional[np.ndarray] = None,
-            u0: Optional[np.ndarray] = None,
+            lbu: Optional[np.ndarray|Real] = None,
+            ubu: Optional[np.ndarray|Real] = None,
+            u0: Optional[np.ndarray|Real] = None,
             v_global: Optional[ca.SX] = None,
-            v0_global: Optional[np.ndarray] = None,
-            lbv_global: Optional[np.ndarray] = None,
-            ubv_global: Optional[np.ndarray] = None,
+            v0_global: Optional[np.ndarray|Real] = None,
+            lbv_global: Optional[np.ndarray|Real] = None,
+            ubv_global: Optional[np.ndarray|Real] = None,
             p_global: Optional[ca.SX] = None,
-            p_global_val: Optional[np.ndarray] = None,
+            p_global_val: Optional[np.ndarray|Real] = None,
             p_time_var: Optional[ca.SX] = None,
-            p_time_var_val: Optional[np.ndarray] = None,
+            p_time_var_val: Optional[np.ndarray|Real] = None,
             f_q: Optional[ca.SX] = None,
             f_q_T: Optional[ca.SX] = None,
-            lsq_x: Optional[np.ndarray] = None,
-            x_ref_val: Optional[np.ndarray] = None,
-            lsq_u: Optional[np.ndarray] = None,
-            u_ref_val: Optional[np.ndarray] = None,
-            lsq_T: Optional[np.ndarray] = None,
-            x_ref_end_val: Optional[np.ndarray] = None,
+            lsq_x: Optional[np.ndarray|Real] = None,
+            x_ref_val: Optional[np.ndarray|Real] = None,
+            lsq_u: Optional[np.ndarray|Real] = None,
+            u_ref_val: Optional[np.ndarray|Real] = None,
+            lsq_T: Optional[np.ndarray|Real] = None,
+            x_ref_end_val: Optional[np.ndarray|Real] = None,
             g_path: Optional[ca.SX] = None,
-            lbg_path: Optional[np.ndarray] = None,
-            ubg_path: Optional[np.ndarray] = None,
+            lbg_path: Optional[np.ndarray|Real] = None,
+            ubg_path: Optional[np.ndarray|Real] = None,
             g_terminal: Optional[ca.SX] = None,
-            lbg_terminal: Optional[np.ndarray] = None,
-            ubg_terminal: Optional[np.ndarray] = None,
+            lbg_terminal: Optional[np.ndarray|Real] = None,
+            ubg_terminal: Optional[np.ndarray|Real] = None,
             G_path: Optional[ca.SX] = None,
             H_path: Optional[ca.SX] = None,
     ):
@@ -178,6 +180,8 @@ class Base(ABC):
         for (vec, init) in vec_init_list:
             if getattr(self, vec) is None:
                 setattr(self, vec,init*np.ones(n))
+            elif isinstance(getattr(self, vec), Real):
+                setattr(self, vec, getattr(self, vec)*np.ones(n))
             elif getattr(self, vec).shape[0] != n:
                 raise RuntimeError("Dimension missmatch in model creation") # TODO(@anton) make this error more traceable
 

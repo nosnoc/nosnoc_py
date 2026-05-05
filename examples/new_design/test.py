@@ -37,7 +37,7 @@ def get_simplest_model_sliding(x0=X0):
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0)
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0, lbx=-5)
 
 
     return model
@@ -57,7 +57,7 @@ def get_simplest_model_switch(x0=X0):
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0)
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0, lbx=-5)
 
     return model
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     print(model_switch)
     dcs_switch = nosnoc.dcs.Stewart(model_switch)
     print(dcs_switch)
-    opts = nosnoc.Options(N_stages=10, N_finite_elements=[3]*10, h_k=[1/30]*10)
+    opts = nosnoc.Options(N_stages=10, N_finite_elements=[3]*10, h_k=[1/30]*10, x_box_at_stg=False, x_box_at_fe=False)
     dtp = nosnoc.discrete_time_problem.Stewart(dcs_switch, opts)
     dtp.populate_problem()
     print(str(dtp))
