@@ -119,6 +119,17 @@ class RegHomotopySolver(MpccsolPlugin):
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
 
+        mpcc_results = {
+            "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+            "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),
+            "lam_x": self.w_mpcc_fun(self.nlp.w.mult).full().flatten(),
+            "g": self.g_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+            "lam_g": self.nlp.g.mult[self.ind_g_mpcc], # TODO(@anton)use sorted indexing
+            "G": self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+            "H": self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+        }
+        return mpcc_results
+
     def _build_solver_vdx(self):
         """
         Build the regularization homotopy solver from a vdx_py MPCC class.
@@ -142,6 +153,13 @@ class RegHomotopySolver(MpccsolPlugin):
         self.ind_g_mpcc = np.arange(0,len(self.mpcc.g))
         self.ind_p_mpcc = np.arange(0,len(self.mpcc.p))
         self.nlp.create_solver(self.opts.opts_casadi_nlp, plugin=self.opts.solver)
+
+        # Build functions for data extraction:
+        self.f_mpcc_fun = ca.Function("f_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.f])
+        self.w_mpcc_fun = ca.Function("w_mpcc", [self.nlp.w.sym], [self.mpcc.w.sym])
+        self.g_mpcc_fun = ca.Function("g_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.g.sym])
+        self.G_mpcc_fun = ca.Function("G_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.G.sym])
+        self.H_mpcc_fun = ca.Function("H_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.H.sym])
 
     def _build_solver_dict(self):
         """

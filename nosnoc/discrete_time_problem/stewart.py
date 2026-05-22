@@ -90,7 +90,7 @@ class Stewart(Base):
             s_sot = self._get_stage_sot(ii)
 
             sum_h = 0
-            for jj in range(1, opts.N_finite_elements[ii-1]):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 h = self._get_fe_h(ii,jj)
                 z_ii_jj = self._build_z(ii,jj)
                 prk_ii_jj = self._build_prk(ii,jj)
@@ -122,9 +122,9 @@ class Stewart(Base):
                             prk_ii_jj
                         )
                     )
-                self._numerical_time_constraints(ii,jj)
                 self._fe_path_constraints(ii,jj)
                 x_prev = x_ii_jj_end
+            self._numerical_time_constraints(ii)
             self._stage_path_constraints(ii)
 
 

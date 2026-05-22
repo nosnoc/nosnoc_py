@@ -132,14 +132,13 @@ def example():
 if __name__ == "__main__":
     model_sliding = get_simplest_model_sliding()
     model_switch = get_simplest_model_switch()
-    print(model_sliding)
-    print(model_switch)
     dcs_switch = nosnoc.dcs.Stewart(model_switch)
-    print(dcs_switch)
+    N_stages = 2
+    N_fe = 2
     opts = nosnoc.Options(
-        N_stages=10,
-        N_finite_elements=[3]*10,
-        h_k=[1/30]*10,
+        N_stages=N_stages,
+        N_finite_elements=[N_fe]*N_stages,
+        h_k=[1/(N_fe*N_stages)]*N_stages,
         x_box_at_stg=False,
         x_box_at_fe=False,
         use_fesd=True,
@@ -149,4 +148,11 @@ if __name__ == "__main__":
     dtp.populate_problem()
     solver = nosnoc.mpccsol.mpccsol("reg_homotopy", dtp, nosnoc.mpccsol.reg_homotopy.RegHomotopyOptions())
     import pdb; pdb.set_trace()
-    solver(x0=dtp.w.init, lbx=dtp.w.lb, ubx=dtp.w.ub, lbg=dtp.g.lb, ubg=dtp.g.ub)
+    mpcc_results = solver(x0=dtp.w.init, lbx=dtp.w.lb, ubx=dtp.w.ub, lbg=dtp.g.lb, ubg=dtp.g.ub, p=dtp.p.val)
+    dtp.w.res = mpcc_results["w"]
+    dtp.w.mult = mpcc_results["lam_x"]
+    dtp.g.val = mpcc_results["g"]
+    dtp.g.mult = mpcc_results["lam_g"]
+    dtp.G.val = mpcc_results["G"]
+    dtp.H.val = mpcc_results["H"]
+    import pdb; pdb.set_trace()

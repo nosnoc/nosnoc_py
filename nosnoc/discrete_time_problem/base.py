@@ -222,8 +222,43 @@ class Base(ABC,MPCC):
         p = self._get_stage_parameters(ii)
         self.g.path[ii] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
 
-    def _numerical_time_constraints(self,ii,jj):
-        pass
+    def _numerical_time_constraints(self,ii):
+        opts = self.opts
+        if opts.use_fesd and opts.equidistant_control_grid:
+            # Create a vdx relaxation struct which holds the information needed by vdx to automatically
+            # relax a constraint vector. It takes the type of relaxation, the name of the vdx.Variable
+            # to store the slacks, and the name of the vdx.Variable to store the relaxation parameter.
+            # This struct can be passed as the last element of the rhs of a vdx variable assignment.
+            # See vdx documentation on relaxation: TODO add when vdx docs updated.
+            # TODO(@anton) implement
+            #relax_num_time_struct = vdx.RelaxationStruct(opts.relax_terminal_numerical_time.to_vdx, 's_numerical_time', 'rho_numerical_time')
+            if opts.time_optimal_problem and not opts.time_freezing:
+                # if time optimal and not time freezing we want T_final to be the rhs of the
+                # equidistant control grid constraints.
+                ecg_rhs = self.w.T_final[()]/opts.N_stages
+            else:
+                # if time freezing or not time optimal we want T to be the rhs of the
+                # equidistant control grid constraints.
+                ecg_rhs = self.p.T[()]/opts.N_stages
+
+            sum_h = ca.sum2(self.w.h[ii,:])
+            s_sot = self._get_stage_sot(ii)
+            if opts.use_numerical_clock_state:
+                curr_t = self.w.numerical_time[ii,opts.N_finite_elements[ii]]
+                self.g.equidistant_numerical_grid[ii] = Constraint(curr_t - ii*ecg_rhs)
+            else:
+                if not opts.time_freezing:
+                    self.g.equidistant_numerical_grid[ii] = Constraint(s_sot*sum_h - ecg_rhs)
+                else:
+                    self.g.equidistant_numerical_grid[ii] = Constraint(sum_h - ecg_rhs)
+
+                    
+                # vdx.RelaxationStruct.is_relaxed returns true if the relaxation is not `NONE`.
+                # if relax_num_time_struct.is_relaxed:
+                #     obj.p.rho_numerical_time().val = opts.rho_terminal_numerical_time
+
+                
+
 
     @abstractmethod
     def _get_rk_stage_z(self, ii, jj, kk):
