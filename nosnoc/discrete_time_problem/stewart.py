@@ -6,7 +6,7 @@ import numpy as np
 from .base import Base
 from vdx_py.vartypes import *
 
-from ..nosnoc_types import RKRepresentation
+from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode
 
 class Stewart(Base):
 
@@ -58,7 +58,7 @@ class Stewart(Base):
                                                                                                   init=1.0/dims.n_theta)
             self.w.mu[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)]    = Primal(f"mu", dims.n_mu,
                                                                                                   lb=-np.inf,
-                                                                                                  ub=-np.inf)
+                                                                                                  ub=np.inf)
 
         # handle relaxing intermediate box constraints
         self._handle_x_box_constraints()
@@ -157,10 +157,291 @@ class Stewart(Base):
 
     @override
     def _generate_complementarity_constraints(self):
-        """Create complementarity constraints"""
-        pass
+        model = self.model
+        opts = self.opts
+        dims = self.dcs.dims
+        lambda_0 = self.w.lam[0,0,opts.n_s]
+        theta_0 = self.w.theta[0,0,opts.n_s]
+
+        # inital_comp
+        self.G.initial_comp = CConstraint(lambda_0)
+        self.H.initial_comp = CConstraint(theta_0)
+
+        if opts.use_fesd:
+            if opts.cross_comp_mode == CrossComplementarityMode.STAGE_STAGE:
+                self.__stage_stage()
+            elif opts.cross_comp_mode == CrossComplementarityMode.FE_STAGE:
+                self.__fe_stage()
+            elif opts.cross_comp_mode == CrossComplementarityMode.STAGE_FE:
+                self.__stage_fe()
+            elif opts.cross_comp_mode == CrossComplementarityMode.FE_FE:
+                self.__fe_fe()
+        else:
+            self.__standard()
+
+    def __stage_stage(self):
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+        lam_prev = self.w.lam[0,0,opts.n_s]
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                Gij = []
+                Hij = []
+                for rr in range(1, opts.n_s+1):
+                    theta_ijr = self.w.theta[ii,jj,rr]
+                    Gij.append(lam_prev)
+                    Hij.append(theta_ijr)
+
+                for kk in range(1,(opts.n_s + rbp)+1):
+                    lam_ijk = self.w.lam[ii,jj,kk]
+                    for rr in range(1, opts.n_s+1):
+                        theta_ijr = self.w.theta[ii,jj,rr]
+                        Gij.append(lam_ijk)
+                        Hij.append(theta_ijr)
+                self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
+                self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
+                lam_prev = self.w.lam[ii,jj,opts.n_s + rbp]
+
+    def __fe_stage(self):
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+        lam_prev = self.w.lam[0,0,opts.n_s]
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                sum_theta = ca.sum2(self.w.theta[ii,jj,:].sym)
+                Gij = [lam_prev]
+                Hij = [sum_theta]
+                for kk in range(1,(opts.n_s + rbp)+1):
+                    lam_ijk = self.w.lam[ii,jj,kk]
+                    Gij.append(lam_ijk)
+                    Hij.append(sum_theta)
+
+                self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
+                self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
+                lam_prev = self.w.lam[ii,jj,opts.n_s + rbp]
+
+    def __stage_fe(self):
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+        lam_prev = self.w.lam[0,0,opts.n_s]
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                sum_lam = lam_prev + ca.sum2(self.w.lam[ii,jj,:])
+                Gij = []
+                Hij = []
+                for kk in range(1, opts.n_s+1):
+                    theta_ijk = self.w.theta[ii,jj,kk]
+                    Gij.append(sum_lam)
+                    Hij.append(theta_ijk)
+
+                self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
+                self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
+                lam_prev = self.w.lam[ii,jj,opts.n_s + rbp]
+
+    def __fe_fe(self):
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+        lam_prev = self.w.lam[0,0,opts.n_s]
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                sum_lam = lam_prev + ca.sum2(self.w.lam[ii,jj,:].sym)
+                sum_theta = ca.sum2(self.w.theta[ii,jj,:].sym)
+                self.G.cross_comp[ii,jj] = CConstraint(sum_lam)
+                self.H.cross_comp[ii,jj] = CConstraint(sum_theta)
+                lam_prev = self.w.lam[ii,jj,opts.n_s + rbp]
+
+    def __standard(self):
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                for kk in range(1, opts.n_s+1):
+                    lam_ijk = self.w.lam[ii,jj,kk].sym
+                    theta_ijk = self.w.theta[ii,jj,kk].sym
+                    self.G.standard_comp[ii,jj,kk] = CConstraint(lam_ijk)
+                    self.H.standard_comp[ii,jj,kk] = CConstraint(theta_ijk)
 
     @override
     def _generate_step_equilibration_constraints(self):
         """Create step equilibration constraints"""
-        pass
+        opts = self.opts
+        dims = self.dcs.dims
+        rbp = self.rbp
+
+        if not opts.use_fesd: # do nothing
+            return
+
+        if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
+            self.__heuristic_mean()
+                
+        if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
+            self.__heuristic_diff()
+
+                
+        if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
+            self.__l2_relaxed_scaled()
+                
+        elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
+            self.__l2_relaxed()
+                
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
+            self.__direct()
+
+        elif opts.step_equilibration == StepEquilibrationMode.DIRECT_HOMOTOPY:
+            raise NotImplementedError("Direct homotopy step-eq mode not currently implemented")
+
+        if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
+            self.__linear_complementarity()
+
+    def __heuristic_mean(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                self.f += self.p.rho_h[()]*(h0-self.w.h[ii,jj])**2
+
+    def __heuristic_diff(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
+
+    def __l2_relaxed_scaled(self):
+        eta_vec = []
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
+
+                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
+                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
+
+                pi_lam = sigma_lam_B * sigma_lam_F
+                pi_theta = sigma_theta_B * sigma_theta_F
+                nu = pi_lam + pi_theta
+                eta = 1
+                for jjj in range(len(nu)):
+                    eta = eta*nu[jjj]
+
+                eta_vec = ca.vertcat(eta_vec,eta)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.f += self.p.rho_h[()] * tanh(eta/opts.step_equilibration_sigma) * delta_h**2
+
+    def __l2_relaxed(self):
+        eta_vec = []
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
+
+                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] +ca.sum2(self.w.lam[ii,jj,:])
+                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
+
+                pi_lam = sigma_lam_B * sigma_lam_F
+                pi_theta = sigma_theta_B * sigma_theta_F
+                nu = pi_lam + pi_theta
+                eta = 1
+                for jjj in range(len(nu)):
+                    eta = eta*nu[jjj]
+
+                eta_vec = ca.vertcat(eta_vec,eta)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.f += self.p.rho_h[()] * eta * delta_h**2
+
+    def __direct(self):
+        eta_vec = []
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
+
+                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
+                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
+
+                pi_lam = sigma_lam_B * sigma_lam_F
+                pi_theta = sigma_theta_B * sigma_theta_F
+                nu = pi_lam + pi_theta
+                eta = 1
+                for jjj in range(len(nu)):
+                    eta = eta*nu[jjj]
+
+                eta_vec = ca.vertcat(eta_vec,eta)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
+
+    def __linear_complementarity(self):
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
+
+                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
+                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
+
+                lam_mult = self.w.lam_mult[ii,jj]
+                theta_mult = self.w.theta_mult[ii,jj]
+                B_max = self.w.B_max[ii,jj]
+                pi_lam = self.w.pi_lam[ii,jj]
+                pi_theta = self.w.pi_theta[ii,jj]
+                eta = self.w.eta[ii,jj]
+                nu = self.w.nu[ii,jj]
+
+                self.g.pi_lam_or[ii,jj] = Constraint(
+                    ca.vertcat(
+                        pi_lam-sigma_lam_F,
+                        pi_lam-sigma_lam_B,
+                        sigma_lam_F+sigma_lam_B-pi_lam
+                    ),
+                    lb=0,
+                    ub=np.inf
+                )
+                self.g.pi_theta_or[ii,jj] = Constraint(
+                    ca.vertcat(
+                        pi_theta-sigma_theta_F,
+                        pi_theta-sigma_theta_B,
+                        sigma_theta_F+sigma_theta_B-pi_theta
+                    ),
+                    lb=0,
+                    ub=np.inf
+                )
+
+                # kkt conditions for min B, B>=sigmaB, B>=sigmaF:
+                kkt_max = ca.vertcat(
+                    1-theta_mult-lam_mult,
+                    B_max-pi_lam,
+                    B_max-pi_theta,
+                )
+                self.g.kkt_max[ii,jj] = Constraint(
+                    kkt_max,
+                    lb=0.0,
+                    ub=np.concat(np.zeros(dims.n_lam),np.inf*np.ones(dims.n_lam),np.inf*np.ones(dims.n_lam))
+                )
+
+                self.G.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat((B_max-pi_lam),(B_max-pi_theta)))
+                self.H.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat(lam_mult,theta_mult))
+
+                # eta calculation
+                eta_const = ca.vertcat(eta-pi_theta,eta-pi_lam,eta-pi_theta-pi_lam+B_max)
+                self.g.eta_const[ii,jj] = Constraint(
+                    eta_const,
+                    lb=np.concat(-np.inf*np.ones(dims.n_lam),-np.inf*np.ones(dims.n_lam),np.zeros(dims.n_lam)),
+                    ub=np.concat(np.zeros(dims.n_lam),np.zeros(dims.n_lam),np.inf*np.ones(dims.n_lam))
+                    )
+
+                self.g.nu_or[ii,jj] = Constraint(ca.vertcat(nu-eta,sum(eta)-nu),lb=0,ub=inf)
+
+                # the actual step eq conditions
+                M=self.p.T[()]/opts.N_stages
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                step_equilibration = ca.vertcat(
+                    delta_h + (1/h0)*nu*M,
+                    delta_h - (1/h0)*nu*M,
+                )
+                self.g.step_equilibration[ii,jj] = Constraint(step_equilibration,np.array([0,-np.inf]),np.array([np.inf,0]))

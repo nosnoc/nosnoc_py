@@ -1,38 +1,6 @@
 from enum import Enum, auto
 
 
-class MpccMode(Enum):
-    """
-    MpccMode determines how complementarities w_1^T w_2 =0 are handled
-    MPCC (Mathematical Program with Complementarity Constraints)
-
-
-    `SCHOLTES_EQ`: w_1^T w_2 - sigma == 0
-    `SCHOLTES_INEQ`: w_1^T w_2 - sigma <= 0
-
-    `ELASTIC*`:
-    - a bounded slack variable s_elastic is introduced.
-    - bounds for s_elastic:  [opts.s_elastic_min, opts.s_elastic_max]
-    - s_elastic is initialized by opts.s_elastic_0
-
-    `ELASTIC_INEQ`: w_1^T w_2 - s_elastic * np.ones((n, 1)) < 0
-    `ELASTIC_EQ`:   w_1^T w_2 - s_elastic * np.ones((n, 1)) == 0
-    `ELASTIC_TWO_SIDED`: w_1^T w_2 - s_elastic * np.ones((n, 1)) <= 0
-                         w_1^T w_2 + s_elastic * np.ones((n, 1)) >= 0
-    """
-    SCHOLTES_INEQ = auto()
-    SCHOLTES_EQ = auto()
-    FISCHER_BURMEISTER = auto()
-    FISCHER_BURMEISTER_IP_AUG = auto()
-    ELASTIC_INEQ = auto()
-    ELASTIC_EQ = auto()
-    ELASTIC_TWO_SIDED = auto()
-    BOOLEAN = auto()
-    # KANZOW_SCHWARTZ = auto()
-    # NOSNOC: 'scholtes_ineq' (3), 'scholtes_eq' (2)
-    # NOTE: tested in simple_sim_tests
-
-
 class RKScheme(Enum):
     RADAU_IIA = auto()
     GAUSS_LEGENDRE = auto()
@@ -59,16 +27,16 @@ class StepEquilibrationMode(Enum):
     L2_RELAXED_SCALED = auto()
     L2_RELAXED = auto()
     DIRECT = auto()
-    DIRECT_COMPLEMENTARITY = auto()
-    HEURISTIC_DELTA_H_COMP = auto()
+    DIRECT_HOMOTOPY = auto()
+    LINEAR_COMPLEMENTARITY = auto()
     # NOTE: tested in test_ocp_motor
 
 
 class CrossComplementarityMode(Enum):
     STAGE_STAGE = auto()  # nosnoc 1
     FE_STAGE = auto()  # nosnoc 3
-    STAGE_FE = auto()  # nosnoc 3
-    FE_FE = auto()  # nosnoc 3
+    STAGE_FE = auto()  # nosnoc 4
+    FE_FE = auto()  # nosnoc 7
     # NOTE: tested in simple_sim_tests
 
 

@@ -4,12 +4,12 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import MpccMode, RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
 
 @dataclass
 class Options():
     # boolean: If true the FESD discretization is used, otherwise a direct time-stepping discretization is used.
-    use_fesd: bool = 1
+    use_fesd: bool = True
 
     # string: Which casadi symbolics to use. Can either be `'casadi.SX'` or `'casadi.MX'.`
     casadi_symbolic_mode: Type = ca.SX

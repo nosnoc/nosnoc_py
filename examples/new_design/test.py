@@ -3,6 +3,7 @@ from casadi import SX, horzcat
 import matplotlib.pyplot as plt
 
 import nosnoc
+from nosnoc.nosnoc_types import CrossComplementarityMode
 
 TOL = 1e-9
 
@@ -135,8 +136,17 @@ if __name__ == "__main__":
     print(model_switch)
     dcs_switch = nosnoc.dcs.Stewart(model_switch)
     print(dcs_switch)
-    opts = nosnoc.Options(N_stages=10, N_finite_elements=[3]*10, h_k=[1/30]*10, x_box_at_stg=False, x_box_at_fe=False)
+    opts = nosnoc.Options(
+        N_stages=10,
+        N_finite_elements=[3]*10,
+        h_k=[1/30]*10,
+        x_box_at_stg=False,
+        x_box_at_fe=False,
+        use_fesd=True,
+        cross_comp_mode=CrossComplementarityMode.FE_FE
+    )
     dtp = nosnoc.discrete_time_problem.Stewart(dcs_switch, opts)
     dtp.populate_problem()
-    print(str(dtp))
+    solver = nosnoc.mpccsol.mpccsol("reg_homotopy", dtp, nosnoc.mpccsol.reg_homotopy.RegHomotopyOptions())
     import pdb; pdb.set_trace()
+    solver(x0=dtp.w.init, lbx=dtp.w.lb, ubx=dtp.w.ub, lbg=dtp.g.lb, ubg=dtp.g.ub)
