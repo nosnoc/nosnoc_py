@@ -113,10 +113,14 @@ class RegHomotopySolver(MpccsolPlugin):
         self.nlp.g.init_mult[self.ind_g_mpcc] = lam_g0
         self.nlp.p.val[self.ind_p_mpcc] = p
 
+        self.stats ={
+            "nlp_stats" : []
+        }
         sigma_curr = self.opts.sigma_0
         while sigma_curr >= self.opts.sigma_N:
             self.nlp.p.sigma[()](val=sigma_curr)
             stats = self.nlp.solve()
+            self.stats["nlp_stats"].append(stats)
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
 

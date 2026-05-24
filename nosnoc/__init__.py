@@ -16,6 +16,7 @@ from .options import Options
 from .dims import Dims
 from .mpcc import MPCC
 from . import mpccsol
+from .ocp import OcpSolver
 
 import warnings
 warnings.simplefilter("always")

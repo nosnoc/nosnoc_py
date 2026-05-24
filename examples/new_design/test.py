@@ -132,7 +132,7 @@ def example():
 if __name__ == "__main__":
     model_sliding = get_simplest_model_sliding()
     model_switch = get_simplest_model_switch()
-    dcs_switch = nosnoc.dcs.Stewart(model_switch)
+
     N_stages = 2
     N_fe = 2
     opts = nosnoc.Options(
@@ -144,9 +144,8 @@ if __name__ == "__main__":
         use_fesd=True,
         cross_comp_mode=CrossComplementarityMode.FE_FE
     )
-    dtp = nosnoc.discrete_time_problem.Stewart(dcs_switch, opts)
-    dtp.populate_problem()
-    solver = nosnoc.mpccsol.mpccsol("reg_homotopy", dtp, nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions())
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)
     import pdb; pdb.set_trace()
-    dtp.solve(nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions())
+    solver.solve()
     import pdb; pdb.set_trace()

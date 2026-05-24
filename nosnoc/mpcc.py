@@ -21,9 +21,9 @@ class MPCC(NLP):
         # TODO(@anton) implement `mpccsol`
         self.solver = mpccsol.mpccsol(plugin, self, mpccsol_opts)
 
-    def solve(self, casadi_opts=dict()):
+    def solve(self, casadi_opts=dict(), plugin="reg_homotopy"):
         if self.solver is None:
-            self.create_solver(casadi_opts)
+            self.create_solver(casadi_opts, plugin=plugin)
 
         mpcc_results = self.solver(x0=self.w.init,
                                  lbx=self.w.lb,
@@ -41,4 +41,5 @@ class MPCC(NLP):
         self.H.val = mpcc_results["H"]
         #
         self.f_result = mpcc_results['f']
-        # TODO Also solve for #s
+
+        return self.solver.stats
