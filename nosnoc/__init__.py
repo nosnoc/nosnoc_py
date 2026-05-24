@@ -14,6 +14,7 @@ from . import dcs
 from . import discrete_time_problem
 from .options import Options
 from .dims import Dims
+from .mpcc import MPCC
 from . import mpccsol
 
 import warnings

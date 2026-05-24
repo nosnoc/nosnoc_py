@@ -146,13 +146,7 @@ if __name__ == "__main__":
     )
     dtp = nosnoc.discrete_time_problem.Stewart(dcs_switch, opts)
     dtp.populate_problem()
-    solver = nosnoc.mpccsol.mpccsol("reg_homotopy", dtp, nosnoc.mpccsol.reg_homotopy.RegHomotopyOptions())
+    solver = nosnoc.mpccsol.mpccsol("reg_homotopy", dtp, nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions())
     import pdb; pdb.set_trace()
-    mpcc_results = solver(x0=dtp.w.init, lbx=dtp.w.lb, ubx=dtp.w.ub, lbg=dtp.g.lb, ubg=dtp.g.ub, p=dtp.p.val)
-    dtp.w.res = mpcc_results["w"]
-    dtp.w.mult = mpcc_results["lam_x"]
-    dtp.g.val = mpcc_results["g"]
-    dtp.g.mult = mpcc_results["lam_g"]
-    dtp.G.val = mpcc_results["G"]
-    dtp.H.val = mpcc_results["H"]
+    dtp.solve(nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions())
     import pdb; pdb.set_trace()

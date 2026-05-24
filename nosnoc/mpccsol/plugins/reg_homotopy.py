@@ -4,7 +4,8 @@ from copy import copy
 
 import casadi as ca
 import numpy as np
-from vdx_py import MPCC, NLP
+import nosnoc as ns
+from vdx_py import NLP
 from vdx_py.vartypes import *
 from .plugin import MpccsolPlugin
 
@@ -85,7 +86,7 @@ class RegHomotopyOptions():
 class RegHomotopySolver(MpccsolPlugin):
     @override
     def _build_solver(self):
-        if isinstance(self.mpcc, MPCC):
+        if isinstance(self.mpcc, ns.MPCC):
             self._build_solver_vdx()
         elif isinstance(self.mpcc, dict):
             self._build_solver_dict()
