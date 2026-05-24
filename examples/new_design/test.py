@@ -148,4 +148,8 @@ if __name__ == "__main__":
     solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)
     import pdb; pdb.set_trace()
     solver.solve()
+    print(solver.get("x"))
+    print(solver.get("lam"))
+    print(solver.get("theta"))
+    print(solver.get("h"))
     import pdb; pdb.set_trace()
