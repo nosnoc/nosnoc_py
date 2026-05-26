@@ -149,7 +149,7 @@ class Base(ABC,MPCC):
         p_time_var = self.p.p_time_var[ii].sym
         return ca.vertcat(p_global, p_time_var)
 
-    def _get_stage_sot(self, ii):
+    def _get_stage_sot(self, ii): # TODO(@anton) maybe this should be public
         if self.opts.use_speed_of_time_variables and self.opts.local_speed_of_time_variable:
             s_sot = self.w.sot(ii) # here, sot is a vector
         elif self.opts.use_speed_of_time_variables:

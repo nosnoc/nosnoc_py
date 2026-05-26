@@ -27,6 +27,7 @@ class OcpSolver():
             raise NotImplementedError("Only Pss is implemented")
 
     def solve(self):
+        self.set_param("rho_h",(), self.opts.rho_h)
         if isinstance(self.solver_opts, RegHomotopyOptions):
             plugin = "reg_homotopy"
         else:
@@ -70,9 +71,38 @@ class OcpSolver():
         else:
             h = self.dtp.p.T[()].val/(sum(self.opts.N_finite_elements))*(np.ones(sum(opts.N_finite_elements)))
 
-        if opts.use_speed_of_time_variables:
-            sot = self.get("sot")
-            h = sot*h
-        t_grid = np.cumsum(np.concat([[0], h]))
+            if self.opts.use_speed_of_time_variables:
+                sot = self.get("sot")
+                h = sot*h
+        t_grid = np.cumsum(np.concatenate([[0], h]))
+        return t_grid
 
-    
+    def get_time_grid_full(self):
+        pass # TODO(@anton)
+
+    def get_control_grid(self):
+        if self.opts.use_fesd:
+            h = self.dtp.w.h[:,:].res
+        else:
+            h = self.dtp.p.T[()].val/(sum(self.opts.N_finite_elements))*(np.ones(sum(opts.N_finite_elements)))
+
+            if self.opts.use_speed_of_time_variables:
+                sot = self.get("sot")
+                h = sot*h
+        t_grid = [0]
+        for ii in range(1,self.opts.N_stages+1):
+            h_sum = sum(self.dtp.w.h[ii,:].res)
+            sot = self.dtp._get_stage_sot(ii)
+            h_sum *= sot
+            t_grid.append(t_grid[-1]+h_sum)
+        return t_grid
+
+    def get_objective(self):
+        return self.dtp.f_result
+
+    def get_w(self):
+        return self.dtp.w.res
+
+    def set(self, varname, indices, **kwargs):
+        var = getattr(self.dtp.w, varname)
+        var[*indices](**kwargs)

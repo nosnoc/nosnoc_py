@@ -84,34 +84,32 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     return results
 
 
-def plot_results(results):
+def plot_results(solver):
     nosnoc.latexify_plot()
+    t_grid = solver.get_time_grid()
 
     plt.figure()
     plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], results["X_sim"], label='x', marker='o')
+    plt.plot(t_grid, solver.get("x"), label='x', marker='o')
     plt.legend()
     plt.grid()
     # algebraic variables
-    thetas = nosnoc.flatten_layer(results['theta_sim'], 0)
-    thetas = [thetas[0]] + thetas
+    thetas = solver.get("theta")
 
-    lambdas = nosnoc.flatten_layer(results['lambda_sim'], 0)
-    lambdas = [lambdas[0]] + lambdas
-    n_lam = len(lambdas[0])
+    lambdas = solver.get("lam")
 
     plt.subplot(3, 1, 2)
-    n_lam = len(lambdas[0])
+    n_lam = lambdas.shape[1]
     for i in range(n_lam):
-        plt.plot(results["t_grid"], [x[i] for x in lambdas], label=f'lambda_{i}')
+        plt.plot(t_grid, lambdas[:,i], label=f'lambda_{i}')
     plt.grid()
     plt.legend()
 
     plt.subplot(3, 1, 3)
     for i in range(n_lam):
-        plt.plot(results["t_grid"], [x[i] for x in thetas], label=f'theta_{i}')
+        plt.plot(t_grid, thetas[:,i], label=f'theta_{i}')
     plt.grid()
-    plt.vlines(results["t_grid"], ymin=0.0, ymax=1.0, linestyles='dotted')
+    plt.vlines(t_grid, ymin=0.0, ymax=1.0, linestyles='dotted')
     plt.legend()
     plt.show()
 
@@ -133,8 +131,10 @@ if __name__ == "__main__":
     model_sliding = get_simplest_model_sliding()
     model_switch = get_simplest_model_switch()
 
-    N_stages = 2
+    N_stages = 10
     N_fe = 2
+
+    # switch
     opts = nosnoc.Options(
         N_stages=N_stages,
         N_finite_elements=[N_fe]*N_stages,
@@ -146,10 +146,37 @@ if __name__ == "__main__":
     )
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)
-    import pdb; pdb.set_trace()
+    solver.set("x", (slice(1,None), slice(1,None), slice(1,None)), lb=-10, ub=10, init=0)
     solver.solve()
     print(solver.get("x"))
+    print(solver.get_full("x"))
     print(solver.get("lam"))
     print(solver.get("theta"))
     print(solver.get("h"))
+    print(solver.get_time_grid())
+    print(solver.get_control_grid())
+    plot_results(solver)
+    import pdb; pdb.set_trace()
+
+    # sliding
+    opts = nosnoc.Options(
+        N_stages=N_stages,
+        N_finite_elements=[N_fe]*N_stages,
+        h_k=[1/(N_fe*N_stages)]*N_stages,
+        x_box_at_stg=False,
+        x_box_at_fe=False,
+        use_fesd=True,
+        cross_comp_mode=CrossComplementarityMode.FE_FE
+    )
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    solver = nosnoc.OcpSolver(model_sliding, opts, solver_opts)
+    solver.solve()
+    print(solver.get("x"))
+    print(solver.get_full("x"))
+    print(solver.get("lam"))
+    print(solver.get("theta"))
+    print(solver.get("h"))
+    print(solver.get_time_grid())
+    print(solver.get_control_grid())
+    plot_results(solver)
     import pdb; pdb.set_trace()
