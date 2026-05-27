@@ -124,6 +124,7 @@ class Base(ABC):
             ubg_terminal: Optional[np.ndarray|Real] = None,
             G_path: Optional[ca.SX] = None,
             H_path: Optional[ca.SX] = None,
+            name: str = "nosnoc_model",
     ):
         self.dims = BaseDims()
         # Vectors
@@ -169,6 +170,8 @@ class Base(ABC):
         self.u_ref_val = u_ref_val
         self.lsq_T = lsq_T
         self.x_ref_end_val = x_ref_end_val
+
+        self.name = name
 
     def _populate_vectors(self, sym: str, vec_init_list = []):
         """

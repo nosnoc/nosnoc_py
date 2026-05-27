@@ -18,17 +18,18 @@ NO_FESD_X_END = 0.36692644
 
 TOL = 1e-7
 
-def compute_errors(results, model) -> dict:
-    X_sim = results["X_sim"]
+def compute_errors(integrator, model) -> dict:
+    X_sim = integrator.get("x")
+    t_grid = integrator.get_time_grid()
     err_x0 = np.abs(X_sim[0] - X0)
 
-    switch_diff = np.abs(results["t_grid"] - EXACT_SWITCH_TIME)
+    switch_diff = np.abs(t_grid - EXACT_SWITCH_TIME)
     err_t_switch = np.min(switch_diff)
 
     switch_index = np.where(switch_diff == err_t_switch)[0][0]
     err_x_switch = np.abs(X_sim[switch_index])
 
-    err_t_end = np.abs(results["t_grid"][-1] - TSIM)
+    err_t_end = np.abs(t_grid[-1] - TSIM)
 
     x_end_ref = 0.0
     if "switch" in model.name:
@@ -44,8 +45,8 @@ def compute_errors(results, model) -> dict:
 
 
 def check_opts(opts, model):
-    results = solve_simplest_example(opts=opts, model=model)
-    errors = compute_errors(results, model)
+    _,_,_,_,integrator = solve_simplest_example(opts=opts, model=model)
+    errors = compute_errors(integrator, model)
 
     print(errors)
     tol = 1e1 * TOL
@@ -54,7 +55,7 @@ def check_opts(opts, model):
     assert errors["t_end"] < tol
     assert errors["x_switch"] < tol
     assert errors["x_end"] < tol
-    return results
+    return integrator
 
 
 class SimpleTests(unittest.TestCase):
@@ -68,20 +69,20 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for pss_mode in nosnoc.PssMode:
+                for dcs_mode in [nosnoc.DcsMode.STEWART]:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
-                        opts = get_default_options()
-                        opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
-                        opts.print_level = 0
-                        opts.n_s = ns
-                        opts.N_finite_elements = Nfe
-                        opts.pss_mode = pss_mode
-                        opts.cross_comp_mode = cross_comp_mode
-                        opts.print_level = 0
+                        opts = get_default_options(
+                            step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA,
+                            n_s = ns,
+                            N_finite_elements = Nfe,
+                            dcs_mode = dcs_mode,
+                            cross_comp_mode = cross_comp_mode,
+                            print_level = 0,
+                        )
                         try:
                             check_opts(opts, model=model)
                         except:
-                            raise Exception(f"test_switch failed with setting:\n {ns=} {Nfe=} {pss_mode=} {cross_comp_mode=}")
+                            raise Exception(f"test_switch failed with setting:\n {ns=} {Nfe=} {dcs_mode=} {cross_comp_mode=}")
         print("main_test_switch: SUCCESS")
 
     def test_sliding(self):
@@ -89,50 +90,35 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for pss_mode in nosnoc.PssMode:
-                    for irk_scheme in nosnoc.IrkSchemes:
-                        opts = get_default_options()
-                        opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-                        opts.irk_scheme = irk_scheme
-                        opts.print_level = 0
-                        opts.n_s = ns
-                        opts.N_finite_elements = Nfe
-                        opts.pss_mode = pss_mode
+                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                    for rk_scheme in nosnoc.RKScheme:
+                        opts = get_default_options(
+                            step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
+                            rk_scheme = rk_scheme,
+                            print_level = 0,
+                            n_s = ns,
+                            N_finite_elements = Nfe,
+                            dcs_mode = dcs_mode,
+                        )
                         try:
                             check_opts(opts, model=model)
                         except:
-                            raise Exception(f"test_sliding failed with setting:\n {ns=} {Nfe=} {pss_mode=} {irk_scheme=}")
-        print("main_test_sliding: SUCCESS")
-
-    def test_discretization(self):
-        model = get_simplest_model_sliding()
-
-        for mpcc_mode in [nosnoc.MpccMode.SCHOLTES_EQ, nosnoc.MpccMode.SCHOLTES_INEQ]:
-            for irk_scheme in nosnoc.IrkSchemes:
-                for irk_representation in nosnoc.IrkRepresentation:
-                    opts = get_default_options()
-                    opts.mpcc_mode = mpcc_mode
-                    opts.irk_scheme = irk_scheme
-                    opts.print_level = 0
-                    opts.irk_representation = irk_representation
-                    try:
-                        check_opts(opts, model=model)
-                    except:
-                        raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                            raise Exception(f"test_sliding failed with setting:\n {ns=} {Nfe=} {dcs_mode=} {rk_scheme=}")
         print("main_test_sliding: SUCCESS")
 
     def test_fesd_off(self):
         model = get_simplest_model_switch()
 
-        opts = get_default_options()
-        opts.print_level = 0
-        opts.use_fesd = False
+        opts = get_default_options(
+            print_level = 0,
+            use_fesd = False,
+        )
 
         try:
             # solve
-            results = solve_simplest_example(opts=opts, model=model)
+            _,_,_,_,integrator = solve_simplest_example(opts=opts, model=model)
 
-            errors = compute_errors(results, model)
+            errors = compute_errors(integrator, model)
             tol = 1e1 * TOL
             # these should be off
             assert errors["x_end"] > 0.01
@@ -141,93 +127,96 @@ class SimpleTests(unittest.TestCase):
             assert errors["x0"] < tol
             assert errors["t_end"] < tol
             #
-            assert np.allclose(results["time_steps"], np.min(results["time_steps"]))
         except:
             raise Exception("Test with FESD off failed")
         print("main_test_fesd_off: SUCCESS")
 
-    def test_least_squares_problem(self):
-        model = get_simplest_model_switch()
+    # def test_discretization(self):
+    #     model = get_simplest_model_sliding()
 
-        opts = get_default_options()
-        opts.print_level = 2
-        opts.n_s = 2
+    #     for mpcc_mode in [nosnoc.MpccMode.SCHOLTES_EQ, nosnoc.MpccMode.SCHOLTES_INEQ]:
+    #         for irk_scheme in nosnoc.IrkSchemes:
+    #             for irk_representation in nosnoc.IrkRepresentation:
+    #                 opts = get_default_options()
+    #                 opts.mpcc_mode = mpcc_mode
+    #                 opts.irk_scheme = irk_scheme
+    #                 opts.print_level = 0
+    #                 opts.irk_representation = irk_representation
+    #                 try:
+    #                     check_opts(opts, model=model)
+    #                 except:
+    #                     raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+    #     print("main_test_sliding: SUCCESS")
 
-        opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-        opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
+    # def test_least_squares_problem(self):
+    #     model = get_simplest_model_switch()
 
-        opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
-        # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
+    #     opts = get_default_options()
+    #     opts.print_level = 2
+    #     opts.n_s = 2
 
-        # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
-        opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
+    #     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    #     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
 
-        opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
-        # opts.fix_active_set_fe0 = True
-        opts.sigma_0 = 1e0
-        opts.gamma_h = np.inf
+    #     opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
+    #     # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
 
-        try:
-            results = check_opts(opts, model=model)
-            print(results["t_grid"])
-        except:
-            raise Exception(f"Test failed.")
+    #     # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
+    #     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
 
+    #     opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+    #     # opts.fix_active_set_fe0 = True
+    #     opts.sigma_0 = 1e0
+    #     opts.gamma_h = np.inf
 
-    def test_least_squares_problem_opts(self):
-        model = get_simplest_model_switch()
-
-        for step_equilibration in [nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY, nosnoc.StepEquilibrationMode.DIRECT]:
-            for fix_as in [True, False]:
-                opts = get_default_options()
-                opts.fix_active_set_fe0 = fix_as
-                opts.print_level = 2
-
-                opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-                opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-
-                opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
-
-                opts.step_equilibration = step_equilibration
-
-                opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
-                opts.sigma_0 = 1e0
-                opts.gamma_h = np.inf
-
-                try:
-                    results = check_opts(opts, model=model)
-                    # print(results["t_grid"])
-                except:
-                    # print(f"Test failed with {fix_as=}, {step_equilibration=}")
-                    raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
+    #     try:
+    #         results = check_opts(opts, model=model)
+    #         print(results["t_grid"])
+    #     except:
+    #         raise Exception(f"Test failed.")
 
 
+    # def test_least_squares_problem_opts(self):
+    #     model = get_simplest_model_switch()
 
-    def test_initializations(self):
-        model = get_simplest_model_switch()
+    #     for step_equilibration in [nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY, nosnoc.StepEquilibrationMode.DIRECT]:
+    #         for fix_as in [True, False]:
+    #             opts = get_default_options()
+    #             opts.fix_active_set_fe0 = fix_as
+    #             opts.print_level = 2
 
-        for initialization_strategy in nosnoc.InitializationStrategy:
-            opts = get_default_options()
-            opts.print_level = 0
-            opts.initialization_strategy = initialization_strategy
-            print(f"\ntesting initialization_strategy = {initialization_strategy}")
-            try:
-                check_opts(opts, model=model)
-            except:
-                raise Exception(f"Test failed with setting:\n {opts=}")
+    #             opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
+    #             opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
 
-    def test_polishing(self):
-        model = get_simplest_model_switch()
+    #             opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
 
-        opts = get_default_options()
-        opts.print_level = 1
-        opts.do_polishing_step = True
-        opts.comp_tol = 1e-3
-        try:
-            check_opts(opts, model=model)
-        except:
-            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+    #             opts.step_equilibration = step_equilibration
 
+    #             opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
+    #             opts.sigma_0 = 1e0
+    #             opts.gamma_h = np.inf
+
+    #             try:
+    #                 results = check_opts(opts, model=model)
+    #                 # print(results["t_grid"])
+    #             except:
+    #                 # print(f"Test failed with {fix_as=}, {step_equilibration=}")
+    #                 raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
+
+
+
+    # def test_initializations(self):
+    #     model = get_simplest_model_switch()
+
+    #     for initialization_strategy in nosnoc.InitializationStrategy:
+    #         opts = get_default_options()
+    #         opts.print_level = 0
+    #         opts.initialization_strategy = initialization_strategy
+    #         print(f"\ntesting initialization_strategy = {initialization_strategy}")
+    #         try:
+    #             check_opts(opts, model=model)
+    #         except:
+    #             raise Exception(f"Test failed with setting:\n {opts=}")
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,3 +1,4 @@
+import time
 from enum import Enum, auto
 from typing import Optional, List, override
 from copy import copy
@@ -54,7 +55,7 @@ class RegHomotopyOptions():
             "verbose": False,
             "ipopt": {
                 "sb"                    : 'yes',
-                "print_level"           : 5,
+                "print_level"           : 0,
                 "max_iter"              : 3000,
                 "bound_relax_factor"    : 0,
                 "tol"                   : 1e-8,
@@ -115,12 +116,18 @@ class RegHomotopySolver(MpccsolPlugin):
 
         self.stats = {
             "nlp_stats" : [],
+            "t_wall" : [],
             "converged" : False
         }
         sigma_curr = self.opts.sigma_0
+        t_wall_total = 0.0
         while sigma_curr >= self.opts.sigma_N:
             self.nlp.p.sigma[()](val=sigma_curr)
+            t_wall_start = time.time()
             stats = self.nlp.solve()
+            t_wall_end = time.time()
+            self.stats["t_wall"].append(t_wall_end - t_wall_start)
+            t_wall_total += t_wall_end - t_wall_start
             self.stats["nlp_stats"].append(stats)
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
@@ -133,6 +140,7 @@ class RegHomotopySolver(MpccsolPlugin):
             self.stats["converged"] = True
         else:
             self.stats["converged"] = False
+        self.stats["wall_time_total"] = t_wall_total
         mpcc_results = {
             "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),

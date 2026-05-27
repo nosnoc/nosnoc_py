@@ -9,17 +9,28 @@ TOL = 1e-9
 # Analytic solution
 EXACT_SWITCH_TIME = 1 / 3
 TSIM = np.pi / 4
+NSIM = 10
 
 # Initial Value
 X0 = np.array([-1.0])
 
 
-def get_default_options():
-    opts = nosnoc.NosnocOpts()
-    opts.comp_tol = TOL
-    opts.N_finite_elements = 2
-    opts.n_s = 2
-    opts.print_level = 1
+def get_default_options(**kwargs):
+    N_fe = 2
+    default_args = {
+        "N_stages":1,
+        "N_finite_elements":N_fe,
+        "T":TSIM/NSIM,
+        "N_sim":NSIM,
+        "h_k":[1/(N_fe)],
+        "use_fesd":True,
+        "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
+    # switch
+    opts = nosnoc.Options(
+        **merged
+    )
     return opts
 
 
@@ -37,7 +48,7 @@ def get_simplest_model_sliding(x0=X0):
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0, name='simplest_sliding')
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0, name='simplest_sliding')
 
     return model
 
@@ -56,7 +67,7 @@ def get_simplest_model_switch(x0=X0):
     # in matrix form
     F = [horzcat(f_11, f_12)]
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, name='simplest_switch')
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=X0, name='simplest_switch')
 
     return model
 
@@ -65,51 +76,46 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     if opts is None:
         opts = get_default_options()
         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-        opts.pss_mode = nosnoc.PssMode.STEWART
+        opts.pss_mode = nosnoc.DcsMode.STEWART
     if model is None:
         model = get_simplest_model_sliding()
 
-    Tstep = Tsim / Nsim
-    opts.terminal_time = Tstep
-
-    solver = nosnoc.NosnocSolver(opts, model)
-    # loop
-    looper = nosnoc.NosnocSimLooper(solver, x0, Nsim)
-    looper.run()
-    results = looper.get_results()
-    # solver.print_problem()
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, print_level=2)
+    integrator = nosnoc.Integrator(model, opts, integrator_opts)
+    t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(x0)
     # plot_results(results)
-    return results
+    return t_grid, x_res, t_grid_full, x_res_full, integrator
 
 
-def plot_results(results):
+def plot_results(integrator):
     nosnoc.latexify_plot()
 
+    t_grid = integrator.get_time_grid()
+    import pdb; pdb.set_trace()
     plt.figure()
     plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], results["X_sim"], label='x', marker='o')
+    plt.plot(t_grid, integrator.get("x"), label='x', marker='o')
     plt.legend()
     plt.grid()
     # algebraic variables
-    thetas = nosnoc.flatten_layer(results['theta_sim'], 0)
-    thetas = [thetas[0]] + thetas
+    thetas = integrator.get("theta")
 
-    lambdas = nosnoc.flatten_layer(results['lambda_sim'], 0)
-    lambdas = [lambdas[0]] + lambdas
-    n_lam = len(lambdas[0])
+    lambdas = integrator.get("lam")
+    n_lam = integrator.plugin.dcs.dims.n_lambda
 
     plt.subplot(3, 1, 2)
     n_lam = len(lambdas[0])
     for i in range(n_lam):
-        plt.plot(results["t_grid"], [x[i] for x in lambdas], label=f'lambda_{i}')
+        plt.plot(t_grid, lambdas[:,i], label=f'lambda_{i}')
     plt.grid()
     plt.legend()
 
     plt.subplot(3, 1, 3)
     for i in range(n_lam):
-        plt.plot(results["t_grid"], [x[i] for x in thetas], label=f'theta_{i}')
+        plt.plot(t_grid, thetas[:,i], label=f'theta_{i}')
     plt.grid()
-    plt.vlines(results["t_grid"], ymin=0.0, ymax=1.0, linestyles='dotted')
+    plt.vlines(t_grid, ymin=0.0, ymax=1.0, linestyles='dotted')
     plt.legend()
     plt.show()
 
@@ -122,9 +128,9 @@ def example():
     opts = get_default_options()
     opts.print_level = 1
 
-    results = solve_simplest_example(opts=opts, model=model)
+    t_grid, x_res, t_grid_full, x_res_full, integrator = solve_simplest_example(opts=opts, model=model)
 
-    plot_results(results)
+    plot_results(integrator)
 
 
 if __name__ == "__main__":

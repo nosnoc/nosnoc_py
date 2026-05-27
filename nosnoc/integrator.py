@@ -89,7 +89,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
 
         stats = self.dtp.solve(casadi_opts=self.solver_opts, plugin=plugin)
         self.stats.append(stats)
-        self.w_all.append(self.dtp.w.res)
+        self.w_all.append(np.copy(self.dtp.w.res))
         return stats
 
     @override
@@ -141,7 +141,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 h = self.dtp.w.h[:,:].res
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
-            t_grid.append(t_grid[-1] + np.cumsum(h))
+            t_grid.append(t_grid[-1][-1] + np.cumsum(h))
             c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
                 start = t_grid_full[-1]
@@ -156,27 +156,122 @@ class FESDIntegratorPlugin(IntegratorPlugin):
 
             self.dtp.w.x[0,0,self.opts.n_s](lb=x_step[-1,:],ub=x_step[-1,:],init=x_step[-1,:])
 
-        import pdb; pdb.set_trace()
         return np.concatenate(t_grid), np.vstack(x_res), np.concatenate(t_grid_full), np.vstack(x_res_full)
 
 
 
     @override
     def get(self, field):
-        pass
+        if not self.w_all:
+            return None # TODO(@anton) probably raise an error instead
+        opts = self.opts
+        rbp = self.dtp.rbp
+        dims = self.dcs.dims
+        w_curr = np.copy(self.dtp.w.res)
+        np.copyto(self.dtp.w.res, self.w_all[0])
+        var = getattr(self.dtp.w, field)
+        var_len = len(next(iter(var.ind_map.values()))) # Assumes all are same length, we don't enforce this however
+        var_shape = (opts.N_finite_elements[0], var_len)
+        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 else None
+        var_out = [] if var_0 is None else [var_0]
+        for w in self.w_all:
+            np.copyto(self.dtp.w.res, w)
+            if var.get_depth() == 3:
+                end = opts.n_s + rbp
+                var_out.append(np.reshape(var[1:,:,end].res, var_shape))
+            elif var.get_depth() == 2:
+                var_out.append(np.reshape(var[1:,:].res, var_shape))
+            elif var.get_depth() == 1:
+                var_out.append(np.reshape(var[1:].res, (1,var_len)))
+            elif var.get_depth() == 0:
+                return var_out.append(np.reshape(var[()].res, (1,var_len)))
+
+        np.copyto(self.dtp.w.res, w_curr)
+
+        return np.vstack(var_out)
+
 
 
     @override
     def get_full(self, field):
-        pass
+        if not self.w_all:
+            return None # TODO(@anton) probably raise an error instead
+        opts = self.opts
+        rbp = self.dtp.rbp
+        dims = self.dcs.dims
+        w_curr = np.copy(self.dtp.w.res)
+        np.copyto(self.dtp.w.res, self.w_all[0])
+        var = getattr(self.dtp.w, field)
+        var_len = len(next(iter(var.ind_map.values()))) # Assumes all are same length, we don't enforce this however
+        var_shape = (opts.N_finite_elements[0]*opts.n_s, var_len) if var.get_depth() == 3 else (opts.N_finite_elements[0], var_len)
+        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 else None
+        var_out = [] if var_0 is None else [var_0]
+        for w in self.w_all:
+            np.copyto(self.dtp.w.res, w)
+            if var.get_depth() == 3:
+                end = opts.n_s + rbp
+                var_out.append(np.reshape(var[1:,:,:].res, var_shape))
+            elif var.get_depth() == 2:
+                var_out.append(np.reshape(var[1:,:].res, var_shape))
+            elif var.get_depth() == 1:
+                var_out.append(np.reshape(var[1:].res, (1,var_len)))
+            elif var.get_depth() == 0:
+                return var_out.append(np.reshape(var[()].res, (1,var_len)))
+
+        np.copyto(self.dtp.w.res, w_curr)
+
+        return np.vstack(var_out)
 
     @override
-    def get_time_grid(self, field):
-        pass
+    def get_time_grid(self):
+        if not self.w_all:
+            return None # TODO(@anton) probably raise an error instead
+        opts = self.opts
+        rbp = self.dtp.rbp
+        dims = self.dcs.dims
+        w_curr = np.copy(self.dtp.w.res)
+        np.copyto(self.dtp.w.res, self.w_all[0])
+        t_grid = [np.array([0.0])]
+        for w in self.w_all:
+            np.copyto(self.dtp.w.res, w)
+            if opts.use_fesd:
+                h = self.dtp.w.h[:,:].res
+            else:
+                h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
+            t_grid.append(t_grid[-1][-1] + np.cumsum(h))
+
+        np.copyto(self.dtp.w.res, w_curr)
+
+        return np.concatenate(t_grid)
+
 
     @override
-    def get_time_grid_full(self, field):
-        pass
+    def get_time_grid_full(self):
+        if not self.w_all:
+            return None # TODO(@anton) probably raise an error instead
+        opts = self.opts
+        rbp = self.dtp.rbp
+        dims = self.dcs.dims
+        w_curr = np.copy(self.dtp.w.res)
+        np.copyto(self.dtp.w.res, self.w_all[0])
+        t_grid_full = [np.array([0.0])]
+        c = self.dtp.rk.colloc_points()
+        for w in self.w_all:
+            np.copyto(self.dtp.w.res, w)
+            if opts.use_fesd:
+                h = self.dtp.w.h[:,:].res
+            else:
+                h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
+            for jj in range(len(h)):
+                start = t_grid_full[-1]
+                for kk in range(opts.n_s):
+                    t_grid_full.append(start + c[kk+1]*h[jj])
+                if rbp:
+                    t_grid_full.append(start + h[jj])
+
+        np.copyto(self.dtp.w.res, w_curr)
+
+        return np.concatenate(t_grid_full)
 
     def set_param(self, field, index: tuple, value):
         param = getattr(self.dtp.p, field) # TODO(@anton) try except

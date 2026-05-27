@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, List
 from dataclasses import dataclass
 
 import casadi as ca
@@ -27,7 +27,7 @@ class Options():
     # int: Number of finite elements in each control stage. This can either be a scalar value
     # in which case it is transformed into a vector for that value when :meth:`preprocess` is called.
     # Alternatively you can pass a vector of size :attr:`N_stages`.
-    N_finite_elements: int = 2
+    N_finite_elements: int|List[int] = 2
 
     n_s: int = 2 # int: Number of Stages in the Runge-Kutta scheme.
 
@@ -319,3 +319,7 @@ class Options():
 
     def time_rescaling(self):
         return (self.time_freezing and self.impose_terminal_phyisical_time) or self.time_optimal_problem;
+
+    def __post_init__(self):
+        if isinstance(self.N_finite_elements, int):
+            self.N_finite_elements = [self.N_finite_elements]*self.N_stages
