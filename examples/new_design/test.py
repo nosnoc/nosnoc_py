@@ -10,6 +10,7 @@ TOL = 1e-9
 # Analytic solution
 EXACT_SWITCH_TIME = 1 / 3
 TSIM = np.pi / 4
+NSIM = 10
 
 # Initial Value
 X0 = np.array([-1.0])
@@ -156,7 +157,6 @@ if __name__ == "__main__":
     print(solver.get_time_grid())
     print(solver.get_control_grid())
     plot_results(solver)
-    import pdb; pdb.set_trace()
 
     # sliding
     opts = nosnoc.Options(
@@ -179,4 +179,21 @@ if __name__ == "__main__":
     print(solver.get_time_grid())
     print(solver.get_control_grid())
     plot_results(solver)
+
+    # integrator
+    opts = nosnoc.Options(
+        N_stages=1,
+        N_finite_elements=[N_fe],
+        T=TSIM/NSIM,
+        N_sim=NSIM,
+        h_k=[1/(N_fe)],
+        x_box_at_stg=False,
+        x_box_at_fe=False,
+        use_fesd=True,
+        cross_comp_mode=CrossComplementarityMode.FE_FE
+    )
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts)
+    integrator = nosnoc.Integrator(model_switch, opts, integrator_opts)
+    t_grid, x_grid, t_grid_full, x_grid_full = integrator.simulate(X0)
     import pdb; pdb.set_trace()

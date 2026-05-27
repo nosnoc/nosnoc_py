@@ -17,6 +17,7 @@ from .dims import Dims
 from .mpcc import MPCC
 from . import mpccsol
 from .ocp import OcpSolver
+from .integrator import FESDIntegratorOptions, Integrator
 
 import warnings
 warnings.simplefilter("always")

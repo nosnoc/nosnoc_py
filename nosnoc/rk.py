@@ -33,11 +33,18 @@ class AbstractRKRepresentation(ABC):
     def is_right_boundary_explicit(self):
         pass
 
+    @abstractmethod
+    def colloc_points(self):
+        pass
+
 class IntegralRKRepresentation(AbstractRKRepresentation):
     def __init__(self, n_s: int, rk_scheme: RKScheme):
         super().__init__(n_s, rk_scheme)
         self.B, self.C, self.D, self.tau_root, = self._generate_butcher_tableau_integral(n_s, rk_scheme)
 
+    @override
+    def colloc_points(self):
+        return self.tau_root
 
     @override
     def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):
@@ -107,6 +114,10 @@ class DifferentialRKRepresentation(AbstractRKRepresentation):
     def __init__(self, n_s: int, rk_scheme: RKScheme):
         super().__init__(n_s, rk_scheme)
         self.A, self.b, self.c = self._generate_butcher_tableau(n_s, rk_scheme)
+
+    @override
+    def colloc_points(self):
+        return self.c
 
     @override
     def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):

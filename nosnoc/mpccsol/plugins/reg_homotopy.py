@@ -124,13 +124,20 @@ class RegHomotopySolver(MpccsolPlugin):
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
 
+        G_val = self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
+        H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
+
+        comp_res = np.max(G_val*H_val)
+
+        if stats['return_status'] in ("Solve Succeeded", "Solved to Acceptable Level") and comp_res <= opts.sigma_N:
+            self.stats["converged"] = True
         mpcc_results = {
             "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),
             "lam_x": self.w_mpcc_fun(self.nlp.w.mult).full().flatten(),
             "g": self.g_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "lam_g": self.nlp.g.mult[self.ind_g_mpcc], # TODO(@anton)use sorted indexing
-            "G": self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+            "G": G_val,
             "H": self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
         }
         return mpcc_results
