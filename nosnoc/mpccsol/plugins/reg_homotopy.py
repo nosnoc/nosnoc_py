@@ -113,8 +113,9 @@ class RegHomotopySolver(MpccsolPlugin):
         self.nlp.g.init_mult[self.ind_g_mpcc] = lam_g0
         self.nlp.p.val[self.ind_p_mpcc] = p
 
-        self.stats ={
-            "nlp_stats" : []
+        self.stats = {
+            "nlp_stats" : [],
+            "converged" : False
         }
         sigma_curr = self.opts.sigma_0
         while sigma_curr >= self.opts.sigma_N:
@@ -128,9 +129,10 @@ class RegHomotopySolver(MpccsolPlugin):
         H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
 
         comp_res = np.max(G_val*H_val)
-
-        if stats['return_status'] in ("Solve Succeeded", "Solved to Acceptable Level") and comp_res <= opts.sigma_N:
+        if stats['return_status'] in ("Solve_Succeeded", "Solved_to_Acceptable_Level") and comp_res <= self.opts.sigma_N:
             self.stats["converged"] = True
+        else:
+            self.stats["converged"] = False
         mpcc_results = {
             "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),

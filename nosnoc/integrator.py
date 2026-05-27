@@ -107,10 +107,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         opts = self.opts
         integrator_opts = self.integrator_opts
 
-        x_res = [x0]
-        x_res_full = [x0]
-        t_grid = [0.0]
-        t_grid_full = [0.0]
+        x_res = [np.reshape(x0,(1, self.model.dims.n_x))]
+        x_res_full = [np.reshape(x0,(1, self.model.dims.n_x))]
+        t_grid = [np.array([0.0])]
+        t_grid_full = [np.array([0.0])]
 
         # set x0
         self.dtp.w.x[0,0,self.opts.n_s](lb=x0,ub=x0,init=x0)
@@ -124,7 +124,6 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dtp.w.u[1](lb = u[ii,:], ub = u[ii,:], init = u[ii,:])
 
             solver_stats = self._solve()
-            import pdb;pdb.set_trace()
             if not solver_stats["converged"]:
                 constr_viol = solver_stats['constraint_violation']
                 warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
@@ -132,9 +131,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 wall_time_total = solver_stats["wall_time_total"]
                 print(f"'Integration step {ii+1} / {opts.N_sim} ({t_current} s / {opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
-            x_step = obj.discrete_time_problem.w.x(0,0,opts.n_s).res if rbp else np.array([])
-            np.vstack(x_step, self.dtp.w.x[1:,:,opts.n_s+rbp].res)
-            x_step_full = self.dtp.w.x[:,:,:].res
+            x_step = np.reshape(obj.discrete_time_problem.w.x(0,0,opts.n_s).res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
+            x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
+            x_step = np.vstack([x_step, x_int])
+            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*opts.n_s, self.model.dims.n_x))
             x_res.append(x_step)
             x_res_full.append(x_step_full)
             if opts.use_fesd:
@@ -142,11 +142,11 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             t_grid.append(t_grid[-1] + np.cumsum(h))
-            c = self.dtp.rk.collocation_points()
+            c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
                 start = t_grid_full[-1]
                 for kk in range(opts.n_s):
-                    t_grid_full.append(start + c[kk]*h[jj])
+                    t_grid_full.append(start + c[kk+1]*h[jj])
                 if rbp:
                     t_grid_full.append(start + h[jj])
 
@@ -156,7 +156,8 @@ class FESDIntegratorPlugin(IntegratorPlugin):
 
             self.dtp.w.x[0,0,self.opts.n_s](lb=x_step[-1,:],ub=x_step[-1,:],init=x_step[-1,:])
 
-        return t_grid, x_res, t_grid_full, x_res_full
+        import pdb; pdb.set_trace()
+        return np.concatenate(t_grid), np.vstack(x_res), np.concatenate(t_grid_full), np.vstack(x_res_full)
 
 
 

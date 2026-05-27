@@ -195,5 +195,5 @@ if __name__ == "__main__":
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts)
     integrator = nosnoc.Integrator(model_switch, opts, integrator_opts)
-    t_grid, x_grid, t_grid_full, x_grid_full = integrator.simulate(X0)
+    t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(X0)
     import pdb; pdb.set_trace()

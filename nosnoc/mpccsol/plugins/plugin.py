@@ -7,6 +7,7 @@ class MpccsolPlugin(ABC):
     def __init__(self, mpcc, opts):
         self.mpcc = mpcc
         self.opts = opts
+        self.stats = {}
         self._build_solver()
 
     @abstractmethod
