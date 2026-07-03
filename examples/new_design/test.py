@@ -1,8 +1,10 @@
+from copy import copy
 import numpy as np
 from casadi import SX, horzcat
 import matplotlib.pyplot as plt
 
 import nosnoc
+import casadi as ca
 from nosnoc.nosnoc_types import CrossComplementarityMode
 
 TOL = 1e-9
@@ -149,13 +151,7 @@ if __name__ == "__main__":
     solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)
     solver.set("x", (slice(1,None), slice(1,None), slice(1,None)), lb=-10, ub=10, init=0)
     solver.solve()
-    print(solver.get("x"))
-    print(solver.get_full("x"))
-    print(solver.get("lam"))
-    print(solver.get("theta"))
-    print(solver.get("h"))
-    print(solver.get_time_grid())
-    print(solver.get_control_grid())
+    breakpoint()
     plot_results(solver)
 
     # sliding
@@ -171,13 +167,6 @@ if __name__ == "__main__":
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     solver = nosnoc.OcpSolver(model_sliding, opts, solver_opts)
     solver.solve()
-    print(solver.get("x"))
-    print(solver.get_full("x"))
-    print(solver.get("lam"))
-    print(solver.get("theta"))
-    print(solver.get("h"))
-    print(solver.get_time_grid())
-    print(solver.get_control_grid())
     plot_results(solver)
 
     # integrator
@@ -195,5 +184,9 @@ if __name__ == "__main__":
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts)
     integrator = nosnoc.Integrator(model_switch, opts, integrator_opts)
+    dtp = integrator.plugin.dtp
+    dtp.w.resort_vector()
+    dtp.g.resort_vector()
+    dtp.p.resort_vector()
     t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(X0)
     import pdb; pdb.set_trace()

@@ -43,3 +43,10 @@ class MPCC(NLP):
         self.f_result = mpcc_results['f']
 
         return self.solver.stats
+
+    def __str__(self):
+        ret = super.__str__(self)
+        ret += self.G.__str__()
+        ret += self.H.__str__()
+
+        return ret

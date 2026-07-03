@@ -105,13 +105,13 @@ class RegHomotopySolver(MpccsolPlugin):
                lam_g0: np.ndarray,
                lam_x0: np.ndarray,
                ):
-        self.nlp.w.init[self.ind_w_mpcc] = x0
-        self.nlp.w.init_mult[self.ind_w_mpcc] = lam_x0
-        self.nlp.w.lb[self.ind_w_mpcc] = lbx
-        self.nlp.w.ub[self.ind_w_mpcc] = ubx
-        self.nlp.g.lb[self.ind_g_mpcc] = lbg
-        self.nlp.g.ub[self.ind_g_mpcc] = ubg
-        self.nlp.g.init_mult[self.ind_g_mpcc] = lam_g0
+        self.nlp.w.init[self.rev_nlp_w_indmap][self.ind_w_mpcc] = x0
+        self.nlp.w.init_mult[self.rev_nlp_w_indmap][self.ind_w_mpcc] = lam_x0
+        self.nlp.w.lb[self.rev_nlp_w_indmap][self.ind_w_mpcc] = lbx
+        self.nlp.w.ub[self.rev_nlp_w_indmap][self.ind_w_mpcc] = ubx
+        self.nlp.g.lb[self.rev_nlp_g_indmap][self.ind_g_mpcc] = lbg
+        self.nlp.g.ub[self.rev_nlp_g_indmap][self.ind_g_mpcc] = ubg
+        self.nlp.g.init_mult[self.nlp_g_indmap[self.ind_g_mpcc]] = lam_g0
         self.nlp.p.val[self.ind_p_mpcc] = p
 
         self.stats = {
@@ -164,13 +164,16 @@ class RegHomotopySolver(MpccsolPlugin):
         self.nlp.p = copy(self.mpcc.p)
         self.nlp.p.sigma[()] = Parameter("sigma", 1)
         sigma = self.nlp.p.sigma[()].sym
-
         for (name,Gvar) in self.mpcc.G.variables.items():
             Hvar = self.mpcc.H.variables[name]
             for idx in Gvar.ind_map.keys():
                 # TODO(@anton) do non sholtes
                 getattr(self.nlp.g, f"{name}_relax")[*idx] = Constraint(Gvar[*idx]*Hvar[*idx] - sigma, lb=-np.inf, ub=0)
 
+        self.nlp_w_indmap,self.rev_nlp_w_indmap = self.nlp.w.resort_vector()
+        self.nlp_g_indmap,self.rev_nlp_g_indmap = self.nlp.g.resort_vector()
+        self.nlp_w_indmap,self.rev_nlp_w_indmap = np.array(self.rev_nlp_w_indmap),np.array(self.nlp_w_indmap)
+        self.nlp_g_indmap,self.rev_nlp_g_indmap = np.array(self.rev_nlp_g_indmap),np.array(self.nlp_g_indmap)
         self.ind_w_mpcc = np.arange(0,len(self.mpcc.w))
         self.ind_g_mpcc = np.arange(0,len(self.mpcc.g))
         self.ind_p_mpcc = np.arange(0,len(self.mpcc.p))
@@ -185,6 +188,6 @@ class RegHomotopySolver(MpccsolPlugin):
 
     def _build_solver_dict(self):
         """
-        Build the regularization homotopy solver from a vdx_py MPCC class.
+        Build the regularization homotopy solver from a mpcc dict.
         """
         pass
