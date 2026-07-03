@@ -151,7 +151,6 @@ if __name__ == "__main__":
     solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)
     solver.set("x", (slice(1,None), slice(1,None), slice(1,None)), lb=-10, ub=10, init=0)
     solver.solve()
-    breakpoint()
     plot_results(solver)
 
     # sliding

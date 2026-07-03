@@ -222,6 +222,14 @@ class Base(ABC,MPCC):
         p = self._get_stage_parameters(ii)
         self.g.path[ii] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
 
+    def _terminal_constraint(self):
+        # TODO(@anton) relaxation
+        x = self.w.x[self.opts.N_stages,self.opts.N_finite_elements[self.opts.N_stages-1],self.opts.n_s+self.rbp]
+        z = self.w.z[self.opts.N_stages,self.opts.N_finite_elements[self.opts.N_stages-1],self.opts.n_s+self.rbp]
+        v_global = self.w.v_global[()]
+        p_global = self.p.p_global[()]
+        self.g.termuinal[self.opts.N_stages+1] = Constraint(self.dcs.g_terminal_fun(x,z,v_global,p_global))
+
     def _numerical_time_constraints(self,ii):
         opts = self.opts
         if opts.use_fesd and opts.equidistant_control_grid:

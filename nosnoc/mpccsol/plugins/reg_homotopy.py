@@ -121,6 +121,8 @@ class RegHomotopySolver(MpccsolPlugin):
         }
         sigma_curr = self.opts.sigma_0
         t_wall_total = 0.0
+        if self.opts.print_level:
+            self._print_header()
         while sigma_curr >= self.opts.sigma_N:
             self.nlp.p.sigma[()](val=sigma_curr)
             t_wall_start = time.time()
@@ -129,6 +131,8 @@ class RegHomotopySolver(MpccsolPlugin):
             self.stats["t_wall"].append(t_wall_end - t_wall_start)
             t_wall_total += t_wall_end - t_wall_start
             self.stats["nlp_stats"].append(stats)
+            if self.opts.print_level:
+                self._print_iter_stats(sigma_curr, 0.0, 0.0, self.nlp.f_result, t_wall_end - t_wall_start, stats['iter_count'], stats['return_status'])
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
 
@@ -191,3 +195,11 @@ class RegHomotopySolver(MpccsolPlugin):
         Build the regularization homotopy solver from a mpcc dict.
         """
         pass
+
+    def _print_header(self):
+        print('-------------------------------------------')
+        print('sigma \t\t compl_res \t nlp_res \t cost_val \t CPU time \t iter \t status')
+
+    def _print_iter_stats(self, sigma_k, complementarity_residual, nlp_res, cost_val, cpu_time_nlp, nlp_iter, status):
+        print(f'{sigma_k:.1e} \t {complementarity_residual:.2e} \t {nlp_res:.2e}' +
+              f'\t {cost_val:.2e} \t {cpu_time_nlp:3f} \t {nlp_iter} \t {status}')

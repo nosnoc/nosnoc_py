@@ -118,9 +118,7 @@ def solve_ocp(opts=None):
     model = get_sliding_mode_ocp_description()
 
     solver = nosnoc.OcpSolver(model, opts, solver_opts)
-
     solver.solve()
-
     return solver
 
 
