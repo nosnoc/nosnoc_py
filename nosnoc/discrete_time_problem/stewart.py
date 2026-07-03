@@ -128,6 +128,7 @@ class Stewart(Base):
             self._stage_path_constraints(ii)
 
         self._terminal_constraint()
+        self._terminal_objective()
 
     def _get_rk_stage_z(self, ii, jj, kk):
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
