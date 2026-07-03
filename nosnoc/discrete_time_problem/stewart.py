@@ -315,6 +315,8 @@ class Stewart(Base):
                 self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
 
     def __l2_relaxed_scaled(self):
+        opts = self.opts
+        rbp = self.rbp
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
@@ -328,14 +330,16 @@ class Stewart(Base):
                 pi_theta = sigma_theta_B * sigma_theta_F
                 nu = pi_lam + pi_theta
                 eta = 1
-                for jjj in range(len(nu)):
+                for jjj in range(nu.size()[0]):
                     eta = eta*nu[jjj]
 
                 eta_vec = ca.vertcat(eta_vec,eta)
                 delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
-                self.f += self.p.rho_h[()] * tanh(eta/opts.step_equilibration_sigma) * delta_h**2
+                self.f += self.p.rho_h[()] * ca.tanh(eta/opts.step_equilibration_sigma) * delta_h**2
 
     def __l2_relaxed(self):
+        opts = self.opts
+        rbp = self.rbp
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
@@ -349,7 +353,7 @@ class Stewart(Base):
                 pi_theta = sigma_theta_B * sigma_theta_F
                 nu = pi_lam + pi_theta
                 eta = 1
-                for jjj in range(len(nu)):
+                for jjj in range(nu.size()[0]):
                     eta = eta*nu[jjj]
 
                 eta_vec = ca.vertcat(eta_vec,eta)
@@ -357,6 +361,8 @@ class Stewart(Base):
                 self.f += self.p.rho_h[()] * eta * delta_h**2
 
     def __direct(self):
+        opts = self.opts
+        rbp = self.rbp
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
@@ -370,7 +376,7 @@ class Stewart(Base):
                 pi_theta = sigma_theta_B * sigma_theta_F
                 nu = pi_lam + pi_theta
                 eta = 1
-                for jjj in range(len(nu)):
+                for jjj in range(nu.size()[0]):
                     eta = eta*nu[jjj]
 
                 eta_vec = ca.vertcat(eta_vec,eta)
