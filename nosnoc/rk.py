@@ -59,11 +59,11 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
             f_ii = sot*f_x(z_ii, p)
             q_ii = sot*f_q(z_ii, p)
             g_ii = g(z_ii, p)
-            x_ii = self.C[0,ii+1]*x0
+            x_kk = self.C[0,ii+1]*x0
             for jj in range(self.n_s):
                 x_jj = z[jj][0:nx] # NOTE: Assume first nx entries in z are x
-                x_ii += self.C[jj+1, ii+1]*x_jj
-            dynamic.append(h*f_ii - x_ii)
+                x_kk += self.C[jj+1, ii+1]*x_jj
+            dynamic.append(h*f_ii - x_kk)
             algebraic.append(g_ii)
             q_end += self.B[ii+1]*h*q_ii
             x_end += self.D[ii+1]*x_ii
