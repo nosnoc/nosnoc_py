@@ -39,7 +39,7 @@ class Base(ABC,MPCC):
         self.p.rho_terminal[()] = Parameter("rho_terminal", 1, val=self.opts.rho_terminal)
         self.p.T[()] = Parameter("T", 1, val=self.opts.T)
         self.p.p_global[()] = Parameter("p_global", self.dcs.dims.n_p_global, val=self.model.p_global_val)
-        self.p.p_time_var[range(self.opts.N_stages)] = Parameter(f"p_time_var", self.dcs.dims.n_p_time_var, val=self.model.p_time_var_val)
+        self.p.p_time_var[range(1,self.opts.N_stages+1)] = Parameter(f"p_time_var", self.dcs.dims.n_p_time_var, val=self.model.p_time_var_val)
 
     def _create_global_variables(self):
         opts = self.opts
@@ -177,7 +177,7 @@ class Base(ABC,MPCC):
         return h
 
     def _get_x_end(self, ii, jj):
-        return self.w.x[ii,jj,self.opts.n_s+self.rbp];
+        return self.w.x[ii,jj,self.opts.n_s+self.rbp].sym
 
     def _build_prk(self, ii, jj):
         return ca.vertcat(
@@ -196,7 +196,7 @@ class Base(ABC,MPCC):
         if not self.opts.g_path_at_stg:
             return
         x = self.w.x[ii,jj,kk]
-        z = self.w.x[ii,jj,kk]
+        z = self.w.z[ii,jj,kk]
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
@@ -206,7 +206,7 @@ class Base(ABC,MPCC):
         if self.opts.g_path_at_stg or not self.opts.g_path_at_fe:
             return
         x = self.w.x[ii,jj,self.opts.n_s+self.rbp]
-        z = self.w.x[ii,jj,self.opts.n_s+self.rbp]
+        z = self.w.z[ii,jj,self.opts.n_s+self.rbp]
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
@@ -216,7 +216,7 @@ class Base(ABC,MPCC):
         if self.opts.g_path_at_stg or self.opts.g_path_at_fe:
             return
         x = self.w.x[ii,self.opts.N_finite_elements[ii-1],self.opts.n_s+self.rbp]
-        z = self.w.x[ii,self.opts.N_finite_elements[ii-1],self.opts.n_s+self.rbp]
+        z = self.w.z[ii,self.opts.N_finite_elements[ii-1],self.opts.n_s+self.rbp]
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
