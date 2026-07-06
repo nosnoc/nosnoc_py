@@ -322,3 +322,5 @@ class Integrator:
         self.opts.h = None
         self.opts.h_k = None
         self.opts._make_T_h_consistent()
+        if isinstance(self.integrator_opts.solver_opts, RegHomotopyOptions):
+            self.integrator_opts.solver_opts.print_level = 0 if self.integrator_opts.print_level < 3 else 4
