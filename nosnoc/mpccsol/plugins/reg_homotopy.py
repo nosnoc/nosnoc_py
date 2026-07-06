@@ -199,6 +199,7 @@ class RegHomotopySolver(MpccsolPlugin):
         else:
             self.stats["converged"] = False
         self.stats["wall_time_total"] = sum(self.stats["t_wall"])
+        self.stats["constraint_violation"] = max(comp_res,self.stats["nlp_stats"][-1]["iterations"]["inf_pr"][-1])
         mpcc_results = {
             "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),
