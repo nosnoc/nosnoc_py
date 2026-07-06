@@ -30,7 +30,7 @@ class RegHomotopyOptions():
         self.solver: str      = 'ipopt'
 
         # MPCC and Homotopy Settings
-        self.complementarity_tol: float               = 1e-9
+        self.complementarity_tol: float               = 1e-8
         self.objective_scaling_direct: bool           = True
         self.sigma_0: float                           = 1
         self.sigma_N: float                           = 1e-9
@@ -92,6 +92,69 @@ class RegHomotopySolver(MpccsolPlugin):
         elif isinstance(self.mpcc, dict):
             self._build_solver_dict()
 
+    def _update_nlp_vectors(
+            self,
+            x0:     np.ndarray,
+            y0:     np.ndarray,
+            lbx:    np.ndarray,
+            ubx:    np.ndarray,
+            lbg:    np.ndarray,
+            ubg:    np.ndarray,
+            p:      np.ndarray,
+            lam_g0: np.ndarray,
+            lam_x0: np.ndarray,
+    ):
+        self.nlp.w.init[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = x0
+        self.nlp.w.init_mult[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lam_x0
+        self.nlp.w.lb[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lbx
+        self.nlp.w.ub[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = ubx
+        self.nlp.g.lb[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = lbg
+        self.nlp.g.ub[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = ubg
+        self.nlp.g.init_mult[self.nlp_g_indmap[self.ind_g_mpcc]] = lam_g0
+        self.nlp.p.val[self.ind_p_mpcc] = p
+
+    def _sigma_curr(self):
+        return self.nlp.p.sigma[()].val[()]
+
+    def _comp_res_curr(self):
+        return self.stats["comp_res"][-1]
+
+    def _nlp_residual(self):
+        return max(
+            self.stats["nlp_stats"][-1]["iterations"]["inf_du"][-1],
+            self.stats["nlp_stats"][-1]["iterations"]["inf_pr"][-1],
+        )
+
+    def _update_sigma(self):
+        sigma_curr = self._sigma_curr()
+        if self.opts.homotopy_update_rule == HomotopyUpdateRule.LINEAR:
+            sigma_next = self.opts.homotopy_update_slope*sigma_curr
+        elif self.opts.homotopy_update_rule == HomotopyUpdateRule.SUPERLINEAR:
+            sigma_next = min(self.opts.homotopy_update_slope*sigma_curr, sigma_curr**self.opts.homotopy_update_exponent)
+        self.nlp.p.sigma[()](val=sigma_next)
+
+    def _prepare_nlp(self):
+        np.copyto(self.nlp.w.init, self.nlp.w.res)
+        self._update_sigma()
+
+    def _solve_nlp(self):
+        t_wall_start = time.time()
+        stats = self.nlp.solve()
+        t_wall_end = time.time()
+        self.stats["t_wall"].append(t_wall_end - t_wall_start)
+        self.stats["nlp_stats"].append(stats)
+        comp_res = self.comp_res_fun(self.nlp.w.res, self.nlp.p.val).full()[0,0]
+        self.stats["comp_res"].append(comp_res)
+        if self.opts.print_level:
+            self._print_iter_stats(
+                self._sigma_curr(),
+                comp_res,
+                self._nlp_residual(),
+                self.nlp.f_result,
+                t_wall_end - t_wall_start,
+                stats['iter_count'],
+                stats['return_status']
+            )
 
     @override
     def _solve(self,
@@ -105,51 +168,32 @@ class RegHomotopySolver(MpccsolPlugin):
                lam_g0: np.ndarray,
                lam_x0: np.ndarray,
                ):
-        self.nlp.w.init[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = x0
-        self.nlp.w.init_mult[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lam_x0
-        self.nlp.w.lb[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lbx
-        self.nlp.w.ub[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = ubx
-        self.nlp.g.lb[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = lbg
-        self.nlp.g.ub[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = ubg
-        self.nlp.g.init_mult[self.nlp_g_indmap[self.ind_g_mpcc]] = lam_g0
-        self.nlp.p.val[self.ind_p_mpcc] = p
+        self._update_nlp_vectors(x0,y0,lbx,ubx,lbg,ubg,p,lam_g0,lam_x0)
 
         self.stats = {
             "nlp_stats" : [],
             "t_wall" : [],
+            "comp_res" : [self.comp_res_fun(self.nlp.w.init, self.nlp.p.val).full()[0,0]],
             "converged" : False
         }
         sigma_curr = self.opts.sigma_0
-        t_wall_total = 0.0
+        self.nlp.p.sigma[()](val=sigma_curr)
         if self.opts.print_level:
             self._print_header()
-        while sigma_curr >= self.opts.sigma_N:
-            self.nlp.p.sigma[()](val=sigma_curr)
-            t_wall_start = time.time()
-            stats = self.nlp.solve()
-            t_wall_end = time.time()
-            self.stats["t_wall"].append(t_wall_end - t_wall_start)
-            t_wall_total += t_wall_end - t_wall_start
-            self.stats["nlp_stats"].append(stats)
-            G_val = self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
-            H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
-
-            comp_res = np.max(G_val*H_val)
-
-            if self.opts.print_level:
-                self._print_iter_stats(sigma_curr, comp_res, 0.0, self.nlp.f_result, t_wall_end - t_wall_start, stats['iter_count'], stats['return_status'])
-            np.copyto(self.nlp.w.init, self.nlp.w.res)
-            sigma_curr = sigma_curr*self.opts.homotopy_update_slope
+        while self._sigma_curr() >= self.opts.sigma_N and self._comp_res_curr() > self.opts.complementarity_tol:
+            self._solve_nlp()
+            self._prepare_nlp()
 
         G_val = self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
         H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
 
-        comp_res = np.max(G_val*H_val)
-        if stats['return_status'] in ("Solve_Succeeded", "Solved_to_Acceptable_Level") and comp_res <= self.opts.sigma_N:
+        comp_res = self.comp_res_fun(self.nlp.w.res, self.nlp.p.val).full()[0,0]
+        last_stats = self.stats['nlp_stats'][-1]
+        if last_stats['return_status'] in ("Solve_Succeeded", "Solved_to_Acceptable_Level") and comp_res <= self.opts.complementarity_tol:
             self.stats["converged"] = True
         else:
             self.stats["converged"] = False
-        self.stats["wall_time_total"] = t_wall_total
+        self.stats["wall_time_total"] = sum(self.stats["t_wall"])
         mpcc_results = {
             "f": self.f_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "w": self.w_mpcc_fun(self.nlp.w.res).full().flatten(),
@@ -157,7 +201,7 @@ class RegHomotopySolver(MpccsolPlugin):
             "g": self.g_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
             "lam_g": self.nlp.g.mult[self.ind_g_mpcc], # TODO(@anton)use sorted indexing
             "G": G_val,
-            "H": self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten(),
+            "H": H_val,
         }
         return mpcc_results
 
@@ -194,6 +238,7 @@ class RegHomotopySolver(MpccsolPlugin):
         self.g_mpcc_fun = ca.Function("g_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.g.sym])
         self.G_mpcc_fun = ca.Function("G_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.G.sym])
         self.H_mpcc_fun = ca.Function("H_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.H.sym])
+        self.comp_res_fun = ca.Function("comp_res", [self.nlp.w.sym, self.nlp.p.sym], [ca.mmax(self.mpcc.G.sym * self.mpcc.H.sym)])
 
     def _build_solver_dict(self):
         """
