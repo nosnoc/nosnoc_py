@@ -105,12 +105,12 @@ class RegHomotopySolver(MpccsolPlugin):
                lam_g0: np.ndarray,
                lam_x0: np.ndarray,
                ):
-        self.nlp.w.init[self.rev_nlp_w_indmap][self.ind_w_mpcc] = x0
-        self.nlp.w.init_mult[self.rev_nlp_w_indmap][self.ind_w_mpcc] = lam_x0
-        self.nlp.w.lb[self.rev_nlp_w_indmap][self.ind_w_mpcc] = lbx
-        self.nlp.w.ub[self.rev_nlp_w_indmap][self.ind_w_mpcc] = ubx
-        self.nlp.g.lb[self.rev_nlp_g_indmap][self.ind_g_mpcc] = lbg
-        self.nlp.g.ub[self.rev_nlp_g_indmap][self.ind_g_mpcc] = ubg
+        self.nlp.w.init[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = x0
+        self.nlp.w.init_mult[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lam_x0
+        self.nlp.w.lb[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = lbx
+        self.nlp.w.ub[self.rev_nlp_w_indmap[self.ind_w_mpcc]] = ubx
+        self.nlp.g.lb[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = lbg
+        self.nlp.g.ub[self.rev_nlp_g_indmap[self.ind_g_mpcc]] = ubg
         self.nlp.g.init_mult[self.nlp_g_indmap[self.ind_g_mpcc]] = lam_g0
         self.nlp.p.val[self.ind_p_mpcc] = p
 
@@ -131,8 +131,13 @@ class RegHomotopySolver(MpccsolPlugin):
             self.stats["t_wall"].append(t_wall_end - t_wall_start)
             t_wall_total += t_wall_end - t_wall_start
             self.stats["nlp_stats"].append(stats)
+            G_val = self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
+            H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
+
+            comp_res = np.max(G_val*H_val)
+
             if self.opts.print_level:
-                self._print_iter_stats(sigma_curr, 0.0, 0.0, self.nlp.f_result, t_wall_end - t_wall_start, stats['iter_count'], stats['return_status'])
+                self._print_iter_stats(sigma_curr, comp_res, 0.0, self.nlp.f_result, t_wall_end - t_wall_start, stats['iter_count'], stats['return_status'])
             np.copyto(self.nlp.w.init, self.nlp.w.res)
             sigma_curr = sigma_curr*self.opts.homotopy_update_slope
 

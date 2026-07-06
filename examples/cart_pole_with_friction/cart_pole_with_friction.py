@@ -80,8 +80,6 @@ def get_cart_pole_model_and_ocp(F_friction: float = 2.0, use_fillipov: bool = Tr
 def solve_example():
     # opts
     opts = nosnoc.NosnocOpts()
-    opts.irk_scheme = nosnoc.IrkSchemes.RADAU_IIA
-    opts.n_s = 2
     # opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA
 
     opts.N_stages = 20  # number of control intervals

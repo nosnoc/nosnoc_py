@@ -83,7 +83,6 @@ def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
     looper.run()
     results = looper.get_results()
     # solver.print_problem()
-    # plot_results(results)
     return results
 
 
@@ -141,7 +140,7 @@ if __name__ == "__main__":
     opts = nosnoc.Options(
         N_stages=N_stages,
         N_finite_elements=[N_fe]*N_stages,
-        h_k=[1/(N_fe*N_stages)]*N_stages,
+        h_k=[1.0/(N_fe*N_stages)]*N_stages,
         x_box_at_stg=False,
         x_box_at_fe=False,
         use_fesd=True,
@@ -157,7 +156,7 @@ if __name__ == "__main__":
     opts = nosnoc.Options(
         N_stages=N_stages,
         N_finite_elements=[N_fe]*N_stages,
-        h_k=[1/(N_fe*N_stages)]*N_stages,
+        h_k=[1.0/(N_fe*N_stages)]*N_stages,
         x_box_at_stg=False,
         x_box_at_fe=False,
         use_fesd=True,
@@ -172,8 +171,6 @@ if __name__ == "__main__":
     opts = nosnoc.Options(
         N_stages=1,
         N_finite_elements=[N_fe],
-        T=TSIM/NSIM,
-        N_sim=NSIM,
         h_k=[1/(N_fe)],
         x_box_at_stg=False,
         x_box_at_fe=False,
@@ -181,11 +178,11 @@ if __name__ == "__main__":
         cross_comp_mode=CrossComplementarityMode.FE_FE
     )
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
-    integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts)
+    integrator_opts = nosnoc.FESDIntegratorOptions(N_sim=NSIM,T_sim=TSIM,solver_opts=solver_opts)
     integrator = nosnoc.Integrator(model_switch, opts, integrator_opts)
     dtp = integrator.plugin.dtp
     dtp.w.resort_vector()
     dtp.g.resort_vector()
     dtp.p.resort_vector()
     t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(X0)
-    import pdb; pdb.set_trace()
+    plot_results(integrator)

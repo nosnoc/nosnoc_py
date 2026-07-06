@@ -70,9 +70,8 @@ def get_default_options():
 
     opts = nosnoc.Options(
         N_stages=N_stages,
-        N_finite_elements=[N_fe]*N_stages,
+        N_finite_elements=N_fe,
         T=TERMINAL_TIME,
-        h_k=[TERMINAL_TIME/(N_fe*N_stages)]*N_stages,
         use_fesd=use_fesd,
         cross_comp_mode=nosnoc.CrossComplementarityMode.FE_FE,
         step_equilibration=nosnoc.StepEquilibrationMode.DIRECT,

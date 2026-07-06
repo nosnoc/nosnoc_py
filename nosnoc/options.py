@@ -1,4 +1,4 @@
-from typing import Type, List
+from typing import Type, List, Optional
 from dataclasses import dataclass
 
 import casadi as ca
@@ -8,19 +8,15 @@ from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityM
 
 @dataclass
 class Options():
+    h: Optional[float] = None
+    h_k: Optional[List[float]] = None
+    T: Optional[float] = None
+
     # boolean: If true the FESD discretization is used, otherwise a direct time-stepping discretization is used.
     use_fesd: bool = True
 
     # string: Which casadi symbolics to use. Can either be `'casadi.SX'` or `'casadi.MX'.`
     casadi_symbolic_mode: Type = ca.SX
-
-    # TODO(@anton) these shouldn't be hard coded with defaults and shouldn't live in these options
-    T_sim: float = 1.0
-    N_sim: int   = 10
-    h_sim: float = 0.1
-    h: float     = 1.0 # double: Control stage Step size.
-    h_k: float   = 1.0/2  # double: Finite element step size.
-    T: float     = 1.0 # double: Terminal time.
 
     N_stages: int = 1 # int: Number of control stages.
 
@@ -320,6 +316,29 @@ class Options():
     def time_rescaling(self):
         return (self.time_freezing and self.impose_terminal_phyisical_time) or self.time_optimal_problem;
 
+    def _make_T_h_consistent(self):
+        # Handle T, h, h_k etc
+        if self.T is not None and self.h_k is None and self.h is None:
+            # using T + discretization info
+            self.h = self.T/self.N_stages
+            self.h_k = [self.h]*self.N_stages
+        elif self.T is None and self.h_k is not None and self.h is None:
+            # using h_k + discretization info
+            # h remains unset
+            assert len(self.h_k)==self.N_stages
+            self.T = sum(self.h_k)
+        elif self.T is None and self.h_k is None and self.h is not None:
+            # using h + discretization info
+            self.h_k = [self.h]*self.N_stages
+            self.T = self.h*self.N_stages
+        else:
+            # Throw an error
+            raise Exception("Please provide exactly one of T, h_k, or h.")
+
+
     def __post_init__(self):
+        # N_finite_elements always emnds up as a list.
         if isinstance(self.N_finite_elements, int):
             self.N_finite_elements = [self.N_finite_elements]*self.N_stages
+
+        self._make_T_h_consistent()

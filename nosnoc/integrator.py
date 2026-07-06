@@ -15,7 +15,19 @@ from nosnoc.mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
 @dataclass
 class IntegratorOptions():
+    N_sim: int
+    T_sim: Optional[float] = None
+    h_sim: Optional[float] = None
     print_level: int = 0
+
+    def __post_init__(self):
+        # Handle T_sim and h_sim
+        if self.T_sim is not None and self.h_sim is None:
+            self.h_sim = self.T_sim/self.N_sim
+        elif self.T_sim is None and self.h_sim is not None:
+            self.T_sim = self.h_sim*self.N_sim
+        else:
+            raise Exception("Please provide exactly one of T_sim and h_sim.")
 
 @dataclass
 class FESDIntegratorOptions(IntegratorOptions):
@@ -95,13 +107,12 @@ class FESDIntegratorPlugin(IntegratorPlugin):
     @override
     def simulate(self, x0, u=None):
         """
-        Simultate the model for opts.N_sim step
+        Simulate the model for integrator_opts.N_sim step
         """
         # TODO(@anton) can x0 be optional
-        # TODO(@anton) N_sim should live in integrator opts right?
         # TODO(@anton) asserts go away in production `-O` python calls, is this ok
         # TODO(@anton) do preallocation of np arrays
-        assert u is None or (np.ndim(u)==2 and u.shape[0] == self.opts.N_sim and u.shape[1] == self.model.dims.n_u)
+        assert u is None or (np.ndim(u)==2 and u.shape[0] == self.integrator_opts.N_sim and u.shape[1] == self.model.dims.n_u)
         assert np.ndim(x0)==1 and x0.shape[0] == self.model.dims.n_x
 
         opts = self.opts
@@ -119,7 +130,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         w0 = self.dtp.w.init
         rbp = self.dtp.rbp
 
-        for ii in range(opts.N_sim):
+        for ii in range(integrator_opts.N_sim):
             if u is not None: # Set control
                 self.dtp.w.u[1](lb = u[ii,:], ub = u[ii,:], init = u[ii,:])
 
@@ -129,7 +140,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
             elif integrator_opts.print_level >= 2:
                 wall_time_total = solver_stats["wall_time_total"]
-                print(f"'Integration step {ii+1} / {opts.N_sim} ({t_current} s / {opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
+                print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
             x_step = np.reshape(obj.discrete_time_problem.w.x(0,0,opts.n_s).res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
             x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
@@ -283,6 +294,8 @@ class Integrator:
         self.opts = opts
         self.integrator_opts = integrator_opts
 
+        self._update_opts()
+
         if isinstance(integrator_opts, FESDIntegratorOptions):
             self.plugin = FESDIntegratorPlugin(model,opts,integrator_opts)
         else:
@@ -302,3 +315,10 @@ class Integrator:
 
     def get_time_grid_full(self):
         return self.plugin.get_time_grid_full()
+
+    def _update_opts(self):
+        """ Update nosnoc options with integrator options time parameters """
+        self.opts.T = self.integrator_opts.h_sim
+        self.opts.h = None
+        self.opts.h_k = None
+        self.opts._make_T_h_consistent()
