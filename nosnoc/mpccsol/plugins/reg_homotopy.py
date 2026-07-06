@@ -9,20 +9,18 @@ import nosnoc as ns
 from vdx_py import NLP
 from vdx_py.vartypes import *
 from .plugin import MpccsolPlugin
+from .relaxations import *
 
 class HomotopyUpdateRule(Enum):
     LINEAR = auto() # sigma_k = homotopy_update_slope*sigma_N
     SUPERLINEAR = auto() # 'superlinear' - sigma_k = max(sigma_N,min(homotopy_update_k*slope_sigma,sigma_k^homotopy_update_exponent))
-
-class MpccRelaxation(Enum):
-    SCHOLTES_INEQ = auto()
-    FISCHER_BURMEISTER_INEQ = auto()
 
 class HomotopySteeringStrategy(Enum):
     DIRECT = auto()
     ELL_1 = auto()
     ELL_INF = auto()
 
+# TODO(@anton) make this a dataclass?
 
 class RegHomotopyOptions():
     def __init__(self):
@@ -35,16 +33,16 @@ class RegHomotopyOptions():
         self.sigma_0: float                           = 1
         self.sigma_N: float                           = 1e-9
         self.homotopy_update_rule: HomotopyUpdateRule = HomotopyUpdateRule.LINEAR
-        self.assume_lower_bounds: bool                = False;
+        self.assume_lower_bounds: bool                = True;
         self.lift_complementarities: bool             = False;
 
         self.homotopy_update_slope: float           = 0.1
         self.homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule
         self.N_homotopy                             = 10 # Maximum number of nlp solves
         self.s_elastic_max: float                   = 1e1
-        self.s_elastic_min: float                   = 0
-        self.s_elastic_0: float                     = 1
-        self.decreasing_s_elastic_upper_bound: bool = 0
+        self.s_elastic_min: float                   = 0.0
+        self.s_elastic_0: float                     = 1.0
+        self.decreasing_s_elastic_upper_bound: bool = True
 
         # Verbose
         self.print_level: int = 3
@@ -74,22 +72,19 @@ class RegHomotopyOptions():
         }
 
         #
-        self.relaxation_strategy: MpccRelaxation                  = MpccRelaxation.SCHOLTES_INEQ
+        self.relaxation_strategy: MpccRelaxation                  = ScholtesRelaxation(inequality=True)
         self.homotopy_steering_strategy: HomotopySteeringStrategy = HomotopySteeringStrategy.DIRECT
 
         self.timeout_cpu: float  = 0
         self.timeout_wall: float = 0
 
         self.store_all_homotopy_iters: bool  = True # store every NLP solution in the homotopy loop;
-        self.normalize_homotopy_update: bool = True
 
 
 class RegHomotopySolver(MpccsolPlugin):
     @override
     def _build_solver(self):
-        if self.opts.N_homotopy == 0:
-            self._calculate_N_homotopy()
-
+        self.f_relax = 0.0
         if isinstance(self.mpcc, ns.MPCC):
             self._build_solver_vdx()
         elif isinstance(self.mpcc, dict):
@@ -118,6 +113,9 @@ class RegHomotopySolver(MpccsolPlugin):
 
     def _sigma_curr(self):
         return self.nlp.p.sigma[()].val[()]
+
+    def _sigma(self):
+        return self.nlp.p.sigma[()].sym
 
     def _comp_res_curr(self):
         return self.stats["comp_res"][-1]
@@ -211,23 +209,73 @@ class RegHomotopySolver(MpccsolPlugin):
         }
         return mpcc_results
 
+    def _add_auxiliary_variables(self):
+        self.nlp.p.sigma[()] = Parameter("sigma", 1)
+        if self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_INF:
+            self.nlp.w.s_elastic[()] = Primal(
+                "s_elastic", 1,
+                lb=self.opts.s_elastic_min,
+                ub=self.opts.s_elastic_max,
+                init=self.opts.s_elastic_0,
+            )
+            if self.opts.decreasing_s_elastic_upper_bound:
+                self.nlp.g.s_ub[()] = Constraint(self.nlp.w.s_elastic[()] - self.nlp.p.sigma[()], lb=-np.inf, ub=0.0)
+            if self.opts.objective_scaling_direct:
+                self.nlp.f += ca.inv(self.nlp.p.sigma[()].sym)*self.nlp.w.s_elastic[()]
+            else:
+                self.nlp.f = self.nlp.f*self.nlp.p.sigma[()] + self.nlp.w.s_elastic[()]
+
+    def _get_relaxation_var(self, name, idx, length):
+
+        if self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.DIRECT:
+            return np.ones(length)*self.nlp.p.sigma[()].sym
+        elif self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_INF:
+            return np.ones(length)*self.nlp.w.s_elastic[()].sym
+        elif self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_1:
+            getattr(self.nlp.w, f"s_{name}")[*idx] = Primal(
+                f"s_{name}_{"_".join([str(i) for i in idx])}", length,
+                lb=self.opts.s_elastic_min,
+                ub=self.opts.s_elastic_max,
+                init=self.opts.s_elastic_0,
+            )
+            s = getattr(self.nlp.w, f"s_{name}")[*idx].sym
+            if self.opts.decreasing_s_elastic_upper_bound:
+                getattr(self.nlp.g, f"s_{name}_ub")[*idx] = Constraint(s - self.nlp.p.sigma[()], lb=-np.inf, ub=0.0)
+            if self.opts.objective_scaling_direct:
+                self.nlp.f += ca.inv(self.nlp.p.sigma[()].sym)*ca.norm_1(s)
+            else:
+                self.f_relax += self.nlp.f*self.nlp.p.sigma[()] + ca.norm_1(s)
+            return s
+
     def _build_solver_vdx(self):
         """
         Build the regularization homotopy solver from a vdx_py MPCC class.
         """
-        #TODO (@anton) reordering
         self.nlp = NLP(type(self.mpcc.f),name=f"relaxed_{self.mpcc.name}")
         self.nlp.f = self.mpcc.f
         self.nlp.w = copy(self.mpcc.w)
         self.nlp.g = copy(self.mpcc.g)
         self.nlp.p = copy(self.mpcc.p)
-        self.nlp.p.sigma[()] = Parameter("sigma", 1)
-        sigma = self.nlp.p.sigma[()].sym
+        self._add_auxiliary_variables()
+
+
         for (name,Gvar) in self.mpcc.G.variables.items():
             Hvar = self.mpcc.H.variables[name]
             for idx in Gvar.ind_map.keys():
                 # TODO(@anton) do non sholtes
-                getattr(self.nlp.g, f"{name}_relax")[*idx] = Constraint(Gvar[*idx]*Hvar[*idx] - sigma, lb=-np.inf, ub=0)
+                length = Gvar[*idx].sym.size(1)
+                relax, lb1, lb2 = self.opts.relaxation_strategy.relax(Gvar[*idx].sym, Hvar[*idx].sym, self._get_relaxation_var(name,idx,length))
+                if not self.opts.assume_lower_bounds:
+                    full_relax = ca.vertcat(relax[0], lb1[0], lb2[0])
+                    full_lb = np.concatenate([relax[1], lb1[1], lb2[1]])
+                    full_ub = np.concatenate([relax[1], lb1[2], lb2[2]])
+                else:
+                    full_relax = relax[0]
+                    full_lb = relax[1]
+                    full_ub = relax[2]
+                getattr(self.nlp.g, f"{name}_relax")[*idx] = Constraint(full_relax, lb=full_lb, ub=full_ub)
+        if not self.opts.objective_scaling_direct and self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_1:
+            self.nlp.f = self.nlp.f*self.nlp.p.sigma[()] + self.f_relax
 
         self.nlp_w_indmap,self.rev_nlp_w_indmap = self.nlp.w.resort_vector()
         self.nlp_g_indmap,self.rev_nlp_g_indmap = self.nlp.g.resort_vector()
@@ -250,7 +298,7 @@ class RegHomotopySolver(MpccsolPlugin):
         """
         Build the regularization homotopy solver from a mpcc dict.
         """
-        pass
+        raise NotImplementedError("Generic (non-vdx) mpccs not yet supported, use CCOpt instead.")
 
     def _print_header(self):
         print('-------------------------------------------')

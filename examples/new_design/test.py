@@ -163,6 +163,7 @@ if __name__ == "__main__":
         cross_comp_mode=CrossComplementarityMode.FE_FE
     )
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    solver_opts.homotopy_steering_strategy = nosnoc.mpccsol.plugins.reg_homotopy.HomotopySteeringStrategy.ELL_1
     solver = nosnoc.OcpSolver(model_sliding, opts, solver_opts)
     solver.solve()
     plot_results(solver)
