@@ -40,7 +40,7 @@ class RegHomotopyOptions():
 
         self.homotopy_update_slope: float           = 0.1
         self.homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule
-        self.N_homotopy                             = 0 # 0 -> set automatically
+        self.N_homotopy                             = 10 # Maximum number of nlp solves
         self.s_elastic_max: float                   = 1e1
         self.s_elastic_min: float                   = 0
         self.s_elastic_0: float                     = 1
@@ -87,6 +87,9 @@ class RegHomotopyOptions():
 class RegHomotopySolver(MpccsolPlugin):
     @override
     def _build_solver(self):
+        if self.opts.N_homotopy == 0:
+            self._calculate_N_homotopy()
+
         if isinstance(self.mpcc, ns.MPCC):
             self._build_solver_vdx()
         elif isinstance(self.mpcc, dict):
@@ -178,11 +181,13 @@ class RegHomotopySolver(MpccsolPlugin):
         }
         sigma_curr = self.opts.sigma_0
         self.nlp.p.sigma[()](val=sigma_curr)
+        ii = 0
         if self.opts.print_level:
             self._print_header()
-        while self._sigma_curr() >= self.opts.sigma_N and self._comp_res_curr() > self.opts.complementarity_tol:
+        while self._sigma_curr() >= self.opts.sigma_N and self._comp_res_curr() > self.opts.complementarity_tol and ii <= self.opts.N_homotopy:
             self._solve_nlp()
             self._prepare_nlp()
+            ii += 1
 
         G_val = self.G_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
         H_val = self.H_mpcc_fun(self.nlp.w.res, self.nlp.p.val).full().flatten()
