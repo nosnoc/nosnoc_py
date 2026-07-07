@@ -59,6 +59,14 @@ class Stewart(Base):
             self.w.mu[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)]    = Primal(f"mu", dims.n_mu,
                                                                                                   lb=-np.inf,
                                                                                                   ub=np.inf)
+            if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
+                self.w.B_max[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('B_max', dims.n_lambda ,lb=-np.inf,ub=np.inf)
+                self.w.pi_theta[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('pi_theta', dims.n_theta ,lb=-np.inf,ub=np.inf)
+                self.w.pi_lambda[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('pi_lambda', dims.n_lambda ,lb=-np.inf,ub=np.inf)
+                self.w.theta_mult[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('theta_mult', dims.n_theta ,lb=0,ub=np.inf)
+                self.w.lambda_mult[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('lambda_mult', dims.n_lambda ,lb=0,ub=np.inf)
+                self.w.eta[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('eta', dims.n_lambda ,lb=0,ub=np.inf)
+                self.w.nu[ii,range(2,opts.N_finite_elements[ii-1]+1)] = Primal('nu', 1, lb=0,ub=np.inf)
 
         # handle relaxing intermediate box constraints
         self._handle_x_box_constraints()
@@ -384,28 +392,31 @@ class Stewart(Base):
                 self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
 
     def __linear_complementarity(self):
+        opts = self.opts
+        rbp = self.rbp
+        dims = self.dcs.dims
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
                 h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
-                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_lambda_B = ca.sum2(self.w.lam[ii,jj-1,:])
                 sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
 
-                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
+                sigma_lambda_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
                 sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
 
-                lam_mult = self.w.lam_mult[ii,jj]
+                lambda_mult = self.w.lambda_mult[ii,jj]
                 theta_mult = self.w.theta_mult[ii,jj]
                 B_max = self.w.B_max[ii,jj]
-                pi_lam = self.w.pi_lam[ii,jj]
+                pi_lambda = self.w.pi_lambda[ii,jj]
                 pi_theta = self.w.pi_theta[ii,jj]
                 eta = self.w.eta[ii,jj]
                 nu = self.w.nu[ii,jj]
 
-                self.g.pi_lam_or[ii,jj] = Constraint(
+                self.g.pi_lambda_or[ii,jj] = Constraint(
                     ca.vertcat(
-                        pi_lam-sigma_lam_F,
-                        pi_lam-sigma_lam_B,
-                        sigma_lam_F+sigma_lam_B-pi_lam
+                        pi_lambda-sigma_lambda_F,
+                        pi_lambda-sigma_lambda_B,
+                        sigma_lambda_F+sigma_lambda_B-pi_lambda
                     ),
                     lb=0,
                     ub=np.inf
@@ -422,28 +433,28 @@ class Stewart(Base):
 
                 # kkt conditions for min B, B>=sigmaB, B>=sigmaF:
                 kkt_max = ca.vertcat(
-                    1-theta_mult-lam_mult,
-                    B_max-pi_lam,
+                    1-theta_mult-lambda_mult,
+                    B_max-pi_lambda,
                     B_max-pi_theta,
                 )
                 self.g.kkt_max[ii,jj] = Constraint(
                     kkt_max,
                     lb=0.0,
-                    ub=np.concat(np.zeros(dims.n_lam),np.inf*np.ones(dims.n_lam),np.inf*np.ones(dims.n_lam))
+                    ub=np.hstack([np.zeros(dims.n_lambda),np.inf*np.ones(dims.n_lambda),np.inf*np.ones(dims.n_lambda)])
                 )
 
-                self.G.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat((B_max-pi_lam),(B_max-pi_theta)))
-                self.H.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat(lam_mult,theta_mult))
+                self.G.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat((B_max-pi_lambda),(B_max-pi_theta)))
+                self.H.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat(lambda_mult,theta_mult))
 
                 # eta calculation
-                eta_const = ca.vertcat(eta-pi_theta,eta-pi_lam,eta-pi_theta-pi_lam+B_max)
+                eta_const = ca.vertcat(eta-pi_theta,eta-pi_lambda,eta-pi_theta-pi_lambda+B_max)
                 self.g.eta_const[ii,jj] = Constraint(
                     eta_const,
-                    lb=np.concat(-np.inf*np.ones(dims.n_lam),-np.inf*np.ones(dims.n_lam),np.zeros(dims.n_lam)),
-                    ub=np.concat(np.zeros(dims.n_lam),np.zeros(dims.n_lam),np.inf*np.ones(dims.n_lam))
+                    lb=np.hstack([-np.inf*np.ones(dims.n_lambda),-np.inf*np.ones(dims.n_lambda),np.zeros(dims.n_lambda)]),
+                    ub=np.hstack([np.zeros(dims.n_lambda),np.zeros(dims.n_lambda),np.inf*np.ones(dims.n_lambda)])
                     )
 
-                self.g.nu_or[ii,jj] = Constraint(ca.vertcat(nu-eta,sum(eta)-nu),lb=0,ub=inf)
+                self.g.nu_or[ii,jj] = Constraint(ca.vertcat(nu-eta,ca.sum(eta.sym)-nu),lb=0,ub=np.inf)
 
                 # the actual step eq conditions
                 M=self.p.T[()]/opts.N_stages

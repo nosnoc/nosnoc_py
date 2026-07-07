@@ -52,9 +52,6 @@ class Options():
 
     dcs_mode: DcsMode = DcsMode.STEWART # DcsMode: Which DCS to reformulate the problem into.
 
-    lift_complementarities: bool = 0 # boolean: Whether complementarities are lifted. TODO(@anton) should this still live in MPCC generation?
-    lower_bound_comp_lift: bool  = 0 # boolean: If true we add additional lower bounds to the lifted variables.
-
     #--------------------- Initial Values ---------------------#
 
     initial_alpha: float      = 0.5 # double: Initial value for $\alpha$ in the Heaviside step reformulation.
@@ -139,8 +136,6 @@ class Options():
     n_depth_step_lifting: int     = 2 # int: Depth to which the Heaviside step convex multipliers are lifted.
 
     gcs_lift_gap_functions: bool = 1 # boolean: If true the step functions $c(x)$ are lifted in the gradient complementarity system reformulation.
-
-    linear_complemtarity_M: float = 1000 # double: $M$ multiplier used in the linear complementarity step equilibration fromulation. Larger values alleviate infeasibility for smaller step sizes.
 
     g_path_at_fe: bool  = 0 # boolean: If true we evaluate nonlinear path constraint at every finte element boundary.
     g_path_at_stg: bool = 0 # boolean: If true evaluate nonlinear path constraint at every stage.

@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from casadi import SX, vertcat, horzcat
 
 import nosnoc
-from nosnoc.nosnoc_types import CrossComplementarityMode, ConstraintRelaxationMode
+from nosnoc.nosnoc_types import CrossComplementarityMode, ConstraintRelaxationMode, StepEquilibrationMode
 
 # example opts
-TERMINAL_RELAXATION = ConstraintRelaxationMode.ELL_1
+TERMINAL_RELAXATION = ConstraintRelaxationMode.NONE
 LINEAR_CONTROL = True
 TERMINAL_TIME = 4.0
 
@@ -36,6 +36,7 @@ def get_default_options() -> nosnoc.Options:
         T=TERMINAL_TIME,
         use_fesd=True,
         cross_comp_mode=CrossComplementarityMode.FE_FE,
+        #step_equilibration=StepEquilibrationMode.LINEAR_COMPLEMENTARITY,
         relax_terminal_constraint = TERMINAL_RELAXATION,
         n_s=n_s,
     )
