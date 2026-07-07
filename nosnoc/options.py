@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, ConstraintHandling, SpeedOfTimeVariableMode
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode
 
 @dataclass
 class Options():
@@ -227,8 +227,7 @@ class Options():
     #
     # See Also:
     #    `ConstraintRelaxationMode` for a detailed description of the available relaxation modes.
-    #relax_terminal_constraint: ConstraintRelaxationMode = ConstraintRelaxationMode.NONE;
-    #relax_terminal_constraint_from_above: bool = 0; # boolean: If true we only relax the upper bound of the terminal constraint.
+    relax_terminal_constraint: ConstraintRelaxationMode = ConstraintRelaxationMode.NONE;
     rho_terminal: float  = 1e2; # double: Weight used to penalize terminal constraint violation.
 
     # NOTIMPLEMENTED

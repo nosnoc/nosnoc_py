@@ -52,9 +52,11 @@ class HomotopyUpdateRule(Enum):
     SUPERLINEAR = auto()
 
 
-class ConstraintHandling(Enum):
-    EXACT = auto()
-    LEAST_SQUARES = auto()
+class ConstraintRelaxationMode(Enum):
+    NONE = auto()
+    ELL_1 = auto()
+    ELL_2 = auto()
+    ELL_INF = auto()
 
 
 class SpeedOfTimeVariableMode(Enum):

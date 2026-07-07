@@ -6,7 +6,7 @@ import numpy as np
 from ..mpcc import MPCC
 from vdx_py.vartypes import *
 
-from ..nosnoc_types import RKRepresentation
+from ..nosnoc_types import RKRepresentation, ConstraintRelaxationMode
 from ..rk import IntegralRKRepresentation, DifferentialRKRepresentation, LiftedDifferentialRKRepresentation
 
 class Base(ABC,MPCC):
@@ -200,7 +200,11 @@ class Base(ABC,MPCC):
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
-        self.g.path[ii,jj,kk] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+        self.g.path[ii,jj,kk] = Constraint(
+            self.dcs.g_path_fun(x,z,u,v_global,p),
+            lb=self.model.lbg_path,
+            ub=self.model.ubg_path,
+        )
 
     def _fe_path_constraints(self, ii, jj):
         if self.opts.g_path_at_stg or not self.opts.g_path_at_fe:
@@ -210,7 +214,11 @@ class Base(ABC,MPCC):
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
-        self.g.path[ii,jj] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+        self.g.path[ii,jj] = Constraint(
+            self.dcs.g_path_fun(x,z,u,v_global,p),
+            lb=self.model.lbg_path,
+            ub=self.model.ubg_path,
+        )
 
     def _stage_path_constraints(self, ii):
         if self.opts.g_path_at_stg or self.opts.g_path_at_fe:
@@ -220,7 +228,11 @@ class Base(ABC,MPCC):
         u = self.w.u[ii]
         v_global = self.w.v_global[()]
         p = self._get_stage_parameters(ii)
-        self.g.path[ii] = Constraint(self.dcs.g_path_fun(x,z,u,v_global,p))
+        self.g.path[ii] = Constraint(
+            self.dcs.g_path_fun(x,z,u,v_global,p),
+            lb=self.model.lbg_path,
+            ub=self.model.ubg_path,
+        )
 
     def _terminal_constraint(self):
         # TODO(@anton) relaxation
@@ -228,7 +240,12 @@ class Base(ABC,MPCC):
         z = self.w.z[self.opts.N_stages,self.opts.N_finite_elements[self.opts.N_stages-1],self.opts.n_s+self.rbp]
         v_global = self.w.v_global[()]
         p_global = self.p.p_global[()]
-        self.g.termuinal[self.opts.N_stages+1] = Constraint(self.dcs.g_terminal_fun(x,z,v_global,p_global))
+        self.g.terminal[self.opts.N_stages+1] = Constraint(
+            self.dcs.g_terminal_fun(x,z,v_global,p_global),
+            lb=self.model.lbg_terminal,
+            ub=self.model.ubg_terminal,
+            relax=self._get_relaxation(self.opts.relax_terminal_constraint),
+        )
 
     def _terminal_objective(self):
         x = self.w.x[self.opts.N_stages,self.opts.N_finite_elements[self.opts.N_stages-1],self.opts.n_s+self.rbp]
@@ -273,6 +290,16 @@ class Base(ABC,MPCC):
                 #     obj.p.rho_numerical_time().val = opts.rho_terminal_numerical_time
 
                 
+
+    def _get_relaxation(self, relax_type: ConstraintRelaxationMode):
+        if relax_type == ConstraintRelaxationMode.NONE:
+            return HardConstraint()
+        elif relax_type == ConstraintRelaxationMode.ELL_1:
+            return Ell1Relaxation(self)
+        elif relax_type == ConstraintRelaxationMode.ELL_2:
+            return Ell2Relaxation(self)
+        elif relax_type == ConstraintRelaxationMode.ELL_INF:
+            return EllInfRelaxation(self)
 
 
     @abstractmethod

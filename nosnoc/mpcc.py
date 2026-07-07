@@ -45,8 +45,17 @@ class MPCC(NLP):
         return self.solver.stats
 
     def __str__(self):
-        ret = super.__str__(self)
-        ret += self.G.__str__()
-        ret += self.H.__str__()
-
+        ret = ("NLP with Objective:\n"
+               f"{self.f}\n"
+               f"Variables:\n"
+               f"{str(self.w)}\n"
+               f"Parameters:\n"
+               f"{str(self.p)}\n"
+               f"Constraints:\n"
+               f"{str(self.g)}\n"
+               f"Complementarity G:\n"
+               f"{str(self.G)}\n"
+               f"Complementarity H:\n"
+               f"{str(self.H)}\n"
+               )
         return ret

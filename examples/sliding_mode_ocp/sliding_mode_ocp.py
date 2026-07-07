@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from casadi import SX, vertcat, horzcat
 
 import nosnoc
-from nosnoc.nosnoc_types import CrossComplementarityMode
+from nosnoc.nosnoc_types import CrossComplementarityMode, ConstraintRelaxationMode
 
 # example opts
-TERMINAL_CONSTRAINT = True
+TERMINAL_RELAXATION = ConstraintRelaxationMode.ELL_1
 LINEAR_CONTROL = True
 TERMINAL_TIME = 4.0
 
@@ -34,9 +34,9 @@ def get_default_options() -> nosnoc.Options:
         N_stages=N_stages,
         N_finite_elements=[N_fe]*N_stages,
         T=TERMINAL_TIME,
-        h_k=[TERMINAL_TIME/(N_fe*N_stages)]*N_stages,
         use_fesd=True,
         cross_comp_mode=CrossComplementarityMode.FE_FE,
+        relax_terminal_constraint = TERMINAL_RELAXATION,
         n_s=n_s,
     )
     return opts
@@ -98,12 +98,8 @@ def get_sliding_mode_ocp_description():
     F2 = horzcat(f_21, f_22)
     F = [F1, F2]
 
-    if TERMINAL_CONSTRAINT:
-        g_terminal = x[:2] - X_TARGET
-        f_terminal = SX.zeros(1)
-    else:
-        g_terminal = SX.zeros(0)
-        f_terminal = 100 * (x[:2] - X_TARGET).T @ (x[:2] - X_TARGET)
+    g_terminal = x[:2] - X_TARGET
+    f_terminal = SX.zeros(1)
 
     model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=X0, u=u, lbu=LBU, ubu=UBU, f_q=f_q, f_q_T=f_terminal, g_terminal=g_terminal)
 
@@ -119,6 +115,7 @@ def solve_ocp(opts=None):
 
     solver = nosnoc.OcpSolver(model, opts, solver_opts)
     solver.solve()
+    breakpoint()
     return solver
 
 

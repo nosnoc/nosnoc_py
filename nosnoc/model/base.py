@@ -152,7 +152,7 @@ class Base(ABC):
         self._populate_vectors("g_path", [("lbg_path", -np.inf), ("ubg_path", np.inf)])
         self.dims.n_g_paty = self.g_path.size(1)
         self.g_terminal = g_terminal; self.lbg_terminal = lbg_terminal; self.ubg_terminal = ubg_terminal
-        self._populate_vectors("g_terminal", [("lbg_terminal", -np.inf), ("ubg_terminal", np.inf)])
+        self._populate_vectors("g_terminal", [("lbg_terminal", 0.0), ("ubg_terminal", 0.0)])
         self.dims.n_g_terminal = self.g_terminal.size(1)
 
         self.G_path = G_path; self._populate_vectors("G_path")
