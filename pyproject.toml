@@ -6,7 +6,7 @@ dependencies = [
   'scipy',
   'casadi>=3.6.0',
   'matplotlib',
-  'vdx'
+  'vdx>=0.0.2'
 ]
 requires-python = ">=3.8"
 authors = [
