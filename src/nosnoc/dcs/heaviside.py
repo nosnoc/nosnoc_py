@@ -1,5 +1,6 @@
 from typing import Optional, List, override
 from ..model import Pss as PssModel, PssDims
+from ..model import Heaviside as HeavisideModel, HeavisideModelDims
 from ..dims import Dims
 from .base import Base
 
@@ -7,9 +8,10 @@ import casadi as ca
 import numpy as np
 
 class HeavisideDims(Dims):
-    def __init__(self, parent :PssDims):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.n_alpha = 0
+        if isinstance(parent, PssDims):
+            self.n_alpha = 0
         self.n_lambda = 0
 
 class Heaviside(Base):
@@ -20,8 +22,7 @@ class Heaviside(Base):
         self.dims = HeavisideDims(model.dims)
         super().__init__(model)
 
-    @override
-    def _generate_variables(self):
+    def __generate_variables_pss(self):
         self.dims.n_alpha = sum(self.dims.n_c_sys)
         self.dims.n_lambda = self.dims.n_alpha
 
@@ -39,13 +40,25 @@ class Heaviside(Base):
         self.lambda_n = ca.vertcat(*self.lambda_n_sys)
         self.lambda_p = ca.vertcat(*self.lambda_p_sys)
 
-        self.z_all = ca.vertcat(self.alpha, self.lambda_n, self.lambda_p, self.model.z)
+
+    def __generate_variables_heaviside(self):
+        self.dims.n_lambda = self.dims.n_alpha
+        self.alpha = self.model.alpha
+        self.lambda_n = ca.SX.sym("lambda_n", self.dims.n_lambda)
+        self.lambda_p = ca.SX.sym("lambda_p", self.dims.n_lambda)
+
 
     @override
-    def _generate_expressions(self):
-        """Generate the required equations and functions for the dcs"""
-        self.f_x = self.model.f_0
+    def _generate_variables(self):
+        if isinstance(self.model, PssModel):
+            self.__generate_variables_pss()
+        elif isinstance(self.model, PssModel):
+            self.__generate_variables_heaviside()
 
+        self.z_all = ca.vertcat(self.alpha, self.lambda_n, self.lambda_p, self.model.z)
+
+    def __generate_expressions_pss(self):
+        f_x = self.model.f_0
 
         # TODO(@anton) there has to be a better way to do this!
         for ii in range(self.dims.n_sys):
@@ -55,10 +68,7 @@ class Heaviside(Base):
                     if self.model.S[ii][jj,kk] != 0:
                         theta_ii[jj] *= (0.5*(1-self.model.S[ii][jj,kk])+self.model.S[ii][jj,kk]*self.alpha_sys[ii][kk])
 
-            self.f_x += self.model.F[ii]@theta_ii
-
-        self.g_indicator = self.model.g_indicator
-
+            f_x += self.model.F[ii]@theta_ii
         g_lp_stationarity = []
         lam00_n_expr = []
         lam00_p_expr = []
@@ -66,6 +76,19 @@ class Heaviside(Base):
             g_lp_stationarity.append(self.model.c[ii] - self.lambda_p_sys[ii] + self.lambda_n_sys[ii])
             lam00_n_expr.append(-ca.fmin(self.model.c[ii], 0))
             lam00_p_expr.append(ca.fmax(self.model.c[ii],0))
+        return f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr
+
+    def __generate_expressions_heaviside(self):
+        return self.model.f_x, [self.model.c - self.lambda_p + self.lambda_n], [-ca.fmin(self.model.c[ii], 0)], [ca.fmax(self.model.c[ii],0)]
+
+    @override
+    def _generate_expressions(self):
+        """Generate the required equations and functions for the dcs"""
+        if isinstance(self.model, PssModel):
+            self.f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr = self.__generate_expressions_pss()
+        elif isinstance(self.model, PssModel):
+            self.f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr = self.__generate_expressions_heaviside()
+
 
         self.g_alg = ca.vertcat(*g_lp_stationarity)
 
@@ -74,7 +97,6 @@ class Heaviside(Base):
         self.g_z_fun = ca.Function('g_z', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.g_z])
         self.g_alg_fun = ca.Function('g_alg', [self.model.x, self.model.z, self.alpha, self.lambda_n, self.lambda_p, self.model.u, self.model.v_global, self.model.p], [self.g_alg])
         self.g_lp_stationarity_fun = ca.Function('g_lp_stationarity', [self.model.x, self.model.z, self.lambda_n, self.lambda_p, self.model.v_global, self.model.p], [*g_lp_stationarity])
-        self.g_indicator_fun = ca.Function('g_indicator', [self.model.x, self.model.z, self.model.v_global, self.model.p], [*self.model.g_indicator])
         self.lam00_fun = ca.Function('lam00', [self.model.x, self.model.z, self.model.v_global, self.model.p_global], [*lam00_n_expr, *lam00_p_expr])
         self.g_path_fun = ca.Function('g_path', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.g_path])
         self.G_path_fun  = ca.Function('G_path', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.G_path])
