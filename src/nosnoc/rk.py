@@ -44,7 +44,7 @@ class IntegralRKRepresentation(AbstractRKRepresentation):
 
     @override
     def colloc_points(self):
-        return self.tau_root
+        return self.tau_root[1:]
 
     @override
     def collocation_constraints(self, x0, z, p, h, f_x, f_q, g, sot=1.0):

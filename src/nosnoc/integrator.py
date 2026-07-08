@@ -159,7 +159,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 start = t_grid_full[-1]
                 if opts.rk_representation != RKRepresentation.DIFFERENTIAL:
                     for kk in range(opts.n_s):
-                        t_grid_full.append(start + c[kk+1]*h[jj])
+                        t_grid_full.append(start + c[kk]*h[jj])
                 if rbp:
                     t_grid_full.append(start + h[jj])
 
@@ -281,7 +281,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             for jj in range(len(h)):
                 start = t_grid_full[-1]
                 for kk in range(opts.n_s):
-                    t_grid_full.append(start + c[kk+1]*h[jj])
+                    t_grid_full.append(start + c[kk]*h[jj])
                 if rbp:
                     t_grid_full.append(start + h[jj])
 
