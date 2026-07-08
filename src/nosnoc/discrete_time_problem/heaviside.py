@@ -85,7 +85,7 @@ class Heaviside(Base):
 
         z_rk_0 = self._get_rk_stage_z(0,0,opts.n_s)
         self.g.algebraic[0,0,opts.n_s] = Constraint(
-            self.g_rk(z_rk_0,self._get_stage_parameters(1))
+            self.dcs.g_rk(z_rk_0,self._get_stage_parameters(1))
         )
 
         x_prev = self.w.x[0,0,opts.n_s].sym # last point of previous FE, needed for continuity conditions
@@ -134,6 +134,7 @@ class Heaviside(Base):
         self._terminal_constraint()
         self._terminal_objective()
 
+    @override
     def _get_rk_stage_z(self, ii, jj, kk):
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
             return ca.vertcat(
@@ -207,7 +208,7 @@ class Heaviside(Base):
                     for rr in range(1, opts.n_s+1):
                         alpha_ijr = self.w.alpha[ii,jj,rr]
                         Gij.append(ca.vertcat(lambda_n_ijk, lambda_p_ijk))
-                        Hij.append(ca.vertcat(alpha_ijr, 1-alpha_ijk))
+                        Hij.append(ca.vertcat(alpha_ijr, 1-alpha_ijr))
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
                 lambda_n_prev = self.w.lambda_n[ii,jj,opts.n_s+rbp]
@@ -229,7 +230,7 @@ class Heaviside(Base):
                     lambda_n_ijk = self.w.lambda_n[ii,jj,kk]
                     lambda_p_ijk = self.w.lambda_p[ii,jj,kk]
                     Gij.append(ca.vertcat(lambda_n_ijk, lambda_p_ijk))
-                    Hij.append(ca.vertact(sum_alpha, sum_not_alpha))
+                    Hij.append(ca.vertcat(sum_alpha, sum_not_alpha))
 
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
@@ -251,7 +252,7 @@ class Heaviside(Base):
                 for kk in range(1, opts.n_s+1):
                     alpha_ijk = self.w.alpha[ii,jj,kk]
                     Gij.append(ca.vertcat(sum_lambda_n, sum_lambda_p))
-                    Hij.append(alpha_ijk, 1-alpha_ijk)
+                    Hij.append(ca.vertcat(alpha_ijk, 1-alpha_ijk))
 
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
@@ -286,8 +287,8 @@ class Heaviside(Base):
                     lambda_n_ijk = self.w.lambda_n[ii,jj,kk]
                     lambda_p_ijk = self.w.lambda_p[ii,jj,kk]
                     alpha_ijk = self.w.alpha[ii,jj,kk]
-                    self.G.standard_comp[ii,jj,kk] = CConstraint(ca.vertact(lambda_n_ijk, lambda_p_ijk))
-                    self.H.standard_comp[ii,jj,kk] = CConstraint(ca.vertact(alpha_ijk, 1-alpha_ijk))
+                    self.G.standard_comp[ii,jj,kk] = CConstraint(ca.vertcat(lambda_n_ijk, lambda_p_ijk))
+                    self.H.standard_comp[ii,jj,kk] = CConstraint(ca.vertcat(alpha_ijk, 1-alpha_ijk))
 
     @override
     def _generate_step_equilibration_constraints(self):
