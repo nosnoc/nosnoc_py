@@ -4,9 +4,9 @@ version = "0.2"
 dependencies = [
   'numpy>=1.20.0',
   'scipy',
-  'casadi',
+  'casadi>=3.6.0',
   'matplotlib',
-  'vdx_py'
+  'vdx'
 ]
 requires-python = ">=3.8"
 authors = [
@@ -19,9 +19,15 @@ maintainers = [
 ]
 description = "Nonsmooth Numerical Optimal Control for Python"
 readme = "README.md"
-license = "BSD-2-Clause"
+license = {file = "LICENCE"}
 
-[project.optional-dependencies]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[dependency-groups]
 test = ['pytest',
         'pytest-cov',
-        'parametrized']
+        'parameterized',
+        ]

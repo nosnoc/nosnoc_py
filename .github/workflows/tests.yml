@@ -3,6 +3,9 @@ name: nosnoc tests
 on:
   pull_request:
   push:
+    branches:
+      - "main"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
 
 jobs:
   test_nosnoc:
@@ -10,7 +13,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
     - name: Install Python and pip package
       shell: bash
       run: |
@@ -19,9 +21,7 @@ jobs:
         virtualenv --python=python3 env
         source env/bin/activate
         which python
-        pip install setuptools
-        pip install -e .
-        pip install -r requirements-test.txt
+        pip install -e . --group test
 
     - name: Run tests
       shell: bash
