@@ -144,7 +144,8 @@ if __name__ == "__main__":
         x_box_at_stg=False,
         x_box_at_fe=False,
         use_fesd=True,
-        cross_comp_mode=CrossComplementarityMode.FE_FE
+        cross_comp_mode=CrossComplementarityMode.FE_FE,
+        rk_representation=nosnoc.RKRepresentation.DIFFERENTIAL,
     )
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     solver = nosnoc.OcpSolver(model_switch, opts, solver_opts)

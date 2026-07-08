@@ -47,7 +47,7 @@ class Heaviside(Base):
 
         for ii in range(1,opts.N_stages+1):
             self._create_h(ii)  # Create timestep variables
-            self._create_xz(ii) # Create x and z variables
+            self._create_xvz(ii) # Create x and z variables
 
             # Create Heaviside algebraics
             self.w.alpha[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)]        = Primal(f"alpha_0", dims.n_alpha,
