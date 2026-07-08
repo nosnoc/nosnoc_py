@@ -20,15 +20,25 @@ def get_default_options(**kwargs):
     default_args = {
         "N_stages":1,
         "N_finite_elements":N_fe,
-        "T":TSIM/NSIM,
-        "N_sim":NSIM,
-        "h_k":[1/(N_fe)],
+        "T":1.0,
         "use_fesd":True,
         "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
         }
     merged = dict(list(default_args.items())+ list(kwargs.items()))
     # switch
     opts = nosnoc.Options(
+        **merged
+    )
+    return opts
+
+def get_default_integrator_options(**kwargs):
+    default_args = {
+        "T_sim":TSIM,
+        "N_sim":NSIM,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
+    # switch
+    opts = nosnoc.FESDIntegratorOptions(
         **merged
     )
     return opts
@@ -72,16 +82,16 @@ def get_simplest_model_switch(x0=X0):
     return model
 
 
-def solve_simplest_example(opts=None, model=None, x0=X0, Nsim=1, Tsim=TSIM):
+def solve_simplest_example(opts=None, model=None, integrator_opts=None, x0=X0, Nsim=1, Tsim=TSIM):
     if opts is None:
         opts = get_default_options()
         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
         opts.pss_mode = nosnoc.DcsMode.STEWART
     if model is None:
         model = get_simplest_model_sliding()
-
-    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
-    integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, print_level=2)
+    if integrator_opts is None:
+        solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+        integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, T_sim=Tsim, N_sim=Nsim, print_level=0)
     integrator = nosnoc.Integrator(model, opts, integrator_opts)
     t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(x0)
     # plot_results(results)

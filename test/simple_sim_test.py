@@ -1,5 +1,6 @@
 from examples.simplest.simplest_example import (
     get_default_options,
+    get_default_integrator_options,
     X0,
     TSIM,
     EXACT_SWITCH_TIME,

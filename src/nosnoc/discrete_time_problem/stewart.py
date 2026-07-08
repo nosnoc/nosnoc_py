@@ -52,7 +52,7 @@ class Stewart(Base):
                                                                                                   lb=0.0,
                                                                                                   ub=np.inf,
                                                                                                   init=1.0)
-            self.w.theta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"theta", dims.n_theta,
+            self.w.theta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(f"theta", dims.n_theta,
                                                                                                   lb=0.0,
                                                                                                   ub=np.inf,
                                                                                                   init=1.0/dims.n_theta)
@@ -126,7 +126,7 @@ class Stewart(Base):
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
                     self.g.algebraic[ii,jj,opts.n_s+1] = Constraint(
                         dcs.g_rk_stationarity(
-                            self._get_rk_stage_z(self, ii, jj, opts.n_s+1),
+                            self._get_rk_stage_z(ii, jj, opts.n_s+1),
                             prk_ii_jj
                         )
                     )

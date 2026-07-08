@@ -142,10 +142,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 wall_time_total = solver_stats["wall_time_total"]
                 print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
-            x_step = np.reshape(obj.discrete_time_problem.w.x(0,0,opts.n_s).res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
+            x_step = np.reshape(self.dtp.w.x[0,0,opts.n_s].res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
             x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
             x_step = np.vstack([x_step, x_int])
-            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*opts.n_s, self.model.dims.n_x))
+            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*(opts.n_s+rbp), self.model.dims.n_x))
             x_res.append(x_step)
             x_res_full.append(x_step_full)
             if opts.use_fesd:
