@@ -4,7 +4,7 @@ import casadi as ca
 import numpy as np
 
 from .base import Base
-from vdx_py.vartypes import *
+from vdx.vartypes import *
 
 from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode
 

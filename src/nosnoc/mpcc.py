@@ -1,6 +1,6 @@
 import casadi as ca
-from vdx_py.vector import *
-from vdx_py.nlp import NLP
+from vdx.vector import *
+from vdx.nlp import NLP
 import nosnoc.mpccsol as mpccsol
 
 class MPCC(NLP):

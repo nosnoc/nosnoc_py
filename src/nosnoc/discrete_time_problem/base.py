@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import casadi as ca
 import numpy as np
 from ..mpcc import MPCC
-from vdx_py.vartypes import *
+from vdx.vartypes import *
 
 from ..nosnoc_types import RKRepresentation, ConstraintRelaxationMode
 from ..rk import IntegralRKRepresentation, DifferentialRKRepresentation, LiftedDifferentialRKRepresentation

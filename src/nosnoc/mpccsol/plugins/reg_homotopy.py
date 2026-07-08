@@ -6,8 +6,8 @@ from copy import copy
 import casadi as ca
 import numpy as np
 import nosnoc as ns
-from vdx_py import NLP
-from vdx_py.vartypes import *
+from vdx import NLP
+from vdx.vartypes import *
 from .plugin import MpccsolPlugin
 from .relaxations import *
 
@@ -251,7 +251,7 @@ class RegHomotopySolver(MpccsolPlugin):
 
     def _build_solver_vdx(self):
         """
-        Build the regularization homotopy solver from a vdx_py MPCC class.
+        Build the regularization homotopy solver from a vdx MPCC class.
         """
         self.nlp = NLP(type(self.mpcc.f),name=f"relaxed_{self.mpcc.name}")
         self.nlp.f = self.mpcc.f
