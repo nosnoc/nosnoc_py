@@ -336,3 +336,17 @@ class Base(ABC,MPCC):
     def _generate_step_equilibration_constraints(self):
         """Create step equilibration constraints"""
         pass
+
+    def _heuristic_mean(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                self.f += self.p.rho_h[()]*(h0-self.w.h[ii,jj])**2
+
+    def _heuristic_diff(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
