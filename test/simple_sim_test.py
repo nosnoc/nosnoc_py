@@ -132,22 +132,21 @@ class SimpleTests(unittest.TestCase):
             raise Exception("Test with FESD off failed")
         print("main_test_fesd_off: SUCCESS")
 
-    # def test_discretization(self):
-    #     model = get_simplest_model_sliding()
+    def test_discretization(self):
+        model = get_simplest_model_sliding()
 
-    #     for mpcc_mode in [nosnoc.MpccMode.SCHOLTES_EQ, nosnoc.MpccMode.SCHOLTES_INEQ]:
-    #         for irk_scheme in nosnoc.IrkSchemes:
-    #             for irk_representation in nosnoc.IrkRepresentation:
-    #                 opts = get_default_options()
-    #                 opts.mpcc_mode = mpcc_mode
-    #                 opts.irk_scheme = irk_scheme
-    #                 opts.print_level = 0
-    #                 opts.irk_representation = irk_representation
-    #                 try:
-    #                     check_opts(opts, model=model)
-    #                 except:
-    #                     raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
-    #     print("main_test_sliding: SUCCESS")
+        for rk_scheme in nosnoc.RKScheme:
+            for rk_representation in nosnoc.RKRepresentation:
+                opts = get_default_options(
+                    rk_scheme = rk_scheme,
+                    rk_representation = rk_representation,
+                    print_level = 0,
+                )
+                try:
+                    check_opts(opts, model=model)
+                except:
+                    raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+        print("main_test_sliding: SUCCESS")
 
     # def test_least_squares_problem(self):
     #     model = get_simplest_model_switch()
@@ -204,20 +203,6 @@ class SimpleTests(unittest.TestCase):
     #                 # print(f"Test failed with {fix_as=}, {step_equilibration=}")
     #                 raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
 
-
-
-    # def test_initializations(self):
-    #     model = get_simplest_model_switch()
-
-    #     for initialization_strategy in nosnoc.InitializationStrategy:
-    #         opts = get_default_options()
-    #         opts.print_level = 0
-    #         opts.initialization_strategy = initialization_strategy
-    #         print(f"\ntesting initialization_strategy = {initialization_strategy}")
-    #         try:
-    #             check_opts(opts, model=model)
-    #         except:
-    #             raise Exception(f"Test failed with setting:\n {opts=}")
 
 if __name__ == "__main__":
     unittest.main()

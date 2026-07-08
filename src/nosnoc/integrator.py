@@ -10,7 +10,7 @@ import casadi as ca
 from .model import Pss
 from .dcs import Stewart as StewartDCS
 from .discrete_time_problem import Stewart as StewartDTP
-from .nosnoc_types import DcsMode
+from .nosnoc_types import DcsMode, RKRepresentation
 from nosnoc.mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
 @dataclass
@@ -129,6 +129,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         t_current = 0.0
         w0 = self.dtp.w.init
         rbp = self.dtp.rbp
+        n_steps = (1 if opts.rk_representation == RKRepresentation.DIFFERENTIAL else opts.n_s+rbp)
 
         for ii in range(integrator_opts.N_sim):
             if u is not None: # Set control
@@ -145,7 +146,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             x_step = np.reshape(self.dtp.w.x[0,0,opts.n_s].res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
             x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
             x_step = np.vstack([x_step, x_int])
-            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*(opts.n_s+rbp), self.model.dims.n_x))
+            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*(n_steps), self.model.dims.n_x))
             x_res.append(x_step)
             x_res_full.append(x_step_full)
             if opts.use_fesd:
@@ -156,8 +157,9 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
                 start = t_grid_full[-1]
-                for kk in range(opts.n_s):
-                    t_grid_full.append(start + c[kk+1]*h[jj])
+                if opts.rk_representation != RKRepresentation.DIFFERENTIAL:
+                    for kk in range(opts.n_s):
+                        t_grid_full.append(start + c[kk+1]*h[jj])
                 if rbp:
                     t_grid_full.append(start + h[jj])
 
@@ -188,8 +190,11 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         for w in self.w_all:
             np.copyto(self.dtp.w.res, w)
             if var.get_depth() == 3:
-                end = opts.n_s + rbp
-                var_out.append(np.reshape(var[1:,:,end].res, var_shape))
+                end = opts.n_s+rbp
+                try:
+                    var_out.append(np.reshape(var[1:,:,end].res, var_shape))
+                except:
+                    raise Exception(f"Cannot get {field} as this value is not evaluated at the element end points")
             elif var.get_depth() == 2:
                 var_out.append(np.reshape(var[1:,:].res, var_shape))
             elif var.get_depth() == 1:

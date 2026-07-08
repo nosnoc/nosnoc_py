@@ -176,7 +176,8 @@ if __name__ == "__main__":
         x_box_at_stg=False,
         x_box_at_fe=False,
         use_fesd=True,
-        cross_comp_mode=CrossComplementarityMode.FE_FE
+        cross_comp_mode=CrossComplementarityMode.FE_FE,
+        rk_representation=nosnoc.RKRepresentation.DIFFERENTIAL,
     )
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     integrator_opts = nosnoc.FESDIntegratorOptions(N_sim=NSIM,T_sim=TSIM,solver_opts=solver_opts)

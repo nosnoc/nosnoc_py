@@ -129,16 +129,26 @@ class Base(ABC,MPCC):
             if not opts.x_box_at_fe:
                 self.w.x[ii,range(1, opts.N_finite_elements[ii-1]),opts.n_s+rbp](lb=-np.inf, ub=np.inf)
 
-    def _create_xz(self, ii):
+    def _create_xvz(self, ii):
         opts = self.opts
         dcs = self.dcs
         model = self.model
         dims = self.dcs.dims
         rbp = self.rbp
-        self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"x", dims.n_x,
-                                                                                              lb=model.lbx,
-                                                                                              ub=model.ubx,
-                                                                                              init=model.x0)
+        if opts.rk_representation in (RKRepresentation.INTEGRAL,RKRepresentation.DIFFERENTIAL_LIFT_X):
+            self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"x", dims.n_x,
+                                                                                                  lb=model.lbx,
+                                                                                                  ub=model.ubx,
+                                                                                                  init=model.x0)
+        else:
+            self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),opts.n_s+rbp] = Primal(f"x", dims.n_x,
+                                                                                       lb=model.lbx,
+                                                                                       ub=model.ubx,
+                                                                                       init=model.x0)
+
+        if opts.rk_representation in(RKRepresentation.DIFFERENTIAL,RKRepresentation.DIFFERENTIAL_LIFT_X):
+            self.w.v[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(f"v", dims.n_x)
+
         self.w.z[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(f"z", dims.n_z,
                                                                                               lb=model.lbz,
                                                                                               ub=model.ubz,

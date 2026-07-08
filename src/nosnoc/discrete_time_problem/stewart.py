@@ -45,7 +45,7 @@ class Stewart(Base):
 
         for ii in range(1,opts.N_stages+1):
             self._create_h(ii)  # Create timestep variables
-            self._create_xz(ii) # Create x and z variables
+            self._create_xvz(ii) # Create x and z variables
 
             # Create Stewart algebraics
             self.w.lam[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)]   = Primal(f"lambda", dims.n_lambda,
@@ -124,9 +124,9 @@ class Stewart(Base):
                 # Handle rbp
                 if not self.rk.is_right_boundary_explicit():
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
-                    self.g.algebraic[ii,jj,opts.n_s+1] = Constraint(
+                    self.g.algebraic[ii,jj,opts.n_s+rbp] = Constraint(
                         dcs.g_rk_stationarity(
-                            self._get_rk_stage_z(ii, jj, opts.n_s+1),
+                            self._get_stage_end(ii, jj),
                             prk_ii_jj
                         )
                     )
@@ -137,6 +137,15 @@ class Stewart(Base):
 
         self._terminal_constraint()
         self._terminal_objective()
+
+    def _get_stage_end(self,ii,jj):
+        return ca.vertcat(
+            self.w.x[ii,jj,self.opts.n_s+self.rbp],
+            self.w.z[ii,jj,self.opts.n_s+self.rbp],
+            self.w.lam[ii,jj,self.opts.n_s+self.rbp],
+            self.w.theta[ii,jj,self.opts.n_s+self.rbp],
+            self.w.mu[ii,jj,self.opts.n_s+self.rbp],
+        )
 
     def _get_rk_stage_z(self, ii, jj, kk):
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
