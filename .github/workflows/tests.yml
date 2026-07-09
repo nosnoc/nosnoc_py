@@ -30,15 +30,10 @@ jobs:
         mkdir -p test-results
         python -m pytest --junitxml test-results/results.xml --cov=nosnoc --cov-report=html:test-results/coverage test --tb=long -n 2
 
-    - name: Publish Test Report
-      uses: mikepenz/action-junit-report@v3
-      if: always() # always run even if the previous step fails
-      with:
-        report_paths: 'test-results/results.xml'
-
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: test-results/
+        retention-days: 1
