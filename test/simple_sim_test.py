@@ -139,7 +139,7 @@ class SimpleTests(unittest.TestCase):
 
         for rk_scheme in nosnoc.RKScheme:
             for rk_representation in nosnoc.RKRepresentation:
-                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
                         opts = get_default_options(
                             rk_scheme = rk_scheme,
