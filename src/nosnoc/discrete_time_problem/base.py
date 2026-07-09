@@ -83,8 +83,8 @@ class Base(ABC,MPCC):
                                           ub=model.x0,
                                           init=model.x0)
         self.w.z[(0,0,opts.n_s)] = Primal(f"z_0", dims.n_z,
-                                          lb=model.z0,
-                                          ub=model.z0,
+                                          lb=model.lbz,
+                                          ub=model.ubz,
                                           init=model.z0)
 
     def _create_h(self, ii):
@@ -92,7 +92,7 @@ class Base(ABC,MPCC):
         dcs = self.dcs
         model = self.model
         dims = self.dcs.dims
-        h0 = opts.h_k[ii-1]
+        h0 = opts.h_k[ii-1]/opts.N_finite_elements[ii-1]
         if opts.use_fesd:
             ubh = (1 + opts.gamma_h) * h0 # upper bound for FE length
             lbh = (1 - opts.gamma_h) * h0 # lower bound for FE length
@@ -396,12 +396,11 @@ class Base(ABC,MPCC):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
-                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
+                h0 = opts.h_k[ii-1]/opts.N_finite_elements[ii-1]
                 self.f += self.p.rho_h[()]*(h0-self.w.h[ii,jj])**2
 
     def _heuristic_diff(self):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
                 self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2

@@ -8,6 +8,7 @@ import numpy as np
 import casadi as ca
 
 from .model import Pss
+from .model import Heaviside
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
 from .discrete_time_problem import Stewart as StewartDTP
@@ -34,7 +35,7 @@ class IntegratorOptions():
 @dataclass
 class FESDIntegratorOptions(IntegratorOptions):
     solver_opts: RegHomotopyOptions = field(kw_only=True)
-    use_previous_solution: bool = False
+    use_previous_solution: bool = True
 
 # TODO(@anton) implement smoothed integrator
 
@@ -87,6 +88,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dcs = HeavisideDCS(model)
                 self.dtp = HeavisideDTP(self.dcs, opts)
                 self.dtp.populate_problem()
+        elif isinstance(model, Heaviside):
+            self.dcs = HeavisideDCS(model)
+            self.dtp = HeavisideDTP(self.dcs, opts)
+            self.dtp.populate_problem()
         else:
             raise NotImplementedError("Only Pss is implemented")
 
@@ -143,6 +148,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             if not solver_stats["converged"]:
                 constr_viol = solver_stats['constraint_violation']
                 warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
+                breakpoint()
             elif integrator_opts.print_level >= 2:
                 wall_time_total = solver_stats["wall_time_total"]
                 print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")

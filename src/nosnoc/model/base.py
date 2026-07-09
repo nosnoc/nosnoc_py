@@ -185,7 +185,7 @@ class Base(ABC):
                 setattr(self, vec,init*np.ones(n))
             elif isinstance(getattr(self, vec), Real):
                 setattr(self, vec, getattr(self, vec)*np.ones(n))
-            elif getattr(self, vec).shape[0] != n:
+            elif np.array(getattr(self, vec)).shape[0] != n:
                 raise RuntimeError("Dimension missmatch in model creation") # TODO(@anton) make this error more traceable
 
     def _populate_scalar(self, sym: str, default=0.0):

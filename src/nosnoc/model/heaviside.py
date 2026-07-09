@@ -32,11 +32,11 @@ class Heaviside(Base):
         assert alpha.size1() == c.size1(), "alpha and c should have the same length"
         assert f_x.size2() == 1, "f_x should be nx1"
         assert f_x.size1() == self.dims.n_x, "f_x should be same length as x"
-        self.dims = HeavisideDims(self.dims)
+        self.dims = HeavisideModelDims(self.dims)
         self.f_x = f_x
         self.c = c
         self.alpha = alpha
-        self.n_alpha = alpha.size1()
+        self.dims.n_alpha = alpha.size1()
         self.__backfill()
 
     def __backfill(self):

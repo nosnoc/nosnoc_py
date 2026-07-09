@@ -1,8 +1,8 @@
 name: report
 on:
   workflow_run:
-    workflows: [ "nosnoc tests" ]
-    types: [ completed ]
+    workflows: [nosnoc tests]
+    types: [completed]
 
 permissions:
   checks: write
