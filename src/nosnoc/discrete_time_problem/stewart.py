@@ -147,6 +147,15 @@ class Stewart(Base):
             self.w.mu[ii,jj,self.opts.n_s+self.rbp],
         )
 
+    def _get_initial_z(self):
+        return ca.vertcat(
+            self.w.x[0,0,self.opts.n_s],
+            self.w.z[0,0,self.opts.n_s],
+            self.w.lam[0,0,self.opts.n_s],
+            self.w.theta[0,0,self.opts.n_s],
+            self.w.mu[0,0,self.opts.n_s],
+        )
+
     def _get_rk_stage_z(self, ii, jj, kk):
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
             return ca.vertcat(

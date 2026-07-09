@@ -72,14 +72,16 @@ class SimpleTests(unittest.TestCase):
             for Nfe in N_FINITE_ELEMENT_VALUES:
                 for dcs_mode in [nosnoc.DcsMode.STEWART]:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
-                        opts = get_default_options(
-                            step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA,
-                            n_s = ns,
-                            N_finite_elements = Nfe,
-                            dcs_mode = dcs_mode,
-                            cross_comp_mode = cross_comp_mode,
-                            print_level = 0,
-                        )
+                        for rk_scheme in nosnoc.RKScheme:
+                            opts = get_default_options(
+                                step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA,
+                                n_s = ns,
+                                N_finite_elements = Nfe,
+                                dcs_mode = dcs_mode,
+                                cross_comp_mode = cross_comp_mode,
+                                print_level = 0,
+                                rk_scheme = rk_scheme,
+                            )
                         try:
                             check_opts(opts, model=model)
                         except:
@@ -137,72 +139,20 @@ class SimpleTests(unittest.TestCase):
 
         for rk_scheme in nosnoc.RKScheme:
             for rk_representation in nosnoc.RKRepresentation:
-                opts = get_default_options(
-                    rk_scheme = rk_scheme,
-                    rk_representation = rk_representation,
-                    print_level = 0,
-                )
-                try:
-                    check_opts(opts, model=model)
-                except:
-                    raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
+                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                    for cross_comp_mode in nosnoc.CrossComplementarityMode:
+                        opts = get_default_options(
+                            rk_scheme = rk_scheme,
+                            rk_representation = rk_representation,
+                            dcs_mode = dcs_mode,
+                            cross_comp_mode = cross_comp_mode,
+                            print_level = 0,
+                        )
+                        try:
+                            check_opts(opts, model=model)
+                        except:
+                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
         print("main_test_sliding: SUCCESS")
-
-    # def test_least_squares_problem(self):
-    #     model = get_simplest_model_switch()
-
-    #     opts = get_default_options()
-    #     opts.print_level = 2
-    #     opts.n_s = 2
-
-    #     opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    #     opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-
-    #     opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
-    #     # opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER
-
-    #     # opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT
-    #     opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
-
-    #     opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
-    #     # opts.fix_active_set_fe0 = True
-    #     opts.sigma_0 = 1e0
-    #     opts.gamma_h = np.inf
-
-    #     try:
-    #         results = check_opts(opts, model=model)
-    #         print(results["t_grid"])
-    #     except:
-    #         raise Exception(f"Test failed.")
-
-
-    # def test_least_squares_problem_opts(self):
-    #     model = get_simplest_model_switch()
-
-    #     for step_equilibration in [nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY, nosnoc.StepEquilibrationMode.DIRECT]:
-    #         for fix_as in [True, False]:
-    #             opts = get_default_options()
-    #             opts.fix_active_set_fe0 = fix_as
-    #             opts.print_level = 2
-
-    #             opts.constraint_handling = nosnoc.ConstraintHandling.LEAST_SQUARES
-    #             opts.cross_comp_mode = nosnoc.CrossComplementarityMode.COMPLEMENT_ALL_STAGE_VALUES_WITH_EACH_OTHER
-
-    #             opts.mpcc_mode = nosnoc.MpccMode.FISCHER_BURMEISTER_IP_AUG
-
-    #             opts.step_equilibration = step_equilibration
-
-    #             opts.initialization_strategy = nosnoc.InitializationStrategy.ALL_XCURRENT_W0_START
-    #             opts.sigma_0 = 1e0
-    #             opts.gamma_h = np.inf
-
-    #             try:
-    #                 results = check_opts(opts, model=model)
-    #                 # print(results["t_grid"])
-    #             except:
-    #                 # print(f"Test failed with {fix_as=}, {step_equilibration=}")
-    #                 raise Exception(f"Test failed with {fix_as=}, {step_equilibration=}")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,7 +96,7 @@ class Stewart(Base):
             [ca.vertcat(self.model.g_z, self.g_alg)]
         )
         self.g_rk_stationarity = ca.Function(
-            'g_rk',
+            'g_rk_stationarity',
             [ca.vertcat(self.model.x, self.model.z, self.lam, self.mu),
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
             [ca.vertcat(self.model.g_z, *g_lp_stationarity)]
