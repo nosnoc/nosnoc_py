@@ -70,7 +70,7 @@ def solve_two_gene(opts=None, integrator_opts=None, model=None):
         model = get_two_gene_model(X0, False)
     if integrator_opts is None:
         solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
-        solver_opts.homotopy_steering_strategy = nosnoc.mpccsol.plugins.reg_homotopy.HomotopySteeringStrategy.ELL_INF
+        solver_opts.homotopy_steering_strategy = nosnoc.mpccsol.plugins.reg_homotopy.HomotopySteeringStrategy.ELL_1
         integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, T_sim=TSIM, N_sim=Nsim, print_level=3)
 
     integrator = nosnoc.Integrator(model, opts, integrator_opts)
