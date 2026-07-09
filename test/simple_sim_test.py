@@ -136,6 +136,3 @@ class SimpleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    # uncomment to run single test locally
-    # simple_test = SimpleTests()
-    # simple_test.test_least_squares_problem()

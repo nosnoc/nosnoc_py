@@ -21,7 +21,7 @@ kappa = np.array([40, 40])
 gamma = np.array([4.5, 1.5])
 
 
-X0 = [3, 3]
+X0 = np.array([9, 9])
 LIFTING = False
 
 def get_default_options(**kwargs) -> nosnoc.Options:
