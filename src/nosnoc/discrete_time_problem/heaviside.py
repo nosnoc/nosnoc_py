@@ -133,6 +133,7 @@ class Heaviside(Base):
 
         self._terminal_constraint()
         self._terminal_objective()
+        self._terminal_numerical_time_constraints()
 
     def _get_initial_z(self):
         return ca.vertcat(

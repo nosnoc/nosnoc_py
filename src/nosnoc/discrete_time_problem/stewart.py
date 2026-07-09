@@ -137,6 +137,7 @@ class Stewart(Base):
 
         self._terminal_constraint()
         self._terminal_objective()
+        self._terminal_numerical_time_constraints()
 
     def _get_stage_end(self,ii,jj):
         return ca.vertcat(

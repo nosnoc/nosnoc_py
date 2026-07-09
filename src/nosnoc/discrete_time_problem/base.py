@@ -299,7 +299,62 @@ class Base(ABC,MPCC):
                 # if relax_num_time_struct.is_relaxed:
                 #     obj.p.rho_numerical_time().val = opts.rho_terminal_numerical_time
 
-                
+    def _terminal_numerical_time_constraints(self):
+        opts = self.opts
+        rbp = self.rbp
+
+        if opts.time_freezing:
+            raise NotImplementedError("time_freezing is not yet implemented")
+            x0 = obj.w.x(0,0,opts.n_s)
+            t0 = x0[-1]
+            x_end = self.w.x[opts.N_stages,opts.N_finite_elements[opts.N_stages-1],opts.n_s+rbp]
+
+            # Terminal Phyisical Time (Possible terminal constraint on the clock state if time freezing is active).
+            if opts.time_optimal_problem:
+                # in the case of time optimal time freezing problem, physical clock state must reach final time.
+                self.g.terminal_physical_time[opts.N_stages+1] = Constraint(x_end[-1]-(self.w.T_final[()]+t0))
+
+            elif opts.impose_terminal_phyisical_time and not opts.stagewise_clock_constraint:
+                # in the case of a generic time freezing problem, physical clock state must reach final time if
+                # we are imposing terminal physical time and we did not do so by apply stagewise constraints.
+                self.g.terminal_physical_time[opts.N_stages+1] = Constraint(x_end[-1]-(self.p.T[()]+t0))
+
+        elif not opts.use_fesd and opts.time_optimal_problem and opts.use_speed_of_time_variables:
+            # without FESD we need speed of time variables and the sum of
+            # h*sot must be equal to the final time.
+            integral_clock_state = 0
+            for ii in range(1,opts.N_stages+1):
+                s_sot = self._get_stage_sot(ii)
+                for jj in range(1,opts.N_finite_elements[ii-1]+1):
+                    h = self.p.T()/(opts.N_stages*opts.N_finite_elements[ii-1])
+                    integral_clock_state += h*s_sot
+            self.g.integral_clock_state[opts.N_stages+1] = Constraint(integral_clock_state-self.w.T_final[()])
+
+        elif not opts.equidistant_control_grid:
+            # T_num = T_phy = T_final =  T.
+            # all step sizes add up to prescribed time T.
+            # if use_speed_of_time_variables = true, numerical time is decupled from the sot scaling (no mather if local or not):
+            sum_h_all = ca.sum2(self.w.h[:,:])
+            if not opts.time_optimal_problem:
+                # not a time optimal problem so just sum of hs must be the terminal numerical time T.
+                self.g.sum_h[opts.N_stages+1] = Constraint(sum_h_all-self.p.T[()])
+
+            elif not opts.use_speed_of_time_variables:
+                # a time optimal problem without sot so sum of hs must be the optimal terminal numerical time T_final.
+                self.g.sum_h[opts.N_stages+1] = Constraint(sum_h_all-self.w.T_final[()])
+
+            else:
+                # a time optimal problem with sot so sum of h*sot must be the optimal terminal "physical" time T_final.
+                # and the sum of h needs to be the terminal numerical time T
+                integral_clock_state = 0
+                for ii in range(1,opts.N_stages+1):
+                    s_sot = self._get_stage_sot(ii)
+                    for jj in range(1,opts.N_finite_elements[ii-1]+1):
+                        h = self.w.h[ii,jj]
+                        integral_clock_state = integral_clock_state + h*s_sot
+                self.g.sum_h[opts.N_stages+1] = Constraint(sum_h_all-self.p.T[()])
+                self.g.integral_clock[opts.N_stages+1] = Constraint(sum_h_all-self.w.T_final[()])
+
 
     def _get_relaxation(self, relax_type: ConstraintRelaxationMode):
         if relax_type == ConstraintRelaxationMode.NONE:

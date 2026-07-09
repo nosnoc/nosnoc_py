@@ -26,19 +26,22 @@ UBU = U_MAX * np.ones((2,))
 
 
 # solver opts
-def get_default_options() -> nosnoc.Options:
+def get_default_options(**kwargs) -> nosnoc.Options:
     N_stages = 6
     N_fe = 6
     n_s = 2
+    default_args = {
+        "N_stages":N_stages,
+        "N_finite_elements":N_fe,
+        "n_s":n_s,
+        "T":TERMINAL_TIME,
+        "use_fesd":True,
+        "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        "relax_terminal_constraint": TERMINAL_RELAXATION,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
     opts = nosnoc.Options(
-        N_stages=N_stages,
-        N_finite_elements=[N_fe]*N_stages,
-        T=TERMINAL_TIME,
-        use_fesd=True,
-        cross_comp_mode=CrossComplementarityMode.FE_FE,
-        #step_equilibration=StepEquilibrationMode.LINEAR_COMPLEMENTARITY,
-        relax_terminal_constraint = TERMINAL_RELAXATION,
-        n_s=n_s,
+        **merged
     )
     return opts
 
@@ -107,16 +110,16 @@ def get_sliding_mode_ocp_description():
     return model
 
 
-def solve_ocp(opts=None):
+def solve_ocp(opts=None, solver_opts=None):
     if opts is None:
         opts = get_default_options()
+    if solver_opts is None:
+        solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
 
-    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     model = get_sliding_mode_ocp_description()
 
     solver = nosnoc.OcpSolver(model, opts, solver_opts)
     solver.solve()
-    breakpoint()
     return solver
 
 
