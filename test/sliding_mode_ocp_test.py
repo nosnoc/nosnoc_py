@@ -14,7 +14,6 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
 )
 
 EQUIDISTANT_CONTROLS = [True, False]
-DCS_MODES = [nosnoc.DcsMode.STEWART]
 STEP_EQUILIBRATION_MODES = [
     nosnoc.StepEquilibrationMode.HEURISTIC_MEAN, nosnoc.StepEquilibrationMode.HEURISTIC_DELTA,
     nosnoc.StepEquilibrationMode.L2_RELAXED, nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
@@ -26,16 +25,9 @@ options = [
     for step_equilibration in STEP_EQUILIBRATION_MODES
     for rk_representation in nosnoc.RKRepresentation
     for rk_scheme in nosnoc.RKScheme
-    for dcs_mode in DCS_MODES
+    for dcs_mode in nosnoc.DcsMode
     for terminal_relax in nosnoc.ConstraintRelaxationMode
 ]
-
-# test HomotopyUpdateRule.SUPERLINEAR separately without cartesian product
-# options += [
-#     (True, nosnoc.StepEquilibrationMode.L2_RELAXED, nosnoc.IrkRepresentation.DIFFERENTIAL,
-#      nosnoc.IrkSchemes.RADAU_IIA, nosnoc.DcsMode.STEWART, nosnoc.HomotopyUpdateRule.SUPERLINEAR, nosnoc.MpccMode.SCHOLTES_EQ),
-# ]
-
 
 class TestSlidingModeOcp(unittest.TestCase):
 

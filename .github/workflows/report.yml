@@ -6,6 +6,7 @@ on:
 
 permissions:
   checks: write
+  pull_requests: write
 
 jobs:
   checks:

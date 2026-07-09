@@ -63,14 +63,14 @@ class Base(ABC,MPCC):
                 self.w.sot[range(1,opts.N_stages+1)] = Primal("sot",
                                                              1,
                                                              init=opts.s_sot0,
-                                                             lb=model.s_sot_min,
-                                                             ub=model.s_sot_max)
+                                                             lb=opts.s_sot_min,
+                                                             ub=opts.s_sot_max)
             else:
                 self.w.sot[()] = Primal("sot",
                                         1,
                                         init=opts.s_sot0,
-                                        lb=model.s_sot_min,
-                                        ub=model.s_sot_max)
+                                        lb=opts.s_sot_min,
+                                        ub=opts.s_sot_max)
 
 
     def _create_initial_variables(self):
@@ -102,7 +102,7 @@ class Base(ABC,MPCC):
                 lbh = lbh/opts.s_sot_min
             elif opts.time_optimal_problem:
                 ubh = ubh*(opts.T_final_max/opts.T)
-                lbh = lbh/((opts.T_final_min+eps)/opts.T)
+                lbh = lbh/((opts.T_final_min+1e-8)/opts.T)
 
             self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)] = Primal(f"h", 1,
                                                                           lb=lbh,
@@ -161,9 +161,9 @@ class Base(ABC,MPCC):
 
     def _get_stage_sot(self, ii): # TODO(@anton) maybe this should be public
         if self.opts.use_speed_of_time_variables and self.opts.local_speed_of_time_variable:
-            s_sot = self.w.sot(ii) # here, sot is a vector
+            s_sot = self.w.sot[ii] # here, sot is a vector
         elif self.opts.use_speed_of_time_variables:
-            s_sot = se;f.w.sot() # here, sot is a scalar
+            s_sot = self.w.sot[()] # here, sot is a scalar
         else:
             s_sot = 1
         return s_sot

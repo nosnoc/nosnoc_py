@@ -57,22 +57,18 @@ def car_model():
 
     return model
 
-def get_default_options():
-    # opts.pss_mode = nosnoc.PssMode.STEP
-    use_fesd = True
-    n_s = 2
-
-    N_stages = 30
-    N_fe = 3
-
+def get_default_options(**kwargs) -> nosnoc.Options:
+    default_args = {
+        "N_stages":30,
+        "N_finite_elements":3,
+        "n_s":2,
+        "T":TERMINAL_TIME,
+        "use_fesd":True,
+        "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
     opts = nosnoc.Options(
-        N_stages=N_stages,
-        N_finite_elements=N_fe,
-        T=TERMINAL_TIME,
-        use_fesd=use_fesd,
-        cross_comp_mode=nosnoc.CrossComplementarityMode.STAGE_STAGE,
-        step_equilibration=nosnoc.StepEquilibrationMode.DIRECT,
-        n_s=n_s,
+        **merged
     )
     return opts
 
@@ -128,9 +124,10 @@ def plot_car_model(solver, latexify=True):
     plt.show()
 
 
-def example():
-    results = solve_ocp()
-    plot_car_model(results)
+def example(plot=True):
+    solver = solve_ocp()
+    if plot:
+        plot_car_model(solver)
 
 
 if __name__ == "__main__":

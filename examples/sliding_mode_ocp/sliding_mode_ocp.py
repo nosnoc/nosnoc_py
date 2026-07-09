@@ -27,13 +27,10 @@ UBU = U_MAX * np.ones((2,))
 
 # solver opts
 def get_default_options(**kwargs) -> nosnoc.Options:
-    N_stages = 6
-    N_fe = 6
-    n_s = 2
     default_args = {
-        "N_stages":N_stages,
-        "N_finite_elements":N_fe,
-        "n_s":n_s,
+        "N_stages":6,
+        "N_finite_elements":2,
+        "n_s":2,
         "T":TERMINAL_TIME,
         "use_fesd":True,
         "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,

@@ -29,6 +29,9 @@ class Heaviside(Base):
         # Use base class to create initial x and z variables
         self._create_initial_variables()
 
+        # Use base class to create speed of time vars
+        self._create_speed_of_time_variables()
+
         # Create initial Heaviside algebraics
         self.w.alpha[0,0,opts.n_s]      = Primal(f"alpha_0", dims.n_alpha,
                                                  lb=0.0,
