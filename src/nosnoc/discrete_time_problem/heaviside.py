@@ -36,11 +36,11 @@ class Heaviside(Base):
                                                  init=0.5)
         self.w.lambda_n[0,0,opts.n_s]   = Primal(f"lambda_n_0", dims.n_lambda,
                                                  lb=0.0,
-                                                 ub=1.0,
+                                                 ub=np.inf,
                                                  init=0.5)
         self.w.lambda_p[0,0,opts.n_s]   = Primal(f"lambda_p_0", dims.n_lambda,
                                                  lb=0.0,
-                                                 ub=1.0,
+                                                 ub=np.inf,
                                                  init=0.5)
         # Create controls
         self._create_u()
@@ -342,6 +342,9 @@ class Heaviside(Base):
     def _get_eta(self, ii, jj):
         assert ii >= 1, jj<=opts.N_stages
         assert jj >= 2, jj<=opts.N_finite_elements[ii-1]
+        opts = self.opts
+        rbp = self.rbp
+
         sigma_lambda_n_B = ca.sum2(self.w.lambda_n[ii,jj-1,:].sym)
         sigma_lambda_p_B = ca.sum2(self.w.lambda_p[ii,jj-1,:].sym)
 
@@ -397,14 +400,14 @@ class Heaviside(Base):
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
                 h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
-                sigma_lambda_n_B = ca.sum2(self.w.lam[ii,jj-1,:])
+                sigma_lambda_n_B = ca.sum2(self.w.lambda_n[ii,jj-1,:])
                 sigma_lambda_p_B = ca.sum2(self.w.lambda_p[ii,jj-1,:])
 
-                sigma_lambda_n_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
-                sigma_lambda_p_F = ca.sum2(self.w.lambda_p[ii,jj,:])
+                sigma_lambda_n_F = self.w.lambda_n[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lambda_n[ii,jj,:])
+                sigma_lambda_p_F = self.w.lambda_p[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lambda_p[ii,jj,:])
 
-                lambda_n_mult = self.w.lambda_n_mult[ii,jj]
-                lambda_p_mult = self.w.lambda_p_mult[ii,jj]
+                lambda_lambda_n = self.w.lambda_lambda_n[ii,jj]
+                lambda_lambda_p = self.w.lambda_lambda_p[ii,jj]
                 B_max = self.w.B_max[ii,jj]
                 pi_lambda_n = self.w.pi_lambda_n[ii,jj]
                 pi_lambda_p = self.w.pi_lambda_p[ii,jj]
@@ -432,25 +435,25 @@ class Heaviside(Base):
 
                 # kkt conditions for min B, B>=sigmaB, B>=sigmaF:
                 kkt_max = ca.vertcat(
-                    1-lambda_p_mult-lambda_n_mult,
+                    1-lambda_lambda_p-lambda_lambda_n,
                     B_max-pi_lambda_n,
                     B_max-pi_lambda_p,
                 )
                 self.g.kkt_max[ii,jj] = Constraint(
                     kkt_max,
                     lb=0.0,
-                    ub=np.hstack([np.zeros(dim.n_lambda),np.inf*np.ones(dim.n_lambda),np.inf*np.ones(dim.n_lambda)])
+                    ub=np.hstack([np.zeros(dims.n_lambda),np.inf*np.ones(dims.n_lambda),np.inf*np.ones(dims.n_lambda)])
                 )
 
                 self.G.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat((B_max-pi_lambda_n),(B_max-pi_lambda_p)))
-                self.H.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat(lambda_n_mult,lambda_p_mult))
+                self.H.step_eq_kkt_max[ii,jj] = CConstraint(ca.vertcat(lambda_lambda_n,lambda_lambda_p))
 
                 # eta calculation
                 eta_const = ca.vertcat(eta-pi_lambda_p,eta-pi_lambda_n,eta-pi_lambda_p-pi_lambda_n+B_max)
                 self.g.eta_const[ii,jj] = Constraint(
                     eta_const,
-                    lb=np.hstack([-np.inf*np.ones(dim.n_lambda),-np.inf*np.ones(dim.n_lambda),np.zeros(dim.n_lambda)]),
-                    ub=np.hstack([np.zeros(dim.n_lambda),np.zeros(dim.n_lambda),np.inf*np.ones(dim.n_lambda)])
+                    lb=np.hstack([-np.inf*np.ones(dims.n_lambda),-np.inf*np.ones(dims.n_lambda),np.zeros(dims.n_lambda)]),
+                    ub=np.hstack([np.zeros(dims.n_lambda),np.zeros(dims.n_lambda),np.inf*np.ones(dims.n_lambda)])
                     )
 
                 self.g.nu_or[ii,jj] = Constraint(ca.vertcat(nu-eta,ca.sum(eta.sym)-nu),lb=0,ub=np.inf)

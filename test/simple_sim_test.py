@@ -9,11 +9,27 @@ from examples.simplest.simplest_example import (
     get_simplest_model_switch,
 )
 import unittest
+from parameterized import parameterized
 import nosnoc
 import numpy as np
 
 NS_VALUES = range(1, 4)
 N_FINITE_ELEMENT_VALUES = range(2, 4)
+
+options = [
+    (rk_representation, rk_scheme, dcs_mode, cross_comp_mode, step_eq_mode, N_fe, n_s)
+    for N_fe in N_FINITE_ELEMENT_VALUES
+    for n_s in NS_VALUES
+    for cross_comp_mode in nosnoc.CrossComplementarityMode
+    for step_eq_mode in nosnoc.StepEquilibrationMode
+    for dcs_mode in nosnoc.DcsMode
+    for rk_scheme in nosnoc.RKScheme
+    for rk_representation in nosnoc.RKRepresentation
+    if step_eq_mode is not nosnoc.StepEquilibrationMode.DIRECT_HOMOTOPY # Unimplemented
+    if step_eq_mode is not nosnoc.StepEquilibrationMode.LINEAR_COMPLEMENTARITY # Extremely Flakey
+    if step_eq_mode is not nosnoc.StepEquilibrationMode.DIRECT # Very Mildly Flakey
+]
+
 
 NO_FESD_X_END = 0.36692644
 
@@ -60,54 +76,37 @@ def check_opts(opts, model):
 
 
 class SimpleTests(unittest.TestCase):
-
-    def test_default(self):
-        model = get_simplest_model_sliding()
-        check_opts(get_default_options(), model)
-
-    def test_switch(self):
+    @parameterized.expand(options)
+    def test_switch(self, rk_representation, rk_scheme, dcs_mode, cross_comp_mode, step_eq_mode, N_fe, n_s):
         model = get_simplest_model_switch()
 
-        for ns in NS_VALUES:
-            for Nfe in N_FINITE_ELEMENT_VALUES:
-                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
-                    for cross_comp_mode in nosnoc.CrossComplementarityMode:
-                        for rk_scheme in nosnoc.RKScheme:
-                            opts = get_default_options(
-                                step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_DELTA,
-                                n_s = ns,
-                                N_finite_elements = Nfe,
-                                dcs_mode = dcs_mode,
-                                cross_comp_mode = cross_comp_mode,
-                                print_level = 0,
-                                rk_scheme = rk_scheme,
-                            )
-                        try:
-                            check_opts(opts, model=model)
-                        except:
-                            raise Exception(f"test_switch failed with setting:\n {ns=} {Nfe=} {dcs_mode=} {cross_comp_mode=}")
-        print("main_test_switch: SUCCESS")
+        opts = get_default_options(
+            step_equilibration = step_eq_mode,
+            n_s = n_s,
+            N_finite_elements = N_fe,
+            dcs_mode = dcs_mode,
+            cross_comp_mode = cross_comp_mode,
+            print_level = 0,
+            rk_scheme = rk_scheme,
+            rk_representation = rk_representation,
+        )
+        check_opts(opts, model=model)
 
-    def test_sliding(self):
+    @parameterized.expand(options)
+    def test_sliding(self, rk_representation, rk_scheme, dcs_mode, cross_comp_mode, step_eq_mode, N_fe, n_s):
         model = get_simplest_model_sliding()
 
-        for ns in NS_VALUES:
-            for Nfe in N_FINITE_ELEMENT_VALUES:
-                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
-                    for rk_scheme in nosnoc.RKScheme:
-                        opts = get_default_options(
-                            step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
-                            rk_scheme = rk_scheme,
-                            print_level = 0,
-                            n_s = ns,
-                            N_finite_elements = Nfe,
-                            dcs_mode = dcs_mode,
-                        )
-                        try:
-                            check_opts(opts, model=model)
-                        except:
-                            raise Exception(f"test_sliding failed with setting:\n {ns=} {Nfe=} {dcs_mode=} {rk_scheme=}")
-        print("main_test_sliding: SUCCESS")
+        opts = get_default_options(
+            step_equilibration = step_eq_mode,
+            n_s = n_s,
+            N_finite_elements = N_fe,
+            dcs_mode = dcs_mode,
+            cross_comp_mode = cross_comp_mode,
+            print_level = 0,
+            rk_scheme = rk_scheme,
+            rk_representation = rk_representation,
+        )
+        check_opts(opts, model=model)
 
     def test_fesd_off(self):
         model = get_simplest_model_switch()
@@ -134,25 +133,6 @@ class SimpleTests(unittest.TestCase):
             raise Exception("Test with FESD off failed")
         print("main_test_fesd_off: SUCCESS")
 
-    def test_discretization(self):
-        model = get_simplest_model_sliding()
-
-        for rk_scheme in nosnoc.RKScheme:
-            for rk_representation in nosnoc.RKRepresentation:
-                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
-                    for cross_comp_mode in nosnoc.CrossComplementarityMode:
-                        opts = get_default_options(
-                            rk_scheme = rk_scheme,
-                            rk_representation = rk_representation,
-                            dcs_mode = dcs_mode,
-                            cross_comp_mode = cross_comp_mode,
-                            print_level = 0,
-                        )
-                        try:
-                            check_opts(opts, model=model)
-                        except:
-                            raise Exception(f"Test failed with setting:\n {opts=} \n{model=}")
-        print("main_test_sliding: SUCCESS")
 
 if __name__ == "__main__":
     unittest.main()

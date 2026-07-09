@@ -158,6 +158,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             t_grid.append(t_grid[-1][-1] + np.cumsum(h))
+            t_current = t_grid[-1][-1]
             c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
                 start = t_grid_full[-1]
