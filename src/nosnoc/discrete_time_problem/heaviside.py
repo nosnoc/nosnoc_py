@@ -30,18 +30,18 @@ class Heaviside(Base):
         self._create_initial_variables()
 
         # Create initial Heaviside algebraics
-        self.w.alpha[(0,0,opts.n_s)]   = Primal(f"alpha_0", dims.n_alpha,
-                                                lb=0.0,
-                                                ub=1.0,
-                                                init=0.5)
-        self.w.lambda_n[(0,0,opts.n_s)]   = Primal(f"lambda_n_0", dims.n_lambda,
-                                                lb=0.0,
-                                                ub=1.0,
-                                                init=0.5)
-        self.w.lambda_p[(0,0,opts.n_s)]   = Primal(f"lambda_p_0", dims.n_lambda,
-                                                   lb=0.0,
-                                                   ub=1.0,
-                                                   init=0.5)
+        self.w.alpha[0,0,opts.n_s]      = Primal(f"alpha_0", dims.n_alpha,
+                                                 lb=0.0,
+                                                 ub=1.0,
+                                                 init=0.5)
+        self.w.lambda_n[0,0,opts.n_s]   = Primal(f"lambda_n_0", dims.n_lambda,
+                                                 lb=0.0,
+                                                 ub=1.0,
+                                                 init=0.5)
+        self.w.lambda_p[0,0,opts.n_s]   = Primal(f"lambda_p_0", dims.n_lambda,
+                                                 lb=0.0,
+                                                 ub=1.0,
+                                                 init=0.5)
         # Create controls
         self._create_u()
 
@@ -83,7 +83,7 @@ class Heaviside(Base):
         dims = self.dcs.dims
         rbp = self.rbp
 
-        z_rk_0 = self._get_rk_stage_z(0,0,opts.n_s)
+        z_rk_0 = self._get_initial_z()
         self.g.algebraic[0,0,opts.n_s] = Constraint(
             self.dcs.g_rk(z_rk_0,self._get_stage_parameters(1))
         )
@@ -122,7 +122,7 @@ class Heaviside(Base):
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
                     self.g.algebraic[ii,jj,opts.n_s+1] = Constraint(
                         dcs.g_rk_stationarity(
-                            self._get_rk_stage_z(ii, jj, opts.n_s+1),
+                            self._get_stage_end(ii,jj),
                             prk_ii_jj
                         )
                     )
@@ -133,6 +133,25 @@ class Heaviside(Base):
 
         self._terminal_constraint()
         self._terminal_objective()
+
+    def _get_initial_z(self):
+        return ca.vertcat(
+            self.w.x[0,0,self.opts.n_s],
+            self.w.z[0,0,self.opts.n_s],
+            self.w.alpha[0,0,self.opts.n_s],
+            self.w.lambda_n[0,0,self.opts.n_s],
+            self.w.lambda_p[0,0,self.opts.n_s],
+        )
+
+    def _get_stage_end(self,ii,jj):
+        return ca.vertcat(
+            self.w.x[ii,jj,self.opts.n_s+self.rbp],
+            self.w.z[ii,jj,self.opts.n_s+self.rbp],
+            self.w.alpha[ii,jj,self.opts.n_s+self.rbp],
+            self.w.lambda_n[ii,jj,self.opts.n_s+self.rbp],
+            self.w.lambda_p[ii,jj,self.opts.n_s+self.rbp],
+        )
+
 
     @override
     def _get_rk_stage_z(self, ii, jj, kk):
