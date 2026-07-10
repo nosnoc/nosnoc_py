@@ -155,7 +155,7 @@ class Options():
     # See Also:
     #     `StepEquilibrationMode` for more details on how each mode works.
     step_equilibration: StepEquilibrationMode = StepEquilibrationMode.HEURISTIC_MEAN
-    step_equilibration_sigma: float           = 0.1 # double: Slope at zero for the sigmoid used to rescale the indicator function, nu_ki_rescaled = tanh(nu_ki/step_equilibration_sigma).
+    step_equilibration_sigma: float           = 1.0 # double: Slope at zero for the sigmoid used to rescale the indicator function, nu_ki_rescaled = tanh(nu_ki/step_equilibration_sigma).
 
     equidistant_control_grid: bool = 1 # boolean: If true each control stage is fixed length.
 

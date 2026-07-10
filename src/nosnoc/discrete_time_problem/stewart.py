@@ -332,6 +332,8 @@ class Stewart(Base):
     def _get_eta(self, ii, jj):
         assert ii >= 1, jj<=opts.N_stages
         assert jj >= 2, jj<=opts.N_finite_elements[ii-1]
+        opts = self.opts
+        rbp = self.rbp
         sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
         sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
 
