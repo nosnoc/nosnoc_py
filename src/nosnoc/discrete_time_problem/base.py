@@ -215,6 +215,8 @@ class Base(ABC,MPCC):
             lb=self.model.lbg_path,
             ub=self.model.ubg_path,
         )
+        self.G.path[ii,jj,kk] = CConstraint(self.dcs.G_path_fun(x,z,u,v_global,p))
+        self.H.path[ii,jj,kk] = CConstraint(self.dcs.H_path_fun(x,z,u,v_global,p))
 
     def _fe_path_constraints(self, ii, jj):
         if self.opts.g_path_at_stg or not self.opts.g_path_at_fe:
@@ -229,6 +231,8 @@ class Base(ABC,MPCC):
             lb=self.model.lbg_path,
             ub=self.model.ubg_path,
         )
+        self.G.path[ii,jj] = CConstraint(self.dcs.G_path_fun(x,z,u,v_global,p))
+        self.H.path[ii,jj] = CConstraint(self.dcs.H_path_fun(x,z,u,v_global,p))
 
     def _stage_path_constraints(self, ii):
         if self.opts.g_path_at_stg or self.opts.g_path_at_fe:
@@ -243,6 +247,8 @@ class Base(ABC,MPCC):
             lb=self.model.lbg_path,
             ub=self.model.ubg_path,
         )
+        self.G.path[ii] = CConstraint(self.dcs.G_path_fun(x,z,u,v_global,p))
+        self.H.path[ii] = CConstraint(self.dcs.H_path_fun(x,z,u,v_global,p))
 
     def _terminal_constraint(self):
         # TODO(@anton) relaxation

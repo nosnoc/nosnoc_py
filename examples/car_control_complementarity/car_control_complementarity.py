@@ -65,6 +65,7 @@ def get_default_options(**kwargs) -> nosnoc.Options:
         "T":TERMINAL_TIME,
         "use_fesd":True,
         "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        "rho_h": 10.0
         }
     merged = dict(list(default_args.items())+ list(kwargs.items()))
     opts = nosnoc.Options(
