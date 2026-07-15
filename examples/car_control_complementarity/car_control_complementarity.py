@@ -53,8 +53,6 @@ def car_model():
 
     f_q = j_a*u[0]**2 + j_b*u[1]**2
 
-    g_path_comp = ca.horzcat(u[0], u[1])
-
     model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=X0, u=u, lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal, G_path=u[0], H_path=u[1])
 
     return model

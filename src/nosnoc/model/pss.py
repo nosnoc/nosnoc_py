@@ -16,7 +16,7 @@ class PssDims(Dims):
 
 class Pss(Base):
     r"""
-    A Peicewise smooth system writen via a (list of) matrix S and (list of) switching function c.
+    A Piecewise smooth system writen via a (list of) matrix S and (list of) switching function c.
     Each region has dynamics defined by F.
     Alternatively one can define the regions via a Stewart type indicator function g_indicator.
 
@@ -65,7 +65,7 @@ class Pss(Base):
             self.g_indicator = [self.g_indicator]
 
         if len(self.g_indicator) != n_sys:
-            RuntimeError("Number of different expressions for g_indicator does not match number of subsystems (taken to be number of matrices F_i which collect the modes of every subsystem).")
+            raise RuntimeError("Number of different expressions for g_indicator does not match number of subsystems (taken to be number of matrices F_i which collect the modes of every subsystem).")
 
         self.dims.n_c_sys = [c.size(1) for c in self.c]
         self.dims.n_f_sys = [f.size(2) for f in self.F]

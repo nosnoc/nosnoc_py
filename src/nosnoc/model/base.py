@@ -150,7 +150,7 @@ class Base(ABC):
         self.p = ca.vertcat(self.p_global, self.p_time_var)
         self.g_path = g_path; self.lbg_path = lbg_path; self.ubg_path = ubg_path
         self._populate_vectors("g_path", [("lbg_path", -np.inf), ("ubg_path", np.inf)])
-        self.dims.n_g_paty = self.g_path.size(1)
+        self.dims.n_g_path = self.g_path.size(1)
         self.g_terminal = g_terminal; self.lbg_terminal = lbg_terminal; self.ubg_terminal = ubg_terminal
         self._populate_vectors("g_terminal", [("lbg_terminal", 0.0), ("ubg_terminal", 0.0)])
         self.dims.n_g_terminal = self.g_terminal.size(1)

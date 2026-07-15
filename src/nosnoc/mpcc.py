@@ -13,8 +13,8 @@ class MPCC(NLP):
         return {'x': self.w.sym,
                 'g': self.g.sym,
                 'p': self.p.sym,
-                'G': self.H.sym,
-                'H': self.p.sym,
+                'G': self.G.sym,
+                'H': self.H.sym,
                 'f': self.f}
 
     def create_solver(self, mpccsol_opts, plugin="reg_homotopy"):
