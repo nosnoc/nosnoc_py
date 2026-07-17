@@ -29,6 +29,9 @@ class Stewart(Base):
         # Use base class to create initial x and z variables
         self._create_initial_variables()
 
+        # Use base class to create speed of time vars
+        self._create_speed_of_time_variables()
+
         # Create initial Stewart algebraics
         self.w.lam[(0,0,opts.n_s)]   = Primal(f"lambda_0", dims.n_lambda,
                                               lb=0.0,
@@ -137,6 +140,7 @@ class Stewart(Base):
 
         self._terminal_constraint()
         self._terminal_objective()
+        self._terminal_numerical_time_constraints()
 
     def _get_stage_end(self,ii,jj):
         return ca.vertcat(
@@ -325,25 +329,33 @@ class Stewart(Base):
         if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
             self.__linear_complementarity()
 
+    def _get_eta(self, ii, jj):
+        assert ii >= 1, jj<=opts.N_stages
+        assert jj >= 2, jj<=opts.N_finite_elements[ii-1]
+        opts = self.opts
+        rbp = self.rbp
+        sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
+        sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
+
+        sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
+        sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
+
+        pi_lam = sigma_lam_B * sigma_lam_F
+        pi_theta = sigma_theta_B * sigma_theta_F
+        nu = pi_lam + pi_theta
+        eta = 1
+        for jjj in range(nu.size()[0]):
+            eta = eta*nu[jjj]
+
+        return eta
+
     def __l2_relaxed_scaled(self):
         opts = self.opts
         rbp = self.rbp
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
-                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
-
-                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
-                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
-
-                pi_lam = sigma_lam_B * sigma_lam_F
-                pi_theta = sigma_theta_B * sigma_theta_F
-                nu = pi_lam + pi_theta
-                eta = 1
-                for jjj in range(nu.size()[0]):
-                    eta = eta*nu[jjj]
-
+                eta = self._get_eta(ii,jj)
                 eta_vec = ca.vertcat(eta_vec,eta)
                 delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
                 self.f += self.p.rho_h[()] * ca.tanh(eta/opts.step_equilibration_sigma) * delta_h**2
@@ -354,19 +366,7 @@ class Stewart(Base):
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
-                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
-
-                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] +ca.sum2(self.w.lam[ii,jj,:])
-                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
-
-                pi_lam = sigma_lam_B * sigma_lam_F
-                pi_theta = sigma_theta_B * sigma_theta_F
-                nu = pi_lam + pi_theta
-                eta = 1
-                for jjj in range(nu.size()[0]):
-                    eta = eta*nu[jjj]
-
+                eta = self._get_eta(ii,jj)
                 eta_vec = ca.vertcat(eta_vec,eta)
                 delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
                 self.f += self.p.rho_h[()] * eta * delta_h**2
@@ -377,19 +377,7 @@ class Stewart(Base):
         eta_vec = []
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                sigma_lam_B = ca.sum2(self.w.lam[ii,jj-1,:])
-                sigma_theta_B = ca.sum2(self.w.theta[ii,jj-1,:])
-
-                sigma_lam_F = self.w.lam[ii,jj-1,opts.n_s + rbp] + ca.sum2(self.w.lam[ii,jj,:])
-                sigma_theta_F = ca.sum2(self.w.theta[ii,jj,:])
-
-                pi_lam = sigma_lam_B * sigma_lam_F
-                pi_theta = sigma_theta_B * sigma_theta_F
-                nu = pi_lam + pi_theta
-                eta = 1
-                for jjj in range(nu.size()[0]):
-                    eta = eta*nu[jjj]
-
+                eta = self._get_eta(ii,jj)
                 eta_vec = ca.vertcat(eta_vec,eta)
                 delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
                 self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)

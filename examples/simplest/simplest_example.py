@@ -91,6 +91,7 @@ def solve_simplest_example(opts=None, model=None, integrator_opts=None, x0=X0, N
         model = get_simplest_model_sliding()
     if integrator_opts is None:
         solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+        solver_opts.homotopy_steering_strategy = nosnoc.mpccsol.plugins.reg_homotopy.HomotopySteeringStrategy.ELL_INF
         integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, T_sim=Tsim, N_sim=Nsim, print_level=0)
     integrator = nosnoc.Integrator(model, opts, integrator_opts)
     t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(x0)

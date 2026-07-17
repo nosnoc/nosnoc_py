@@ -52,7 +52,7 @@ class Heaviside(Base):
     def _generate_variables(self):
         if isinstance(self.model, PssModel):
             self.__generate_variables_pss()
-        elif isinstance(self.model, PssModel):
+        elif isinstance(self.model, HeavisideModel):
             self.__generate_variables_heaviside()
 
         self.z_all = ca.vertcat(self.alpha, self.lambda_n, self.lambda_p, self.model.z)
@@ -79,14 +79,14 @@ class Heaviside(Base):
         return f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr
 
     def __generate_expressions_heaviside(self):
-        return self.model.f_x, [self.model.c - self.lambda_p + self.lambda_n], [-ca.fmin(self.model.c[ii], 0)], [ca.fmax(self.model.c[ii],0)]
+        return self.model.f_x, [self.model.c - self.lambda_p + self.lambda_n], [-ca.fmin(self.model.c, 0)], [ca.fmax(self.model.c,0)]
 
     @override
     def _generate_expressions(self):
         """Generate the required equations and functions for the dcs"""
         if isinstance(self.model, PssModel):
             self.f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr = self.__generate_expressions_pss()
-        elif isinstance(self.model, PssModel):
+        elif isinstance(self.model, HeavisideModel):
             self.f_x, g_lp_stationarity, lam00_n_expr, lam00_p_expr = self.__generate_expressions_heaviside()
 
 
@@ -94,7 +94,7 @@ class Heaviside(Base):
 
         self.f_x_fun = ca.Function('f_x', [self.model.x, self.model.z, self.alpha, self.lambda_n, self.lambda_p, self.model.u, self.model.v_global, self.model.p], [self.f_x, self.model.f_q])
         self.f_q_fun = ca.Function('f_q', [self.model.x, self.model.z, self.alpha, self.lambda_n, self.lambda_p, self.model.u, self.model.v_global, self.model.p], [self.model.f_q])
-        self.g_z_fun = ca.Function('g_z', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.g_z])
+        self.g_z_fun = ca.Function('g_z', [self.model.x, self.model.z, self.alpha, self.model.u, self.model.v_global, self.model.p], [self.model.g_z])
         self.g_alg_fun = ca.Function('g_alg', [self.model.x, self.model.z, self.alpha, self.lambda_n, self.lambda_p, self.model.u, self.model.v_global, self.model.p], [self.g_alg])
         self.g_lp_stationarity_fun = ca.Function('g_lp_stationarity', [self.model.x, self.model.z, self.lambda_n, self.lambda_p, self.model.v_global, self.model.p], [*g_lp_stationarity])
         self.lam00_fun = ca.Function('lam00', [self.model.x, self.model.z, self.model.v_global, self.model.p_global], [*lam00_n_expr, *lam00_p_expr])
@@ -126,5 +126,5 @@ class Heaviside(Base):
             'g_rk_stationariy',
             [ca.vertcat(self.model.x, self.model.z, self.lambda_n, self.lambda_p),
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
-            [ca.vertcat(self.model.g_z, *g_lp_stationarity)]
+            [ca.vertcat(*g_lp_stationarity)]
         )

@@ -8,6 +8,7 @@ import numpy as np
 import casadi as ca
 
 from .model import Pss
+from .model import Heaviside
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
 from .discrete_time_problem import Stewart as StewartDTP
@@ -34,7 +35,7 @@ class IntegratorOptions():
 @dataclass
 class FESDIntegratorOptions(IntegratorOptions):
     solver_opts: RegHomotopyOptions = field(kw_only=True)
-    use_previous_solution: bool = False
+    use_previous_solution: bool = True
 
 # TODO(@anton) implement smoothed integrator
 
@@ -87,6 +88,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dcs = HeavisideDCS(model)
                 self.dtp = HeavisideDTP(self.dcs, opts)
                 self.dtp.populate_problem()
+        elif isinstance(model, Heaviside):
+            self.dcs = HeavisideDCS(model)
+            self.dtp = HeavisideDTP(self.dcs, opts)
+            self.dtp.populate_problem()
         else:
             raise NotImplementedError("Only Pss is implemented")
 
@@ -158,6 +163,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             t_grid.append(t_grid[-1][-1] + np.cumsum(h))
+            t_current = t_grid[-1][-1]
             c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
                 start = t_grid_full[-1]

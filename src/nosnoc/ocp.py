@@ -39,11 +39,11 @@ class OcpSolver():
 
         return self.dtp.solve(casadi_opts=self.solver_opts, plugin=plugin)
 
-    def get(self, field):
+    def get(self, field): # TODO(@anton) allow for specialization in the DTP
         var = getattr(self.dtp.w, field) # TODO(@anton) try except
         if var.get_depth() == 3:
-            end = self.opts.n_s
-            return var[:,:,end:end+2].res
+            end = self.opts.n_s+self.dtp.rbp
+            return np.vstack([var[0,0,self.opts.n_s].res, var[1:,:,end].res])
         elif var.get_depth() == 2:
             return var[:,:].res
         elif var.get_depth() == 1:
@@ -70,19 +70,42 @@ class OcpSolver():
         self.dtp.w.x[0,0,self.opts.n_s](lb=x0,ub=x0,init=x0)
 
     def get_time_grid(self):
-        if self.opts.use_fesd:
+        opts = self.opts
+        if opts.use_fesd:
             h = self.dtp.w.h[:,:].res
         else:
             h = self.dtp.p.T[()].val/(sum(self.opts.N_finite_elements))*(np.ones(sum(opts.N_finite_elements)))
 
             if self.opts.use_speed_of_time_variables:
                 sot = self.get("sot")
-                h = sot*h
+                if self.opts.local_speed_of_time_variable:
+                    start = 0
+                    for ii,nfe in enumerate(self.opts.N_finite_elements):
+                        h[start:start+nfe] = sot[ii]*h[start:start+nfe]
+                        start += nfe
+                else:
+                    h = sot*h
+
         t_grid = np.cumsum(np.concatenate([[0], h]))
         return t_grid
 
     def get_time_grid_full(self):
-        pass # TODO(@anton)
+        opts = self.opts
+        rbp = self.dtp.rbp
+        dims = self.dcs.dims
+        t_grid_full = [np.array([0.0])]
+        c = self.dtp.rk.colloc_points()
+        if opts.use_fesd:
+            h = self.dtp.w.h[:,:].res
+        else:
+            h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
+        for jj in range(len(h)):
+            start = t_grid_full[-1]
+            for kk in range(opts.n_s):
+                t_grid_full.append(start + c[kk]*h[jj])
+            if rbp:
+                t_grid_full.append(start + h[jj])
+        return np.concatenate(t_grid_full)
 
     def get_control_grid(self):
         if self.opts.use_fesd:
@@ -99,7 +122,7 @@ class OcpSolver():
             sot = self.dtp._get_stage_sot(ii)
             h_sum *= sot
             t_grid.append(t_grid[-1]+h_sum)
-        return t_grid
+        return np.array(t_grid)
 
     def get_objective(self):
         return self.dtp.f_result
