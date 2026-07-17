@@ -302,7 +302,6 @@ class Heaviside(Base):
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 for kk in range(1, opts.n_s+1):
-                    lam_ijk = self.w.lam[ii,jj,kk].sym
                     lambda_n_ijk = self.w.lambda_n[ii,jj,kk]
                     lambda_p_ijk = self.w.lambda_p[ii,jj,kk]
                     alpha_ijk = self.w.alpha[ii,jj,kk]
