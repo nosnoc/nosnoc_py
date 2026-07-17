@@ -359,7 +359,7 @@ class Base(ABC,MPCC):
                         h = self.w.h[ii,jj]
                         integral_clock_state = integral_clock_state + h*s_sot
                 self.g.sum_h[opts.N_stages+1] = Constraint(sum_h_all-self.p.T[()])
-                self.g.integral_clock[opts.N_stages+1] = Constraint(sum_h_all-self.w.T_final[()])
+                self.g.integral_clock[opts.N_stages+1] = Constraint(integral_clock_state-self.w.T_final[()])
 
 
     def _get_relaxation(self, relax_type: ConstraintRelaxationMode):
