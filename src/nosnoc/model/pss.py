@@ -25,7 +25,7 @@ class Pss(Base):
     """
     def __init__(self,
                  F: ca.SX|List[ca.SX],
-                 S: np.ndarray|List[np.ndarray],
+                 S: Optional[np.ndarray|List[np.ndarray]] = None,
                  c: Optional[ca.SX|List[ca.SX]] = None,
                  g_indicator: Optional[ca.SX|List[ca.SX]] = None,
                  f_0: Optional[ca.SX] = None,
@@ -49,6 +49,8 @@ class Pss(Base):
         self.dims.n_sys = n_sys
         if self.g_indicator is None: # using S*c formulation
             self.g_indicator = list()
+            if self.S is None: # S must exist
+                raise RuntimeError("The switching matrix S, is not provided.")
             if len(self.S) != n_sys: # S must have n_sys elements
                 raise RuntimeError("Number of matrices S does not match number of subsystems. Note that the number of subsystems is taken to be number of matrices F_i which collect the modes of every subsystem.")
             if self.c is None: # c must exist

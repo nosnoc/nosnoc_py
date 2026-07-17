@@ -82,7 +82,7 @@ def get_simplest_model_switch(x0=X0):
     return model
 
 
-def solve_simplest_example(opts=None, model=None, integrator_opts=None, x0=X0, Nsim=1, Tsim=TSIM):
+def solve_simplest_example(opts=None, model=None, integrator_opts=None, x0=X0, Nsim=NSIM, Tsim=TSIM):
     if opts is None:
         opts = get_default_options()
         opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
