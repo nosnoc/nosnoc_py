@@ -148,7 +148,6 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             if not solver_stats["converged"]:
                 constr_viol = solver_stats['constraint_violation']
                 warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
-                breakpoint()
             elif integrator_opts.print_level >= 2:
                 wall_time_total = solver_stats["wall_time_total"]
                 print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")

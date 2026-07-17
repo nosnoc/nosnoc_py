@@ -184,7 +184,7 @@ class RegHomotopySolver(MpccsolPlugin):
         ii = 0
         if self.opts.print_level:
             self._print_header()
-        while self._sigma_curr() >= self.opts.sigma_N and (ii<1 or self._comp_res_curr() > self.opts.complementarity_tol) and ii <= self.opts.N_homotopy:
+        while self._sigma_curr() >= self.opts.sigma_N and (ii<1 or self._comp_res_curr() > self.opts.complementarity_tol) and ii < self.opts.N_homotopy:
             self._solve_nlp()
             self._prepare_nlp()
             ii += 1
