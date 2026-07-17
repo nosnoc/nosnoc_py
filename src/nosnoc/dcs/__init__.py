@@ -1,3 +1,3 @@
 from .base import Base
 from .stewart import Stewart
-# TODO(@anton) others
+from .heaviside import Heaviside

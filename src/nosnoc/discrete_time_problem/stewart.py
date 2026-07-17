@@ -305,12 +305,11 @@ class Stewart(Base):
             return
 
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-            self.__heuristic_mean()
+            self._heuristic_mean()
                 
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
-            self.__heuristic_diff()
+            self._heuristic_diff()
 
-                
         if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
             self.__l2_relaxed_scaled()
                 
@@ -325,20 +324,6 @@ class Stewart(Base):
 
         if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
             self.__linear_complementarity()
-
-    def __heuristic_mean(self):
-        opts = self.opts
-        for ii in range(1, opts.N_stages+1):
-            for jj in range(1, opts.N_finite_elements[ii-1]+1):
-                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
-                self.f += self.p.rho_h[()]*(h0-self.w.h[ii,jj])**2
-
-    def __heuristic_diff(self):
-        opts = self.opts
-        for ii in range(1, opts.N_stages+1):
-            for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                h0 = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
-                self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
 
     def __l2_relaxed_scaled(self):
         opts = self.opts

@@ -70,7 +70,7 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
                         for rk_scheme in nosnoc.RKScheme:
                             opts = get_default_options(
@@ -93,7 +93,7 @@ class SimpleTests(unittest.TestCase):
 
         for ns in NS_VALUES:
             for Nfe in N_FINITE_ELEMENT_VALUES:
-                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
                     for rk_scheme in nosnoc.RKScheme:
                         opts = get_default_options(
                             step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
@@ -139,7 +139,7 @@ class SimpleTests(unittest.TestCase):
 
         for rk_scheme in nosnoc.RKScheme:
             for rk_representation in nosnoc.RKRepresentation:
-                for dcs_mode in [nosnoc.DcsMode.STEWART]:
+                for dcs_mode in [nosnoc.DcsMode.STEWART, nosnoc.DcsMode.STEP]:
                     for cross_comp_mode in nosnoc.CrossComplementarityMode:
                         opts = get_default_options(
                             rk_scheme = rk_scheme,

@@ -2,7 +2,9 @@ import numpy as np
 
 from .model import Pss
 from .dcs import Stewart as StewartDCS
+from .dcs import Heaviside as HeavisideDCS
 from .discrete_time_problem import Stewart as StewartDTP
+from .discrete_time_problem import Heaviside as HeavisideDTP
 from .nosnoc_types import DcsMode
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
@@ -21,8 +23,10 @@ class OcpSolver():
                 self.dcs = StewartDCS(model)
                 self.dtp = StewartDTP(self.dcs, opts)
                 self.dtp.populate_problem()
-            else:
-                 raise NotImplementedError("Only Stewart is implemented")
+            elif opts.dcs_mode == DcsMode.STEP:
+                self.dcs = HeavisideDCS(model)
+                self.dtp = HeavisideDTP(self.dcs, opts)
+                self.dtp.populate_problem()
         else:
             raise NotImplementedError("Only Pss is implemented")
 
