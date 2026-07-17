@@ -11,6 +11,7 @@ from examples.car_control_complementarity.car_control_complementarity import (
     TERMINAL_TIME,
 )
 
+USE_FESD = [True, False]
 TIME_OPTIMAL = [True, False]
 USE_SPEED_OF_TIME = [True, False]
 LOCAL_SPEED_OF_TIME = [True, False]
@@ -20,7 +21,8 @@ STEP_EQUILIBRATION_MODES = [
 ]
 
 options = [
-    (time_optimal, use_speed_of_time, local_speed_of_time, rk_representation, rk_scheme, dcs_mode)
+    (use_fesd, time_optimal, use_speed_of_time, local_speed_of_time, rk_representation, rk_scheme, dcs_mode)
+    for use_fesd in USE_FESD
     for time_optimal in TIME_OPTIMAL
     for use_speed_of_time in USE_SPEED_OF_TIME
     for local_speed_of_time in LOCAL_SPEED_OF_TIME
@@ -37,8 +39,9 @@ class TestCarControlComplementarity(unittest.TestCase):
         example(plot=False)
 
     @parameterized.expand(options)
-    def test_combination(self, time_optimal, use_speed_of_time, local_speed_of_time, rk_representation, rk_scheme, dcs_mode):
+    def test_combination(self, use_fesd, time_optimal, use_speed_of_time, local_speed_of_time, rk_representation, rk_scheme, dcs_mode):
         opts = get_default_options(
+            use_fesd=use_fesd,
             time_optimal_problem=time_optimal,
             use_speed_of_time_variables=use_speed_of_time,
             local_speed_of_time_variable=local_speed_of_time,
@@ -49,6 +52,7 @@ class TestCarControlComplementarity(unittest.TestCase):
         message = (
             f"""
             Test setting:
+            use_fesd: {use_fesd}
             time_optimal: {time_optimal}
             use_speed_of_time: {use_speed_of_time}
             local_speed_of_time: {local_speed_of_time}

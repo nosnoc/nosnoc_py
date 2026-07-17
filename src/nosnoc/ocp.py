@@ -70,7 +70,8 @@ class OcpSolver():
         self.dtp.w.x[0,0,self.opts.n_s](lb=x0,ub=x0,init=x0)
 
     def get_time_grid(self):
-        if self.opts.use_fesd:
+        opts = self.opts
+        if opts.use_fesd:
             h = self.dtp.w.h[:,:].res
         else:
             h = self.dtp.p.T[()].val/(sum(self.opts.N_finite_elements))*(np.ones(sum(opts.N_finite_elements)))

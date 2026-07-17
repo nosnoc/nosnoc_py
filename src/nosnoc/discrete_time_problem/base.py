@@ -332,7 +332,7 @@ class Base(ABC,MPCC):
             for ii in range(1,opts.N_stages+1):
                 s_sot = self._get_stage_sot(ii)
                 for jj in range(1,opts.N_finite_elements[ii-1]+1):
-                    h = self.p.T()/(opts.N_stages*opts.N_finite_elements[ii-1])
+                    h = self.p.T[()]/(opts.N_stages*opts.N_finite_elements[ii-1])
                     integral_clock_state += h*s_sot
             self.g.integral_clock_state[opts.N_stages+1] = Constraint(integral_clock_state-self.w.T_final[()])
 
