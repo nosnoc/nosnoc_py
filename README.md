@@ -37,12 +37,30 @@ pip install -e .
 ## Optional additional installation steps
 1. In order to build docs also run:
 ```
-pip -r docs/docs_reqirements.txt
+pip install -e . --group docs
 ```
 2. In order to run tests you should install the testing requirements:
 ```
-pip -r requirements-test.txt
+pip install -e . --group test
 ```
+
+## Running tests:
+The easiest way to run tests is 
+```
+python -m pytest test
+```
+which will run all (>= 2000!) tests which may take some time.
+If you want to run these in parallel we depend on `pytest-xdist` to parallelize.
+To do this run:
+```
+python -m pytest test -n <num_threads>
+```
+
+If you want to run specific tests run them with:
+```
+python -m pytest test -k "<Test>"
+```
+See the [`pytest` docs](https://docs.pytest.org/en/stable/) for more information as to how to use this filtering.
 
 ## Literature - theory and algorithms
 

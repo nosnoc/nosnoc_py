@@ -33,55 +33,49 @@ def get_oscillator_model(use_g_Stewart=False):
 
     if use_g_Stewart:
         g_Stewart_list = [-S[i] @ c[i] for i in range(1)]
-        model = nosnoc.NosnocModel(x=x, F=F, g_Stewart=g_Stewart_list, x0=x0)
+        model = nosnoc.model.Pss(x=x, F=F, g_indicator=g_Stewart_list, x0=x0)
     else:
-        model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=x0)
+        model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=x0)
 
     return model
 
-def get_default_options():
-    opts = nosnoc.NosnocOpts()
-    comp_tol = 1e-8
-    opts.comp_tol = comp_tol
-    opts.homotopy_update_slope = 0.1  # decrease rate
-    opts.N_finite_elements = 2
-    opts.n_s = 3
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.DIRECT_COMPLEMENTARITY
-    opts.print_level = 1
+def get_default_options(**kwargs):
+    N_fe = 2
+    default_args = {
+        "N_stages":1,
+        "N_finite_elements":3,
+        "n_s":3,
+        "T":1.0,
+        "use_fesd":True,
+        "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
+    # switch
+    opts = nosnoc.Options(
+        **merged
+    )
     return opts
 
 
-def solve_oscillator(opts=None, use_g_Stewart=False, do_plot=True):
+def solve_oscillator(opts=None, integrator_opts=None, use_g_Stewart=False, do_plot=True):
     if opts is None:
         opts = get_default_options()
+    if integrator_opts is None:
+        solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+        solver_opts.complementarity_tol = 1e-8
+        integrator_opts = nosnoc.FESDIntegratorOptions(solver_opts=solver_opts, T_sim=TSIM, N_sim=29, print_level=3)
 
     model = get_oscillator_model(use_g_Stewart)
+    integrator = nosnoc.Integrator(model, opts, integrator_opts)
+    t_grid, x_res, t_grid_full, x_res_full = integrator.simulate(model.x0)
 
-    Nsim = 29
-    Tstep = TSIM / Nsim
-    opts.terminal_time = Tstep
-
-    solver = nosnoc.NosnocSolver(opts, model)
-
-    # loop
-    looper = nosnoc.NosnocSimLooper(solver, model.x0, Nsim)
-    looper.run()
-    results = looper.get_results()
-
-    error = np.max(np.abs(X_SOL - results["X_sim"][-1]))
+    error = np.max(np.abs(X_SOL - x_res[-1,:]))
     print(f"error wrt exact solution {error:.2e}")
 
     if do_plot:
-        plot_oscillator(results["X_sim"], results["t_grid"], switch_times=results["switch_times"])
-    # nosnoc.plot_timings(results["cpu_nlp"])
+        plot_oscillator(integrator.get("x"), integrator.get_time_grid(), switch_times=None)
 
-    # store solution
-    # import json
-    # json_file = 'oscillator_results_ref.json'
-    # with open(json_file, 'w') as f:
-    #     json.dump(results['w_sim'], f, indent=4, sort_keys=True, default=make_object_json_dumpable)
-    # print(f"saved results in {json_file}")
-    return results
+    return integrator
 
 def main_least_squares():
 

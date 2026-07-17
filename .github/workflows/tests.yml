@@ -3,6 +3,12 @@ name: nosnoc tests
 on:
   pull_request:
   push:
+    branches:
+      - "main"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+permissions:
+  checks: write
+  pull-requests: write # only required if `comment: true` was enabled
 
 jobs:
   test_nosnoc:
@@ -10,7 +16,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
     - name: Install Python and pip package
       shell: bash
       run: |
@@ -19,22 +24,14 @@ jobs:
         virtualenv --python=python3 env
         source env/bin/activate
         which python
-        pip install setuptools
-        pip install -e .
-        pip install -r requirements-test.txt
+        pip install -e . --group test
 
     - name: Run tests
       shell: bash
       run: |
         source env/bin/activate
         mkdir -p test-results
-        python -m pytest --junitxml test-results/results.xml --cov=nosnoc --cov-report=html:test-results/coverage test
-
-    - name: Publish Test Report
-      uses: mikepenz/action-junit-report@v3
-      if: always() # always run even if the previous step fails
-      with:
-        report_paths: 'test-results/results.xml'
+        python -m pytest --junitxml test-results/results.xml --cov=nosnoc --cov-report=html:test-results/coverage test --tb=long -n 2
 
     - name: Upload test results
       if: always()
@@ -42,3 +39,10 @@ jobs:
       with:
         name: test-results
         path: test-results/
+        retention-days: 1
+    - name: Publish Test Report
+      uses: mikepenz/action-junit-report@v6
+      if: always() # always run even if the previous step fails
+      with:
+        report_paths: 'test-results/results.xml'
+        comment: true

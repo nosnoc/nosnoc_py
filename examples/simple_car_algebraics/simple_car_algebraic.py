@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 X0 = np.array([0, 0])
 X_TARGET = np.array([500, 0])
 
+TERMINAL_TIME = 30
 
 def car_model():
     q = ca.SX.sym('q')
@@ -52,28 +53,30 @@ def car_model():
     f_q = j*u[0]**2
 
     g_z = z-(v-15)
-    z0 = [-15]
+    z0 = np.array([-15])
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u, z=z, g_z=g_z, z0=z0)
-    ocp = nosnoc.NosnocOcp(lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal)
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=X0, u=u, z=z, g_z=g_z, z0=z0, lbu=lbu, ubu=ubu, f_q=f_q, g_terminal=g_terminal)
 
-    return model, ocp
+    return model
 
 
 def get_default_options():
-    opts = nosnoc.NosnocOpts()
     # opts.pss_mode = nosnoc.PssMode.STEP
-    opts.use_fesd = True
-    comp_tol = 1e-6
-    opts.comp_tol = comp_tol
-    opts.homotopy_update_slope = 0.1
-    opts.n_s = 2
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED
-    opts.print_level = 1
+    use_fesd = True
+    n_s = 2
 
-    opts.N_stages = 30
-    opts.N_finite_elements = 2
-    opts.rootfinder_for_initial_z = True
+    N_stages = 30
+    N_fe = 3
+
+    opts = nosnoc.Options(
+        N_stages=N_stages,
+        N_finite_elements=N_fe,
+        T=TERMINAL_TIME,
+        use_fesd=use_fesd,
+        cross_comp_mode=nosnoc.CrossComplementarityMode.FE_FE,
+        step_equilibration=nosnoc.StepEquilibrationMode.DIRECT,
+        n_s=n_s,
+    )
     return opts
 
 
@@ -81,22 +84,21 @@ def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
 
-    model, ocp = car_model()
-    opts.terminal_time = 30
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    model = car_model()
+    solver = nosnoc.OcpSolver(model, opts, solver_opts)
 
-    solver = nosnoc.NosnocSolver(opts, model, ocp)
+    solver.solve()
 
-    results = solver.solve()
-
-    return results
+    return solver
 
 
-def plot_car_model(results, latexify=True):
-    x_traj = np.array(results['x_traj'])
-    u_traj = np.array(results['u_traj'])
-    t_grid = results['t_grid']
-    t_grid_u = results['t_grid_u']
-
+def plot_car_model(solver, latexify=True):
+    x_traj = solver.get("x")
+    u_traj = solver.get("u")
+    t_grid = solver.get_time_grid()
+    t_grid_u = solver.get_control_grid()
+    breakpoint()
     if latexify:
         nosnoc.latexify_plot()
 
@@ -114,7 +116,7 @@ def plot_car_model(results, latexify=True):
     plt.grid()
 
     plt.figure()
-    plt.step(t_grid_u, np.concatenate([[u_traj[0, 0]], u_traj[:, 0]]))
+    plt.step(t_grid_u, np.concatenate([[u_traj[0]], u_traj[:]]))
     plt.ylabel("$u_a$")
     plt.xlabel("time [s]")
     plt.grid()
@@ -123,9 +125,8 @@ def plot_car_model(results, latexify=True):
 
 
 def example():
-    results = solve_ocp()
-    plot_car_model(results)
-
+    solver = solve_ocp()
+    plot_car_model(solver)
 
 if __name__ == "__main__":
     example()

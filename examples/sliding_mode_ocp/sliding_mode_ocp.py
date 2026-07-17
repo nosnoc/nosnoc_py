@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 from casadi import SX, vertcat, horzcat
 
 import nosnoc
+from nosnoc.nosnoc_types import CrossComplementarityMode, ConstraintRelaxationMode, StepEquilibrationMode
 
 # example opts
-TERMINAL_CONSTRAINT = True
+TERMINAL_RELAXATION = ConstraintRelaxationMode.NONE
 LINEAR_CONTROL = True
 TERMINAL_TIME = 4.0
 
@@ -25,17 +26,20 @@ UBU = U_MAX * np.ones((2,))
 
 
 # solver opts
-def get_default_options() -> nosnoc.NosnocOpts:
-    opts = nosnoc.NosnocOpts()
-    opts.irk_representation = nosnoc.IrkRepresentation.DIFFERENTIAL
-    opts.comp_tol = 1e-9
-    opts.homotopy_update_slope = 0.1
-    opts.n_s = 2
-    opts.step_equilibration = nosnoc.StepEquilibrationMode.HEURISTIC_MEAN
-    opts.rho_h = 1e1
-    opts.print_level = 1
-    opts.N_stages = 6
-    opts.N_finite_elements = 6
+def get_default_options(**kwargs) -> nosnoc.Options:
+    default_args = {
+        "N_stages":6,
+        "N_finite_elements":2,
+        "n_s":2,
+        "T":TERMINAL_TIME,
+        "use_fesd":True,
+        "cross_comp_mode":nosnoc.CrossComplementarityMode.FE_FE,
+        "relax_terminal_constraint": TERMINAL_RELAXATION,
+        }
+    merged = dict(list(default_args.items())+ list(kwargs.items()))
+    opts = nosnoc.Options(
+        **merged
+    )
     return opts
 
 
@@ -95,50 +99,43 @@ def get_sliding_mode_ocp_description():
     F2 = horzcat(f_21, f_22)
     F = [F1, F2]
 
-    if TERMINAL_CONSTRAINT:
-        g_terminal = x[:2] - X_TARGET
-        f_terminal = SX.zeros(1)
-    else:
-        g_terminal = SX.zeros(0)
-        f_terminal = 100 * (x[:2] - X_TARGET).T @ (x[:2] - X_TARGET)
+    g_terminal = x[:2] - X_TARGET
+    f_terminal = SX.zeros(1)
 
-    model = nosnoc.NosnocModel(x=x, F=F, S=S, c=c, x0=X0, u=u)
-    ocp = nosnoc.NosnocOcp(lbu=LBU, ubu=UBU, f_q=f_q, f_terminal=f_terminal, g_terminal=g_terminal)
+    model = nosnoc.model.Pss(x=x, F=F, S=S, c=c, x0=X0, u=u, lbu=LBU, ubu=UBU, f_q=f_q, f_q_T=f_terminal, g_terminal=g_terminal)
 
-    return model, ocp
+    return model
 
 
-def solve_ocp(opts=None):
+def solve_ocp(opts=None, solver_opts=None):
     if opts is None:
         opts = get_default_options()
+    if solver_opts is None:
+        solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
 
-    [model, ocp] = get_sliding_mode_ocp_description()
+    model = get_sliding_mode_ocp_description()
 
-    opts.terminal_time = TERMINAL_TIME
-
-    solver = nosnoc.NosnocSolver(opts, model, ocp)
-
-    results = solver.solve()
-
-    return results
+    solver = nosnoc.OcpSolver(model, opts, solver_opts)
+    solver.solve()
+    return solver
 
 
 def example(plot=True):
-    results = solve_ocp()
+    solver = solve_ocp()
     if plot:
         plot_sliding_mode(
-            results["x_traj"],
-            results["u_traj"],
-            results["t_grid"],
-            results["t_grid_u"],
+            solver.get("x"),
+            solver.get("u"),
+            solver.get_time_grid(),
+            solver.get_control_grid(),
         )
-        plot_time_steps(results["time_steps"])
+        plot_time_steps(solver.get("h"))
 
 
 def plot_sliding_mode(x_traj, u_traj, t_grid, t_grid_u, latexify=True):
     plt.figure()
     plt.subplot(2, 1, 1)
-    plt.step(t_grid_u, [u_traj[0]] + u_traj, label="u")
+    plt.step(t_grid_u, np.vstack([u_traj[0,:], u_traj]), label="u")
     plt.grid()
     plt.legend()
 
