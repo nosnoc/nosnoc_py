@@ -78,7 +78,14 @@ class OcpSolver():
 
             if self.opts.use_speed_of_time_variables:
                 sot = self.get("sot")
-                h = sot*h
+                if self.opts.local_speed_of_time_variable:
+                    start = 0
+                    for ii,nfe in enumerate(self.opts.N_finite_elements):
+                        h[start:start+nfe] = sot[ii]*h[start:start+nfe]
+                        start += nfe
+                else:
+                    h = sot*h
+
         t_grid = np.cumsum(np.concatenate([[0], h]))
         return t_grid
 

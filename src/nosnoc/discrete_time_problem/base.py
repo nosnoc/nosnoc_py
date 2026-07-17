@@ -181,7 +181,7 @@ class Base(ABC,MPCC):
         if self.opts.use_fesd:
             h = self.w.h[ii,jj]
         elif self.opts.time_optimal_problem and not self.opts.use_speed_of_time_variables:
-            h = self.w.T_final()/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
+            h = self.w.T_final[()]/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
         else:
             h = self.p.T[()].val/(self.opts.N_stages*self.opts.N_finite_elements[ii-1])
         return h
