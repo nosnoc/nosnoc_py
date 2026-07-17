@@ -33,3 +33,10 @@ test = [
      'pytest-cov',
      'parameterized',
 ]
+
+docs = [
+     'sphinx',
+     'sphinx-rtd-theme',
+     'sphinx-toolbox',
+     'enum-tools',
+]
