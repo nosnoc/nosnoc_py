@@ -90,6 +90,36 @@ class DcsMode(Enum):
     lambda_p_i >= 0;    for all i = 1,..., n_sys
     alpha_i >= 0;     for all i = 1,..., n_sys
     """
+    CLS = auto()
+    """
+    Complementarity Lagrangian System, discretized with FESD-J.
+
+    M(q)dv = f_v(q,v) + J_n(q)lambda_n + J_t(q)lambda_t
+    0 <= lambda_n perp f_c(q) >= 0
+    plus impulse equations at the finite element boundaries.
+    """
+
+
+class FrictionModel(Enum):
+    """
+    Which representation of the Coulomb friction cone to use for a CLS.
+    """
+    CONIC = auto()
+    """Exact nonlinear friction cone, ||lambda_t||_2 <= mu*lambda_n."""
+    POLYHEDRAL = auto()
+    """Polyhedral approximation of the friction cone spanned by D_tangent."""
+
+
+class ConicModelSwitchHandling(Enum):
+    """
+    How switches of the tangential velocity are detected with the Conic friction model.
+    """
+    PLAIN = auto()
+    """No extra variables, switches of the tangential velocity are not isolated."""
+    ABS = auto()
+    """Positive/negative parts of the tangential velocity, 0 <= p_vt perp n_vt >= 0."""
+    LP = auto()
+    """Positive/negative parts plus a step function alpha_vt for the tangential velocity."""
 
 
 class Status(Enum):

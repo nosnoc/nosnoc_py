@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling
 
 @dataclass
 class Options():
@@ -190,26 +190,39 @@ class Options():
     # double: Constant used for stabilizing auxiliary dynamics in \nabla f_c(q) direction.
     kappa_stabilizing_q_dynamics: float         = 1e-5
 
-    ############################# NOT IMPLEMENTED
+    #--------------------- Complementarity Lagrangian System (FESD-J) ---------------------#
+
     # FrictionModel: Which Friction model to use for the Complementarity Lagrangian System.
     #
-    # Default: :mat:class:`FrictionModel.Conic`
+    # Warning:
+    #     Friction is not yet implemented in the Python CLS. Any model with a nonzero
+    #     coefficient of friction is currently rejected by `nosnoc.model.Cls`.
     #
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
-    #friction_model : FrictionModel = FrictionModel.Conic;
+    friction_model: FrictionModel = FrictionModel.CONIC
 
     # ConicModelSwitchHandling: Which velocity switch handling mode to use when using the Conic friction model
     #
     # See Also:
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
-    #conic_model_switch_handling : ConicModelSwitchHandling = ConicModelSwitchHandling.Abs;
+    conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
+
+    # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.
+    no_initial_impacts: bool = False
+
+    # double: enforce $f_c \ge 0$ at an explicit Euler step of length `eps_cls`*h after the impact.
+    #
+    # This is Eq. (18) of :cite:`Nurkanovic2024` and excludes spurious solutions with a zero
+    # impulse and a very large contact force. Set to 0 to disable.
+    eps_cls: float = 1e-3
+    fixed_eps_cls: bool = False # boolean: use fixed step eps_cls instead of a multiple of h.
+
+    ############################# NOT IMPLEMENTED
 
     #kappa_friction_reg : float  = 0; # double: Regularization term in friction equations to avoid large multipliers if no contact happens.
 
     #lift_velocity_state: bool = 0; # boolean: If true define auxliary algebraic vairable, $dot = z_v$, to avoid symbolic inversion of the inertia matrix.
-    #eps_cls: float = 1e-3 # double: enforce $f_c$ at Euler step with h * eps_cls
-    #fixed_eps_cls: bool = False # boolean: use fixed step eps_cls instead of a multiple of h.
 
     # double: The constant radius of relaxation for the friction force which enforces a nonempty interior around zero velocity
     #
