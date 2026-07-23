@@ -127,7 +127,6 @@ class Cls(Base):
                 self.w.y_gap[ii,jj,kk],
             )
 
-    # ------------------------------------------------------------------ transcription
 
     @override
     def _generate_direct_transcription_constraints(self):
@@ -139,10 +138,10 @@ class Cls(Base):
 
         x_0 = self.w.x[0,0,opts.n_s].sym
         z_0 = self.w.z[0,0,opts.n_s].sym
-        self.g.z[0,0,opts.n_s] = Constraint(
+        self.g.algebraic[0,0,opts.n_s] = Constraint(
             dcs.g_z_fun(x_0, z_0, self.w.u[1], self.w.v_global[()], self._get_stage_parameters(1)))
 
-        x_prev = x_0  # right boundary of the previous FE, the pre impact state.
+        x_prev = x_0  # last point of previous FE, needed for continuity conditions
         for ii in range(1, opts.N_stages+1):
             s_sot = self._get_stage_sot(ii)
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
@@ -150,8 +149,6 @@ class Cls(Base):
                 u_i = self.w.u[ii]
                 v_global = self.w.v_global[()]
                 p = self._get_stage_parameters(ii)
-
-                # ---- FESD-J boundary handling: continuity of q, impulse/jump for v ----
                 
                 q_prev = x_prev[0:dims.n_q]
                 v_prev = x_prev[dims.n_q:]
@@ -163,7 +160,7 @@ class Cls(Base):
                 if opts.use_fesd and (jj != 1 or not opts.no_initial_impacts):
                     self.g.impulse[ii,jj] = Constraint(
                         dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj), v_global, p))
-                    # Eq. (18): enforce the gap shortly after the impact to exclude spurious
+                    # enforce the gap shortly after the impact to exclude spurious
                     # solutions with a zero impulse and a huge contact force.
                     if opts.eps_cls > 0:
                         step = opts.eps_cls if opts.fixed_eps_cls else h*opts.eps_cls
@@ -172,7 +169,7 @@ class Cls(Base):
                 else:
                     self.g.v_continuity[ii,jj] = Constraint(v_lbp - v_prev)
 
-                # ---- RK collocation, started from the (post impact) left boundary point ----
+                #  RK collocation, started from the (post impact) left boundary point
                 z_ii_jj = self._build_z(ii, jj)
                 prk_ii_jj = self._build_prk(ii, jj)
                 x_end, q_end, dynamic, algebraic = self.rk.collocation_constraints(
@@ -186,13 +183,13 @@ class Cls(Base):
                 x_ii_jj_end = self._get_x_end(ii, jj)
                 if not self.rk.is_right_boundary_explicit():
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
-                    self.g.z[ii,jj,opts.n_s+1] = Constraint(
-                        dcs.g_z_fun(x_ii_jj_end, self.w.z[ii,jj,opts.n_s+1].sym, u_i, v_global, p))
+                    self.g.algebraic[ii,jj,opts.n_s+1] = Constraint(
+                        dcs.g_z_fun(x_ii_jj_end , self.w.z[ii,jj,opts.n_s+1].sym, u_i, v_global, p))
                     # y_gap at the right boundary point is defined by the gap function there.
                     self.g.y_gap_rbp[ii,jj] = Constraint(
                         self.w.y_gap[ii,jj,opts.n_s+1].sym - dcs.f_c_fun(x_ii_jj_end))
                 self._fe_path_constraints(ii, jj)
-                x_prev = x_ii_jj_end
+                x_prev = x_ii_jj_end 
             self._numerical_time_constraints(ii)
             self._stage_path_constraints(ii)
 
@@ -200,7 +197,6 @@ class Cls(Base):
         self._terminal_objective()
         self._terminal_numerical_time_constraints()
 
-    # ------------------------------------------------------------------ complementarities
 
     @override
     def _generate_complementarity_constraints(self):
@@ -301,10 +297,9 @@ class Cls(Base):
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 for kk in range(1, opts.n_s+1):
-                    self.G.cross_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
-                    self.H.cross_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
+                    self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
+                    self.H.standardx_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
 
-    # ------------------------------------------------------------------ step equilibration
 
     @override
     def _generate_step_equilibration_constraints(self):
