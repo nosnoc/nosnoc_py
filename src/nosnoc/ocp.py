@@ -118,14 +118,15 @@ class OcpSolver():
         if self.opts.use_fesd:
             h = self.dtp.w.h[:,:].res
         else:
-            h = self.dtp.p.T[()].val/(sum(self.opts.N_finite_elements))*(np.ones(sum(opts.N_finite_elements)))
+            h = self.dtp.p.T[()].val/(np.sum(self.opts.N_finite_elements))*(np.ones(np.sum(self.opts.N_finite_elements)))
 
             if self.opts.use_speed_of_time_variables:
                 sot = self.get("sot")
                 h = sot*h
         t_grid = [0]
         for ii in range(1,self.opts.N_stages+1):
-            h_sum = sum(self.dtp.w.h[ii,:].res)
+            
+            h_sum = np.sum(self.dtp.w.h[ii,:].res) 
             sot = self.dtp._get_stage_sot(ii)
             h_sum *= sot
             t_grid.append(t_grid[-1]+h_sum)
