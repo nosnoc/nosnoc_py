@@ -17,11 +17,10 @@ import nosnoc
 
 GRAVITY = 9.81
 
-# Simulation settings, cf. the MATLAB example `bouncing_ball_1d_sim.m`.
 X0 = np.array([0.8, 0.0])
 T_SIM = 3.0
-N_SIM = 50
-N_FE = 5
+N_SIM = 10
+N_FE = 2
 
 
 
@@ -49,6 +48,7 @@ def get_default_options(**kwargs):
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "dcs_mode": nosnoc.DcsMode.CLS,
         "use_fesd": True,
+        "cross_comp_mode": nosnoc.CrossComplementarityMode.STAGE_STAGE,
         "no_initial_impacts": True,
         "step_equilibration": nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
         # A zero initial guess for the contact quantities works best for this example.
@@ -180,4 +180,4 @@ def example(e=0.0, plot=True):
 
 
 if __name__ == "__main__":
-    example(e=0.5)
+    example(e=0.0)
