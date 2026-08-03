@@ -20,8 +20,9 @@ GRAVITY = 9.81
 # Simulation settings, cf. the MATLAB example `bouncing_ball_1d_sim.m`.
 X0 = np.array([0.8, 0.0])
 T_SIM = 3.0
-N_SIM = 20
-N_FE = 2
+N_SIM = 50
+N_FE = 5
+
 
 
 def get_bouncing_ball_model(e=0.0, x0=X0):
@@ -44,10 +45,10 @@ def get_default_options(**kwargs):
     default_args = {
         "N_stages": 1,
         "N_finite_elements": N_FE,
-        "n_s": 1,
+        "n_s": 2,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "dcs_mode": nosnoc.DcsMode.CLS,
-        "use_fesd": False,
+        "use_fesd": True,
         "no_initial_impacts": True,
         "step_equilibration": nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
         # A zero initial guess for the contact quantities works best for this example.
@@ -55,17 +56,14 @@ def get_default_options(**kwargs):
         "initial_lambda_normal": 0.0,
         "initial_Y_gap": 0.0,
         "initial_y_gap": 0.0,
-        "T": 1.0,
+        "T": 1.0, #note that this gets overwirtten by T_sim / N_sim, redundancy-> TODO: evaluate this
     }
     return nosnoc.Options(**(default_args | kwargs))
 
 
 def get_default_integrator_options(**kwargs):
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
-    # FESD-J needs a slower homotopy update than the Filippov discretizations, cf. Section 6 of the
-    # FESD-J paper, where a homotopy update slope of 0.2 to 0.5 is recommended. A slower update
-    # needs more homotopy iterations to drive sigma down to sigma_N, otherwise the homotopy loop
-    # stops early and the complementarity residual stays above complementarity_tol.
+
     solver_opts.homotopy_update_slope = 0.2
     solver_opts.N_homotopy = 25
     solver_opts.complementarity_tol = 1e-8
