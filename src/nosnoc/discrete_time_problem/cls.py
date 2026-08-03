@@ -298,7 +298,7 @@ class Cls(Base):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 for kk in range(1, opts.n_s+1):
                     self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
-                    self.H.standardx_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
+                    self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
 
 
     @override
