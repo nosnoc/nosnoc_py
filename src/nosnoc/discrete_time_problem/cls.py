@@ -6,16 +6,39 @@ import numpy as np
 from .base import Base
 from vdx.vartypes import *
 
-from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode
+from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization
 
 
 class Cls(Base):
     r"""
-    FESD-J discrete time problem (MPCC) for a Complementarity Lagrangian System.
+    Discrete time problem (MPCC) for a Complementarity Lagrangian System.
+
+    Two discretizations of the impact are supported, selected by ``opts.cls_discretization``:
+    FESD-J (impulse + velocity jump at the finite element boundaries, exact) and Patel's relaxed
+    orthogonal collocation (velocity continuity + contact force over a shrinking element,
+    approximate). They share all machinery except the treatment of the velocity at a boundary.
     """
 
     def __init__(self, dcs, opts):
         super().__init__(dcs, opts)
+
+    def _is_relaxed_oc(self):
+        """True if the relaxed orthogonal-collocation formulation (velocity continuity, no impulse) is selected."""
+        return self.opts.cls_discretization == ClsDiscretization.RELAXED_OC
+
+    def _h_rescale(self, ii):
+        """
+        Scale that converts the stage contact multiplier to the correct units in the ODE RHS.
+
+        In FESD ``lambda_normal`` is a genuine contact *force*, so no rescaling is applied (1). In
+        non-FESD implicit-Euler time-stepping it is instead a contact *impulse* over the fixed step,
+        so ``f_x`` divides it by the step length ``h_0``; the ``h *`` from the Euler integration then
+        cancels the division and the impulse acts directly on the velocity. Mirrors ``h_rescale`` in
+        the MATLAB ``Cls.m``.
+        """
+        if self.opts.use_fesd:
+            return 1.0
+        return self.opts.h_k[ii-1] / self.opts.N_finite_elements[ii-1]
 
     def _start_fe(self):
         """First finite element that may contain an impact (2 if initial impacts are excluded)."""
@@ -46,9 +69,8 @@ class Cls(Base):
             self.w.y_gap[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(
                 "y_gap", dims.n_c, lb=0.0, ub=opts.ub_y_gap, init=opts.initial_y_gap)
 
-            # Impulse variables at the finite element boundaries. They only exist where an impact is
-            # allowed, i.e. from start_fe onwards.
-            if opts.use_fesd:
+        
+            if opts.use_fesd and not self._is_relaxed_oc():
                 fe_range = range(start_fe, opts.N_finite_elements[ii-1]+1)
                 self.w.Lambda_normal[ii,fe_range] = Primal("Lambda_normal", dims.n_c, lb=0.0, ub=opts.ub_Lambda_normal, init=opts.initial_Lambda_normal)
                 self.w.P_vn[ii,fe_range] = Primal("P_vn", dims.n_c, lb=0.0, ub=opts.ub_P_vn, init=opts.initial_P_vn)
@@ -101,9 +123,22 @@ class Cls(Base):
         )
 
     @override
+    def _build_prk(self, ii, jj):
+        # The CLS RK functions take one extra parameter, h_rescale (see dcs.Cls): 1 in FESD, the
+        # fixed step length in the non-FESD implicit-Euler scheme where lambda_normal is an impulse
+        # rather than a force. Only f_x uses it; f_q_rk / g_rk ignore it.
+        return ca.vertcat(
+            self.w.u[ii],
+            self.w.v_global[()],
+            self._get_stage_parameters(ii),
+            self._h_rescale(ii),
+        )
+
+    @override
     def _get_rk_stage_z(self, ii, jj, kk):
         # The stacked algebraic order (lambda_normal, y_gap) must match the dcs `z_alg` used to
-        # build f_x_rk / f_q_rk / g_rk.
+        # build f_x_rk / f_q_rk / g_rk. The h_rescale of lambda_normal happens inside f_x (via the
+        # prk parameter), so the raw multiplier is stacked here.
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
             return ca.vertcat(
                 self.w.x[ii,jj,kk],
@@ -157,11 +192,11 @@ class Cls(Base):
                 v_lbp = x_lbp[dims.n_q:]
                 self.g.q_continuity[ii,jj] = Constraint(q_prev - q_lbp)
 
-                if opts.use_fesd and (jj != 1 or not opts.no_initial_impacts):
+            
+                if opts.use_fesd and not self._is_relaxed_oc() and (jj != 1 or not opts.no_initial_impacts):
                     self.g.impulse[ii,jj] = Constraint(
                         dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj), v_global, p))
-                    # enforce the gap shortly after the impact to exclude spurious
-                    # solutions with a zero impulse and a huge contact force.
+                   
                     if opts.eps_cls > 0:
                         step = opts.eps_cls if opts.fixed_eps_cls else h*opts.eps_cls
                         x_eps = ca.vertcat(q_lbp + step*v_lbp, v_lbp)
@@ -203,7 +238,9 @@ class Cls(Base):
         opts = self.opts
 
         if opts.use_fesd:
-            self.__impulse_comp()
+            
+            if not self._is_relaxed_oc():
+                self.__impulse_comp()
             if opts.cross_comp_mode == CrossComplementarityMode.STAGE_STAGE:
                 self.__stage_stage()
             elif opts.cross_comp_mode == CrossComplementarityMode.FE_STAGE:
@@ -237,7 +274,7 @@ class Cls(Base):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 Gij = []
                 Hij = []
-                if jj != 1 or not opts.no_initial_impacts:
+                if (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc():
                     for kk in range(1, opts.n_s+1):
                         Gij.append(self.w.lambda_normal[ii,jj,kk])
                         Hij.append(self.w.Y_gap[ii,jj])
@@ -257,7 +294,7 @@ class Cls(Base):
                 sum_lambda = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
                 Gij = []
                 Hij = []
-                if jj != 1 or not opts.no_initial_impacts:
+                if (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc():
                     Gij.append(sum_lambda)
                     Hij.append(self.w.Y_gap[ii,jj])
                 for rr in range(1, opts.n_s+rbp+1):
@@ -271,7 +308,8 @@ class Cls(Base):
         
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
-                y_gap_lb = self.w.Y_gap[ii,jj] if (jj != 1 or not opts.no_initial_impacts) else 0
+                use_Y = (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc()
+                y_gap_lb = self.w.Y_gap[ii,jj] if use_Y else 0
                 sum_y_gap = y_gap_lb + ca.sum2(self.w.y_gap[ii,jj,:].sym)
                 Gij = []
                 Hij = []
@@ -286,7 +324,8 @@ class Cls(Base):
         no_ii = opts.no_initial_impacts
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
-                y_gap_lb = self.w.Y_gap[ii,jj] if (jj != 1 or not no_ii) else 0
+                use_Y = (jj != 1 or not no_ii) and not self._is_relaxed_oc()
+                y_gap_lb = self.w.Y_gap[ii,jj] if use_Y else 0
                 sum_y_gap = y_gap_lb + ca.sum2(self.w.y_gap[ii,jj,:].sym)
                 sum_lambda = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
                 self.G.cross_comp[ii,jj] = CConstraint(sum_lambda)
@@ -332,11 +371,13 @@ class Cls(Base):
         rbp = self.rbp
         no_ii = opts.no_initial_impacts
 
-        sigma_c_B = self.w.Y_gap[ii,jj-1] if (jj != 2 or not no_ii) else 0
+        use_Y = (jj != 2 or not no_ii) and not self._is_relaxed_oc()
+        sigma_c_B = self.w.Y_gap[ii,jj-1] if use_Y else 0
         sigma_c_B = sigma_c_B + ca.sum2(self.w.y_gap[ii,jj-1,:].sym)
         sigma_lambda_B = ca.sum2(self.w.lambda_normal[ii,jj-1,:].sym)
 
-        sigma_c_F = self.w.Y_gap[ii,jj] + ca.sum2(self.w.y_gap[ii,jj,:].sym)
+        Y_gap_F = self.w.Y_gap[ii,jj] if not self._is_relaxed_oc() else 0
+        sigma_c_F = Y_gap_F + ca.sum2(self.w.y_gap[ii,jj,:].sym)
         sigma_lambda_F = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
 
         nu = sigma_c_B*sigma_c_F + sigma_lambda_B*sigma_lambda_F

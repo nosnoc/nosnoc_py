@@ -162,20 +162,27 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         into the following steps.
         """
         opts = self.opts
-        if self.integrator_opts.print_level >= 2:
-            print("integrator_fesd: initial guess did not converge, retrying with an impact guess.")
+        print("integrator_fesd: initial guess did not converge, retrying with an impact guess.")
         w_init = np.copy(self.dtp.w.init)
 
         start_fe = 2 if opts.no_initial_impacts else 1
-        for jj in range(start_fe, opts.N_finite_elements[0]+1):
-            self.dtp.w.Lambda_normal[1,jj](init=7.0) #as far as i(stefan) know 7 is magic number > 0
-            self.dtp.w.Y_gap[1,jj](init=0.0)
-            self.dtp.w.P_vn[1,jj](init=0.0)
-            self.dtp.w.N_vn[1,jj](init=0.0)
-        for jj in range(1, opts.N_finite_elements[0]+1):
-            for kk in range(1, opts.n_s+1):
-                self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
-                self.dtp.w.y_gap[1,jj,kk](init=0.0)
+        if self.dtp._is_relaxed_oc():
+            # Patel's relaxed formulation has no impulse variables; the impact is a large contact
+            # force, so guess that instead (7 is the same magic positive number used for the impulse).
+            for jj in range(1, opts.N_finite_elements[0]+1):
+                for kk in range(1, opts.n_s+1):
+                    self.dtp.w.lambda_normal[1,jj,kk](init=7.0)
+                    self.dtp.w.y_gap[1,jj,kk](init=0.0)
+        else:
+            for jj in range(start_fe, opts.N_finite_elements[0]+1):
+                self.dtp.w.Lambda_normal[1,jj](init=7.0) #as far as i(stefan) know 7 is magic number > 0
+                self.dtp.w.Y_gap[1,jj](init=0.0)
+                self.dtp.w.P_vn[1,jj](init=0.0)
+                self.dtp.w.N_vn[1,jj](init=0.0)
+            for jj in range(1, opts.N_finite_elements[0]+1):
+                for kk in range(1, opts.n_s+1):
+                    self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
+                    self.dtp.w.y_gap[1,jj,kk](init=0.0)
 
         # Drop the failed attempt, then re-solve.
         self.stats.pop()
@@ -217,14 +224,18 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dtp.w.u[1](lb = u[ii,:], ub = u[ii,:], init = u[ii,:])
 
             solver_stats = self._solve()
-            if not solver_stats["converged"] and self._is_cls() and opts.use_fesd:
-                solver_stats = self._retry_cls_step() 
+            
             if not solver_stats["converged"]:
-                constr_viol = solver_stats['constraint_violation']
-                warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
+                warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {solver_stats['constraint_violation']}")
+                if self._is_cls() and opts.use_fesd:
+                    solver_stats = self._retry_cls_step()
+                    if integrator_opts.print_level >= 2:
+                        if not solver_stats["converged"]:
+                            print(f"integrator_fesd: retry did not converge in step {ii+1} constraint violation is: {solver_stats['constraint_violation']}")
+                        else:
+                            print(f"Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {solver_stats['wall_time_total']} s.")
             elif integrator_opts.print_level >= 2:
-                wall_time_total = solver_stats["wall_time_total"]
-                print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
+                print(f"Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {solver_stats['wall_time_total']} s.")
 
             if opts.use_fesd:
                 h = self.dtp.w.h[:,:].res

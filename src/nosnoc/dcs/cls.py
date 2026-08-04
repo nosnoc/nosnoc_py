@@ -100,21 +100,29 @@ class Cls(Base):
         self.g_terminal_fun = ca.Function('g_terminal', [model.x, model.z, model.v_global, model.p_global], [model.g_terminal])
         self.f_q_T_fun = ca.Function('f_q_T', [model.x, model.z, model.v_global, model.p], [model.f_q_T])
 
+        # The RK functions additionally take h_rescale as a parameter. lambda_normal is a contact
+        # force in FESD (h_rescale = 1) but a contact impulse in the non-FESD implicit-Euler scheme,
+        # where the ODE right hand side divides it by the fixed step length. Following the MATLAB
+        # Cls.m, the division lives inside f_x only; f_q_rk and g_rk receive the raw multiplier
+        # (they ignore h_rescale), so the rescaling never leaks into the cost or the algebraic
+        # constraints.
+        self.h_rescale = ca.SX.sym("h_rescale")
+        f_x_rk_expr = ca.vertcat(
+            model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale)))
+        p_rk = ca.vertcat(model.u, model.v_global, model.p, self.h_rescale)
+
         self.f_x_rk = ca.Function(
             'f_x_rk',
-            [ca.vertcat(model.x, model.z, self.z_alg),
-             ca.vertcat(model.u, model.v_global, model.p)],
-            [self.f_x]
+            [ca.vertcat(model.x, model.z, self.z_alg), p_rk],
+            [f_x_rk_expr]
         )
         self.f_q_rk = ca.Function(
             'f_q_rk',
-            [ca.vertcat(model.x, model.z, self.z_alg),
-             ca.vertcat(model.u, model.v_global, model.p)],
+            [ca.vertcat(model.x, model.z, self.z_alg), p_rk],
             [model.f_q]
         )
         self.g_rk = ca.Function(
             'g_rk',
-            [ca.vertcat(model.x, model.z, self.z_alg),
-             ca.vertcat(model.u, model.v_global, model.p)],
+            [ca.vertcat(model.x, model.z, self.z_alg), p_rk],
             [ca.vertcat(model.g_z, self.g_alg)]
         )

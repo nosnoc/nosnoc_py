@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ClsDiscretization
 
 @dataclass
 class Options():
@@ -200,6 +200,15 @@ class Options():
     #
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
+    # ClsDiscretization: Which discretization to use for the impact of a Complementarity Lagrangian
+    # System. FESD_J (default) is exact (impulse + velocity jump at FE boundaries); RELAXED_OC is
+    # Patel et al.'s relaxed orthogonal-collocation formulation (velocity continuity + contact force
+    # over a shrinking element), approximate at finite h. RELAXED_OC requires `use_fesd = True`.
+    #
+    # See Also:
+    #     `ClsDiscretization` for more details on the difference between the two.
+    cls_discretization: ClsDiscretization = ClsDiscretization.FESD_J
+
     friction_model: FrictionModel = FrictionModel.CONIC
 
     # ConicModelSwitchHandling: Which velocity switch handling mode to use when using the Conic friction model
@@ -355,5 +364,10 @@ class Options():
             warnings.warn("use_fesd = 0 with CLS implies using the implicit Euler time-stepping scheme, setting n_s = 1, rk_scheme = RADAU_IIA.")
             self.rk_scheme = RKScheme.RADAU_IIA
             self.n_s = 1
+
+        # The relaxed orthogonal-collocation formulation needs the variable finite element lengths
+        # and cross complementarity that only exist in the FESD machinery.
+        if self.cls_discretization == ClsDiscretization.RELAXED_OC and not self.use_fesd:
+            raise Exception("cls_discretization = RELAXED_OC requires use_fesd = True.")
 
         self._make_T_h_consistent()

@@ -122,6 +122,30 @@ class ConicModelSwitchHandling(Enum):
     """Positive/negative parts plus a step function alpha_vt for the tangential velocity."""
 
 
+class ClsDiscretization(Enum):
+    """
+    Which discretization to use for the impact of a Complementarity Lagrangian System.
+
+    Both modes share everything except how the velocity is treated at a finite element boundary.
+    The numerical complementarity relaxation (homotopy) is shared machinery underneath both.
+    """
+    FESD_J = auto()
+    """
+    Finite Elements with Switch Detection for Jumps (default).
+
+    The impact is exact: impulse equations at the finite element boundaries let the velocity
+    *jump*, M(v^+ - v^-) = J_n Lambda_n with 0 <= Lambda_n perp Y_gap >= 0.
+    """
+    RELAXED_OC = auto()
+    """
+    Patel et al.'s relaxed orthogonal-collocation formulation (IEEE RA-L 2019).
+
+    The velocity is *continuous* across finite element boundaries; the impact is produced by the
+    contact force lambda_n acting over one shrinking finite element. It is an approximation at
+    finite step size that converges to the exact plastic impact as h -> 0.
+    """
+
+
 class Status(Enum):
     SUCCESS = auto()
     INFEASIBLE = auto()

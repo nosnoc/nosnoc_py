@@ -22,7 +22,14 @@ T_SIM = 3.0
 N_SIM = 10
 N_FE = 2
 
+#supress warning until new vdx release
+import warnings
 
+warnings.filterwarnings(
+    "ignore",
+    message=".*__array_wrap__.*",
+    category=DeprecationWarning,
+)
 
 def get_bouncing_ball_model(e=0.0, x0=X0):
     """Build the 1d bouncing ball as a `nosnoc.model.Cls`."""
@@ -44,7 +51,7 @@ def get_default_options(**kwargs):
     default_args = {
         "N_stages": 1,
         "N_finite_elements": N_FE,
-        "n_s": 2,
+        "n_s": 1,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "dcs_mode": nosnoc.DcsMode.CLS,
         "use_fesd": True,
@@ -180,4 +187,4 @@ def example(e=0.0, plot=True):
 
 
 if __name__ == "__main__":
-    example(e=0.0)
+    example(e=1.0)
