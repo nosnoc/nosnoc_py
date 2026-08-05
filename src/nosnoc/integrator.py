@@ -327,7 +327,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         dims = self.dcs.dims
         w_curr = np.copy(self.dtp.w.res)
         np.copyto(self.dtp.w.res, self.w_all[0])
-        var = self._get_variable(field)
+        var =  getattr(self.dtp.w, field)
         var_len = len(next(iter(var.ind_map.values()))) # Assumes all are same length, we don't enforce this however
         # Derive the number of rows from the index map, as not every variable is defined on every
         # finite element or at every stage point.
