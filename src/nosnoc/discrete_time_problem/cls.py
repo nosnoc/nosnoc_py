@@ -21,6 +21,37 @@ class Cls(Base):
 
     def __init__(self, dcs, opts):
         super().__init__(dcs, opts)
+        self.__check_restitution_supported()
+
+    def __check_restitution_supported(self):
+        """
+        Reject a nonzero coefficient of restitution in the discretizations that cannot represent it.
+
+        Newton's restitution law enters the problem only through the impulse equations
+        `dcs.g_impulse`, whose term $J_n^\\top(v(t_s^+) + e\\,v(t_s^-))$ carries `e`. Those equations
+        are generated exactly when FESD-J is active, see `_generate_direct_transcription_constraints`;
+        otherwise the finite element boundary gets `v_continuity` instead, the velocity is continuous
+        and every impact comes out plastic. A nonzero `e` would then be silently ignored rather than
+        approximated, so it is refused here.
+
+        This cannot live in `model.Cls.__backfill` with the other coefficient checks, because the
+        model is constructed before the options exist; this is the first point at which both are
+        known.
+        """
+        if not np.any(np.asarray(self.model.e) > 0.0):
+            return
+        if self._is_relaxed_oc():
+            raise RuntimeError(
+                "cls_discretization = RELAXED_OC has no impulse variables. The velocity is "
+                "continuous across a finite element boundary, so every impact is plastic and the "
+                f"coefficient of restitution e = {self.model.e} cannot be represented. Use "
+                "cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
+        if not self.opts.use_fesd:
+            raise RuntimeError(
+                "use_fesd = False selects the implicit Euler time stepping scheme, which has no "
+                "impulse variables and therefore produces plastic impacts only. The coefficient "
+                f"of restitution e = {self.model.e} cannot be represented. Use use_fesd = True "
+                "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
     def _is_relaxed_oc(self):
         """True if the relaxed orthogonal-collocation formulation PATEL is selected."""
