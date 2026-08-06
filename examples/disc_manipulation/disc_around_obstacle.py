@@ -5,9 +5,6 @@ problem with the FESD-J discretization of a Complementarity Lagrangian System (C
 Only the first disc is actuated (a thrust force ``u``). The second disc can only be moved by making
 inelastic contact with the first one. The optimizer discovers a trajectory in which the first disc
 pushes the second around the obstacle so that both reach the other's initial position.
-
-This is the frictionless (``mu = 0``, ``e = 0``) CLS optimal control example, ported from the MATLAB
-reference ``examples/cls_tutorial_ocp/disc_around_obstacle.m``.
 """
 import numpy as np
 import casadi as ca
@@ -15,6 +12,16 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
 import nosnoc
+
+#supress warning until new vdx release
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*__array_wrap__.*",
+    category=DeprecationWarning,
+)
+
 
 # ------------------------------------------------------------------ problem data
 
@@ -109,12 +116,20 @@ def get_default_options(**kwargs):
         "n_s": N_S,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "dcs_mode": nosnoc.DcsMode.CLS,
-        "use_fesd": False,
+
+        "use_fesd": True,
+        #NOTE: this can be changed to nosnoc.ClsDiscretization.RELAXED_OC
+        "cls_discretization": nosnoc.ClsDiscretization.FESD_J, 
+
         # Matches the MATLAB reference, which leaves cross_comp_mode at the default FE_STAGE.
-        "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_STAGE,
-        "gamma_h": 0.0,          # fixed finite element lengths
+        # For Patel OC use FE_FE 
+        "cross_comp_mode": nosnoc.CrossComplementarityMode.STAGE_STAGE,
+        "step_equilibration": nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED,
+       
+                 
         "g_path_at_fe": True,    # enforce the obstacle constraint at every finite element boundary
         "T": T,
+        #"rho_h": 0.0, # no step equilibration, the finite element lengths are fixed
     }
     return nosnoc.Options(**(default_args | kwargs))
 
