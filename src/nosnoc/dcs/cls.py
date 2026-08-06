@@ -20,14 +20,14 @@ class Cls(Base):
 
     The contact forces are determined by the complementarity conditions
 
-        0 <= lambda_normal  perp  y_gap >= 0,   y_gap = f_c(q),
+        0 <= lambda_normal  perpendicular  y_gap >= 0,   y_gap = f_c(q),
 
     and, at the boundaries of the finite elements, the impulse equations determine either a state
     jump or the continuity of the velocities. `y_gap` and `Y_gap` are lifting variables for f_c(q),
     which keep the complementarity conditions linear in the variables.
 
     Note:
-        Friction is not yet implemented, cf. `nosnoc.model.Cls`.
+        Friction is not yet implemented.
     """
     def __init__(self, model: ClsModel):
         self.dims = ClsDcsDims(model.dims)

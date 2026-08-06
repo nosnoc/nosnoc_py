@@ -16,25 +16,24 @@ class Cls(Base):
     Two discretizations of the impact are supported, selected by ``opts.cls_discretization``:
     FESD-J (impulse + velocity jump at the finite element boundaries, exact) and Patel's relaxed
     orthogonal collocation (velocity continuity + contact force over a shrinking element,
-    approximate). They share all machinery except the treatment of the velocity at a boundary.
+    approximate).
     """
 
     def __init__(self, dcs, opts):
         super().__init__(dcs, opts)
 
     def _is_relaxed_oc(self):
-        """True if the relaxed orthogonal-collocation formulation (velocity continuity, no impulse) is selected."""
+        """True if the relaxed orthogonal-collocation formulation PATEL is selected."""
         return self.opts.cls_discretization == ClsDiscretization.RELAXED_OC
 
     def _h_rescale(self, ii):
         """
         Scale that converts the stage contact multiplier to the correct units in the ODE RHS.
 
-        In FESD ``lambda_normal`` is a genuine contact *force*, so no rescaling is applied (1). In
-        non-FESD implicit-Euler time-stepping it is instead a contact *impulse* over the fixed step,
+        In FESD-J ``lambda_normal`` is a genuine contact force so no rescaling is applied. In
+        non-FESD-J implicit-Euler time-stepping it is instead a contact impulse over the fixed step,
         so ``f_x`` divides it by the step length ``h_0``; the ``h *`` from the Euler integration then
-        cancels the division and the impulse acts directly on the velocity. Mirrors ``h_rescale`` in
-        the MATLAB ``Cls.m``.
+        cancels the division and the impulse acts directly on the velocity.
         """
         if self.opts.use_fesd:
             return 1.0
@@ -124,7 +123,7 @@ class Cls(Base):
 
     @override
     def _build_prk(self, ii, jj):
-        # The CLS RK functions take one extra parameter, h_rescale (see dcs.Cls): 1 in FESD, the
+        # The CLS RK functions take one extra parameter, h_rescale, the
         # fixed step length in the non-FESD implicit-Euler scheme where lambda_normal is an impulse
         # rather than a force. Only f_x uses it; f_q_rk / g_rk ignore it.
         return ca.vertcat(
