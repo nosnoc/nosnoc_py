@@ -226,7 +226,8 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             solver_stats = self._solve()
             
             if not solver_stats["converged"]:
-                warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {solver_stats['constraint_violation']}")
+                constr_viol = solver_stats['constraint_violation']
+                warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
                 if self._is_cls() and opts.use_fesd:
                     solver_stats = self._retry_cls_step()
                     if integrator_opts.print_level >= 2:
@@ -235,7 +236,8 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                         else:
                             print(f"Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {solver_stats['wall_time_total']} s.")
             elif integrator_opts.print_level >= 2:
-                print(f"Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {solver_stats['wall_time_total']} s.")
+                wall_time_total = solver_stats["wall_time_total"]
+                print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
             if opts.use_fesd:
                 h = self.dtp.w.h[:,:].res
