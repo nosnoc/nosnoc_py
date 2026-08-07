@@ -1,4 +1,5 @@
 from typing import override
+from warnings import warn
 
 import casadi as ca
 import numpy as np
@@ -6,7 +7,7 @@ import numpy as np
 from .base import Base
 from vdx.vartypes import *
 
-from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization
+from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization, RKScheme
 
 
 class Cls(Base):
@@ -20,8 +21,23 @@ class Cls(Base):
     """
 
     def __init__(self, dcs, opts):
+        self.__apply_time_stepping_defaults(opts)
         super().__init__(dcs, opts)
         self.__check_restitution_supported()
+
+    def __apply_time_stepping_defaults(self, opts):
+        """
+        Without FESD a CLS is discretized with the implicit Euler time-stepping scheme, which is
+        Radau IIA with a single stage.
+        """
+        if opts.use_fesd:
+            return
+        if opts.n_s != 1 or opts.rk_scheme != RKScheme.RADAU_IIA:
+            warn("use_fesd = 0 with a CLS implies using the implicit Euler time-stepping scheme, "
+                 "setting n_s = 1, rk_scheme = RADAU_IIA.",
+                 stacklevel=3) # points at the caller that built the discrete time problem
+        opts.rk_scheme = RKScheme.RADAU_IIA
+        opts.n_s = 1
 
     def __check_restitution_supported(self):
         """
@@ -34,9 +50,6 @@ class Cls(Base):
         and every impact comes out plastic. A nonzero `e` would then be silently ignored rather than
         approximated, so it is refused here.
 
-        This cannot live in `model.Cls.__backfill` with the other coefficient checks, because the
-        model is constructed before the options exist; this is the first point at which both are
-        known.
         """
         if not np.any(np.asarray(self.model.e) > 0.0):
             return

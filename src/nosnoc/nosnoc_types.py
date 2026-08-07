@@ -90,14 +90,6 @@ class DcsMode(Enum):
     lambda_p_i >= 0;    for all i = 1,..., n_sys
     alpha_i >= 0;     for all i = 1,..., n_sys
     """
-    CLS = auto()
-    """
-    Complementarity Lagrangian System, discretized with FESD-J.
-
-    M(q)dv = f_v(q,v) + J_n(q)lambda_n + J_t(q)lambda_t
-    0 <= lambda_n perp f_c(q) >= 0
-    plus impulse equations at the finite element boundaries.
-    """
 
 
 class FrictionModel(Enum):

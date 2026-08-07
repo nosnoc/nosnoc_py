@@ -53,7 +53,6 @@ def get_default_options(**kwargs):
         "N_finite_elements": N_FE,
         "n_s": 1,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
-        "dcs_mode": nosnoc.DcsMode.CLS,
         "use_fesd": True,
         "cross_comp_mode": nosnoc.CrossComplementarityMode.STAGE_STAGE,
         "no_initial_impacts": True,

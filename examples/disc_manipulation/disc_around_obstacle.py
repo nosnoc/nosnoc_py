@@ -115,7 +115,6 @@ def get_default_options(**kwargs):
         "N_finite_elements": N_FE,
         "n_s": N_S,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
-        "dcs_mode": nosnoc.DcsMode.CLS,
 
         "use_fesd": True,
         #NOTE: this can be changed to nosnoc.ClsDiscretization.RELAXED_OC

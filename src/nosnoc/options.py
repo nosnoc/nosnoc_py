@@ -357,14 +357,6 @@ class Options():
         if isinstance(self.N_finite_elements, int):
             self.N_finite_elements = [self.N_finite_elements]*self.N_stages
 
-        # Without FESD a CLS is discretized with the implicit Euler time-stepping scheme, which is
-        # Radau IIA with a single stage. 
-        if self.dcs_mode == DcsMode.CLS and not self.use_fesd:
-            import warnings
-            warnings.warn("use_fesd = 0 with CLS implies using the implicit Euler time-stepping scheme, setting n_s = 1, rk_scheme = RADAU_IIA.")
-            self.rk_scheme = RKScheme.RADAU_IIA
-            self.n_s = 1
-
         # The relaxed orthogonal-collocation formulation needs the variable finite element lengths
         # and cross complementarity that only exist in the FESD machinery.
         if self.cls_discretization == ClsDiscretization.RELAXED_OC and not self.use_fesd:
