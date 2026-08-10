@@ -18,6 +18,7 @@ from .mpcc import MPCC
 from . import mpccsol
 from .ocp import OcpSolver
 from .integrator import FESDIntegratorOptions, Integrator
+from .qpcc import Qpcc, QpccDims
 
 import warnings
 warnings.simplefilter("always")
