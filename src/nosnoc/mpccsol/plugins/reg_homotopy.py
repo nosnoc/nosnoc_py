@@ -87,10 +87,9 @@ class RegHomotopySolver(MpccsolPlugin):
     @override
     def _build_solver(self):
         self.f_relax = 0.0
-        if isinstance(self.mpcc, ns.MPCC):
-            self._build_solver_vdx()
-        elif isinstance(self.mpcc, dict):
-            self._build_solver_dict()
+        if isinstance(self.mpcc, dict):
+            self._convert_dict_to_mpcc()
+        self._build_solver()
 
     def _update_nlp_vectors(
             self,
@@ -228,7 +227,6 @@ class RegHomotopySolver(MpccsolPlugin):
                 self.nlp.f = self.nlp.f*self.nlp.p.sigma[()] + self.nlp.w.s_elastic[()]
 
     def _get_relaxation_var(self, name, idx, length):
-
         if self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.DIRECT:
             return np.ones(length)*self.nlp.p.sigma[()].sym
         elif self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_INF:
@@ -249,7 +247,29 @@ class RegHomotopySolver(MpccsolPlugin):
                 self.f_relax += self.nlp.f*self.nlp.p.sigma[()] + ca.norm_1(s)
             return s
 
-    def _build_solver_vdx(self):
+    def _convert_dict_to_mpcc(self):
+        """
+        If reg_homotopy is passed a dictionary, we convert it to an nosnoc MPCC object.
+        This object inherits the lack of structure but allows us to reuse the vdx based handling in _build_solver.
+        In order to minimize memory overhead, we use MX symbolics.
+        """
+        mpcc = ns.MPCC(symbolic_type=ca.MX)
+        nw = mpcc["w"].size(0)
+        np = mpcc["p"].size(0)
+        f_fun = Function("f", [mpcc["w"], mpcc["p"]], [mpcc["f"]])
+        g_fun = Function("g", [mpcc["w"], mpcc["p"]], [mpcc["g"]])
+        G_fun = Function("H", [mpcc["w"], mpcc["p"]], [mpcc["G"]])
+        H_fun = Function("G", [mpcc["w"], mpcc["p"]], [mpcc["H"]])
+
+        mpcc.w.w[()] = Primal("w", nw)
+        mpcc.p.p[()] = Parameter("p", np)
+        mpcc.g.g[()] = Constraint(g_fun(mpcc.w.w[()], mpcc.p.p[()]))
+        mpcc.G.G[()] = Constraint(G_fun(mpcc.w.w[()], mpcc.p.p[()]))
+        mpcc.H.H[()] = Constraint(H_fun(mpcc.w.w[()], mpcc.p.p[()]))
+        mpcc.f = f_fun(mpcc.w.w[()], mpcc.p.p[()])
+        self.mpcc = mpcc
+
+    def _build_solver(self):
         """
         Build the regularization homotopy solver from a vdx MPCC class.
         """
@@ -295,12 +315,6 @@ class RegHomotopySolver(MpccsolPlugin):
         self.G_mpcc_fun = ca.Function("G_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.G.sym])
         self.H_mpcc_fun = ca.Function("H_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.H.sym])
         self.comp_res_fun = ca.Function("comp_res", [self.nlp.w.sym, self.nlp.p.sym], [ca.mmax(self.mpcc.G.sym * self.mpcc.H.sym)])
-
-    def _build_solver_dict(self):
-        """
-        Build the regularization homotopy solver from a mpcc dict.
-        """
-        raise NotImplementedError("Generic (non-vdx) mpccs not yet supported, use CCOpt instead.")
 
     def _print_header(self):
         print('-------------------------------------------')
