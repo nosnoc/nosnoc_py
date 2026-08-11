@@ -7,7 +7,7 @@
 from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, ConstraintRelaxationMode, ClsDiscretization
 # from .helpers import NosnocSimLooper
 # from .utils import casadi_length, casadi_vertcat_list, print_casadi_vector, flatten_layer, make_object_json_dumpable
-from .plot_utils import plot_timings, latexify_plot
+from .plot_utils import plot_timings, latexify_plot, plot_sparsity
 # from .rk_utils import rk4, generate_butcher_tableu_integral, generate_butcher_tableu
 from . import model
 from . import dcs

@@ -2,6 +2,7 @@ from copy import copy
 from dataclasses import dataclass
 
 import casadi as ca
+import numpy as np
 
 @dataclass
 class QpccDims():
@@ -39,7 +40,7 @@ class Qpcc():
         self.H_sparsity = jac_H.sparsity()
 
         self.Q_fun = ca.Function("Q", [mpcc.w.sym, lam_g, lam_G, lam_H, mpcc.p.sym], [hess_L])
-        self.q_fun = ca.Function("q", [mpcc.w.sym, lam_g, lam_G, lam_H, lam_g,mpcc. p.sym], [nabla_L])
+        self.q_fun = ca.Function("q", [mpcc.w.sym, lam_g, lam_G, lam_H,mpcc.p.sym], [nabla_L])
         self.A_fun = ca.Function("A", [mpcc.w.sym, mpcc.p.sym], [jac_g])
         self.b_fun = ca.Function("b", [mpcc.w.sym, mpcc.p.sym], [mpcc.g.sym])
         self.G_fun = ca.Function("G", [mpcc.w.sym, mpcc.p.sym], [jac_G])

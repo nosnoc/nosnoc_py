@@ -1,6 +1,7 @@
-import numpy as np
 from typing import Union, List, get_origin, get_args
+
 import casadi as ca
+import numpy as np
 
 
 def make_object_json_dumpable(input):
