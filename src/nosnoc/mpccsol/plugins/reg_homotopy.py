@@ -89,7 +89,7 @@ class RegHomotopySolver(MpccsolPlugin):
         self.f_relax = 0.0
         if isinstance(self.mpcc, dict):
             self._convert_dict_to_mpcc()
-        self._build_solver()
+        self._build_solver_impl()
 
     def _update_nlp_vectors(
             self,
@@ -254,22 +254,22 @@ class RegHomotopySolver(MpccsolPlugin):
         In order to minimize memory overhead, we use MX symbolics.
         """
         mpcc = ns.MPCC(symbolic_type=ca.MX)
-        nw = mpcc["w"].size(0)
-        np = mpcc["p"].size(0)
-        f_fun = Function("f", [mpcc["w"], mpcc["p"]], [mpcc["f"]])
-        g_fun = Function("g", [mpcc["w"], mpcc["p"]], [mpcc["g"]])
-        G_fun = Function("H", [mpcc["w"], mpcc["p"]], [mpcc["G"]])
-        H_fun = Function("G", [mpcc["w"], mpcc["p"]], [mpcc["H"]])
+        nx = self.mpcc["x"].size(1)
+        np = self.mpcc["p"].size(1)
+        f_fun = ca.Function("f", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["f"]])
+        g_fun = ca.Function("g", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["g"]])
+        G_fun = ca.Function("H", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["G"]])
+        H_fun = ca.Function("G", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["H"]])
 
-        mpcc.w.w[()] = Primal("w", nw)
+        mpcc.w.x[()] = Primal("x", nx)
         mpcc.p.p[()] = Parameter("p", np)
-        mpcc.g.g[()] = Constraint(g_fun(mpcc.w.w[()], mpcc.p.p[()]))
-        mpcc.G.G[()] = Constraint(G_fun(mpcc.w.w[()], mpcc.p.p[()]))
-        mpcc.H.H[()] = Constraint(H_fun(mpcc.w.w[()], mpcc.p.p[()]))
-        mpcc.f = f_fun(mpcc.w.w[()], mpcc.p.p[()])
+        mpcc.g.g[()] = Constraint(g_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.G.cc[()] = Constraint(G_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.H.cc[()] = Constraint(H_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.f = f_fun(mpcc.w.x[()], mpcc.p.p[()])
         self.mpcc = mpcc
 
-    def _build_solver(self):
+    def _build_solver_impl(self):
         """
         Build the regularization homotopy solver from a vdx MPCC class.
         """
@@ -284,7 +284,7 @@ class RegHomotopySolver(MpccsolPlugin):
         for (name,Gvar) in self.mpcc.G.variables.items():
             Hvar = self.mpcc.H.variables[name]
             for idx in Gvar.ind_map.keys():
-                # TODO(@anton) do non sholtes
+                # TODO(@anton) do non scholtes
                 length = Gvar[*idx].sym.size(1)
                 relax, lb1, lb2 = self.opts.relaxation_strategy.relax(Gvar[*idx].sym, Hvar[*idx].sym, self._get_relaxation_var(name,idx,length))
                 if not self.opts.assume_lower_bounds:
