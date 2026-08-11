@@ -3,21 +3,29 @@ from dataclasses import dataclass
 
 import casadi as ca
 import numpy as np
+from .mpccsol import mpccsol
 
 @dataclass
 class QpccDims():
-    nw: int
+    nx: int
     ng: int
     ncc: int
     
 class Qpcc():
     """
     Build a parametric QPCC with the given sparsity pattern.
+    Currently assumes that the original MPCC is in the form of:
+        min f(x,p)
+         x
+         s.t. lbx <= x <= ubx
+              lbg <= g(x,p) <= ubg
+              0 <= G(x,p) _|_ H(x,p) >= 0
+    and is passed as a nosnoc.MPCC vdx object
     """
     def __init__(self, mpcc, use_mpcc_multipliers=False):
         self.mpcc = copy(mpcc)
         self.use_mpcc_multipliers = mpcc
-        dims = QpccDims(nw=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
+        dims = QpccDims(nx=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
         self.dims = dims
         ## linearize around mpcc.w.init
         # Build L
@@ -40,7 +48,7 @@ class Qpcc():
         self.H_sparsity = jac_H.sparsity()
 
         self.Q_fun = ca.Function("Q", [mpcc.w.sym, lam_g, lam_G, lam_H, mpcc.p.sym], [hess_L])
-        self.q_fun = ca.Function("q", [mpcc.w.sym, lam_g, lam_G, lam_H,mpcc.p.sym], [nabla_L])
+        self.q_fun = ca.Function("q", [mpcc.w.sym,mpcc.p.sym], [grad_f])
         self.A_fun = ca.Function("A", [mpcc.w.sym, mpcc.p.sym], [jac_g])
         self.b_fun = ca.Function("b", [mpcc.w.sym, mpcc.p.sym], [mpcc.g.sym])
         self.G_fun = ca.Function("G", [mpcc.w.sym, mpcc.p.sym], [jac_G])
@@ -49,7 +57,7 @@ class Qpcc():
         self.h_fun = ca.Function("h", [mpcc.w.sym, mpcc.p.sym], [mpcc.H.sym])
         
         self.Q = ca.DM(self.Q_sparsity)
-        self.q = ca.DM.zeros(dims.nw)
+        self.q = ca.DM.zeros(dims.nx)
         self.A = ca.DM(self.A_sparsity)
         self.b = ca.DM.zeros(dims.ng)
         self.G = ca.DM(self.G_sparsity)
@@ -60,23 +68,28 @@ class Qpcc():
         self.ubx = np.copy(mpcc.w.ub)
         self.lbg = np.copy(mpcc.g.lb)
         self.ubg = np.copy(mpcc.g.ub)
-        self.lbG = np.copy(mpcc.G.lb)
-        self.lbH = np.copy(mpcc.H.lb)
-        
 
-    def linearize(self, x0=None, lam_g=None, lam_G=None, lam_H=None, tr=1.0):
-        if x0:
-            self.mpcc.w.init = x0
-        if lam_g:
+
+    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=1.0):
+        self.mpcc.w.init = x0
+        if lam_g is not None:
             self.mpcc.g.init_mult = lam_g
-        if lam_G and self.use_mpcc_multipliers:
+        else:
+            self.mpcc.g.init_mult[:] = 0.0
+
+        if lam_G is not None and self.use_mpcc_multipliers:
             self.mpcc.G.init_mult = lam_G
-        if lam_H and self.use_mpcc_multipliers:
+        else:
+            self.mpcc.G.init_mult[:] = 0.0
+
+        if lam_H is not None and self.use_mpcc_multipliers:
             self.mpcc.H.init_mult = lam_H
-        
+        else:
+            self.mpcc.H.init_mult[:] = 0.0
+
 
         self.Q = self.Q_fun(self.mpcc.w.init, self.mpcc.g.init_mult, self.mpcc.G.init_mult, self.mpcc.H.init_mult, self.mpcc.p.val)
-        self.q = self.q_fun(self.mpcc.w.init, self.mpcc.g.init_mult, self.mpcc.G.init_mult, self.mpcc.H.init_mult, self.mpcc.p.val)
+        self.q = self.q_fun(self.mpcc.w.init, self.mpcc.p.val)
 
         self.A = self.A_fun(self.mpcc.w.init, self.mpcc.p.val)
         self.b = self.b_fun(self.mpcc.w.init, self.mpcc.p.val)
@@ -86,3 +99,50 @@ class Qpcc():
 
         self.H = self.H_fun(self.mpcc.w.init, self.mpcc.p.val)
         self.h = self.h_fun(self.mpcc.w.init, self.mpcc.p.val)
+
+        # setup tr
+        self.lbx = np.maximum(self.mpcc.w.lb - x0, -tr)
+        self.ubx = np.minimum(self.mpcc.w.ub - x0, tr)
+
+
+    def solve(self):
+        pval = np.concat([
+            self.Q.nonzeros(),
+            self.q.full().flatten(),
+            self.A.nonzeros(),
+            self.b.full().flatten(),
+            self.G.nonzeros(),
+            self.g.full().flatten(),
+            self.H.nonzeros(),
+            self.h.full().flatten(),
+        ])
+        res = self.solver(p=pval, lbx=self.lbx, ubx=self.ubx)
+        self.mpcc.w.res = res["w"]
+        self.mpcc.g.val = res["g"]
+        return res
+
+    def _build_mpccsol_solver(self, opts):
+        Q = ca.SX.sym("Q", self.Q_sparsity)
+        q = ca.SX.sym("q", self.q.size())
+        A = ca.SX.sym("A", self.A_sparsity)
+        b = ca.SX.sym("b", self.b.size())
+        G = ca.SX.sym("G", self.G_sparsity)
+        g = ca.SX.sym("g", self.g.size())
+        H = ca.SX.sym("H", self.H_sparsity)
+        h = ca.SX.sym("h", self.g.size())
+
+        x = ca.SX.sym("x", self.dims.nx)
+
+        f_expr = 0.5*ca.bilin(Q,x) + ca.dot(q,x)
+        g_expr = A@x + b
+        G_expr = G@x + g
+        H_expr = H@x + h
+        qpcc = {
+            "x": x,
+            "p": ca.vertcat(*(Q.nonzeros()),q, *(A.nonzeros()),b, *(G.nonzeros()),g, *(H.nonzeros()),h),
+            "f": f_expr,
+            "g": g_expr,
+            "G": G_expr,
+            "H": H_expr,
+        }
+        self.solver = mpccsol("reg_homotopy", qpcc, opts)
