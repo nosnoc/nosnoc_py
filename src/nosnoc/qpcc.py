@@ -151,7 +151,12 @@ class Qpcc():
             self._build_mpccsol_solver("reg_homotopy", opts)
         else:
            raise NotImplementedError("Only the reg_homotopy plugin for mpccsol is currently supported.")
-        
+
+    def get_dx(self):
+        """
+        Get the primal step from the last solve.
+        """
+        return self.mpcc.w.res
 
     def _build_mpccsol_solver(self, plugin, opts):
         """
