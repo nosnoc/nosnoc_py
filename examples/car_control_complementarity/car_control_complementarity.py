@@ -127,16 +127,6 @@ def plot_car_model(solver, latexify=True):
 
 def example(plot=True):
     solver = solve_ocp()
-    qpcc = nosnoc.Qpcc(solver.dtp)
-    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions(assume_lower_bounds=False)
-    solver_opts.opts_casadi_nlp["print_time"] = 0
-    solver_opts.opts_casadi_nlp["expand"] = 1
-    solver_opts.opts_casadi_nlp["ipopt"]["print_level"] = 0
-    solver_opts.opts_casadi_nlp["ipopt"]["mumps_mem_percent"] = 5000
-    qpcc._build_mpccsol_solver(solver_opts)
-    qpcc.linearize(x0=solver.dtp.w.res, lam_g=solver.dtp.g.mult)
-    res = qpcc.solve()
-    breakpoint()
     if plot:
         plot_car_model(solver)
 
