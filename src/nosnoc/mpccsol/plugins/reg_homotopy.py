@@ -31,10 +31,10 @@ class RegHomotopyOptions():
     complementarity_tol: float               = 1e-8
     objective_scaling_direct: bool           = True
     sigma_0: float                           = 1
-    sigma_N: float                           = 1e-9
+    sigma_N: float                           = 1e-15
     homotopy_update_rule: HomotopyUpdateRule = HomotopyUpdateRule.LINEAR
-    assume_lower_bounds: bool                = True;
-    lift_complementarities: bool             = False;
+    assume_lower_bounds: bool                = True
+    lift_complementarities: bool             = False # TODO(@anton) Not implemented
 
     homotopy_update_slope: float           = 0.1
     homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule

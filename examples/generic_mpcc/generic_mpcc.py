@@ -76,3 +76,4 @@ if __name__ == "__main__":
     mpcc2, init2 = create_generic_mpcc2()
     solver2 = ns.mpccsol.mpccsol("reg_homotopy", mpcc2, solver_opts)
     solution2 = solver2(**init2)
+    breakpoint()

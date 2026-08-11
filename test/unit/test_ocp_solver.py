@@ -91,7 +91,6 @@ class TestOcpSolver(unittest.TestCase):
         solver.set("u", (range(2,N_stages),), lb=3)
         solver.set("u", (slice(4,None),), lb=5)
 
-        print(solver.dtp.w.u[2:].lb)
         self.assertTrue(np.allclose(solver.dtp.w.u[2:4].lb, 3.0))
         self.assertTrue(np.allclose(solver.dtp.w.u[4:].lb, 5.0))
         self.assertTrue(np.allclose(solver.dtp.w.x[0,0,n_s].lb, -10))
