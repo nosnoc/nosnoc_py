@@ -21,6 +21,6 @@ class ScholtesRelaxation(MpccRelaxation):
     def relax(self, w1, w2, sigma):
         e = np.ones(w1.size(1))
         if self.inequality:
-            return (w1*w2 - sigma, -np.inf*e, 0.0*e), (w1, 0.0*e, np.inf*e), (w2, 0.0, np.inf*e)
+            return (w1*w2 - sigma, -np.inf*e, 0.0*e), (w1, 0.0*e, np.inf*e), (w2, 0.0*e, np.inf*e)
         else:
             return (w1*w2 - sigma, 0.0*e, 0.0*e), (w1, 0.0*e, np.inf*e), (w2, 0.0*e, np.inf*e)

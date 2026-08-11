@@ -35,8 +35,8 @@ def create_generic_mpcc1():
 
 if __name__ == "__main__":
     mpcc, init = create_generic_mpcc1()
-    solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions(assume_lower_bounds=False)
 
     solver1 = ns.mpccsol.mpccsol("reg_homotopy", mpcc, solver_opts)
 
-    solution1 = solver(**init)
+    solution1 = solver1(**init)
