@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 from .mpccsol import mpccsol
+from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
 @dataclass
 class QpccDims():
@@ -23,6 +24,11 @@ class Qpcc():
     and is passed as a nosnoc.MPCC vdx object
     """
     def __init__(self, mpcc, use_mpcc_multipliers=False):
+        """
+        Construct the required functions required to form a QPCC from the passed `mpcc`.
+        This includes constructing the Lagrange-Hessian function, constraint Jacobian, and objective gradient.
+        Space is allocated for evaluating these functions.
+        """
         self.mpcc = copy(mpcc)
         self.use_mpcc_multipliers = mpcc
         dims = QpccDims(nx=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
@@ -69,8 +75,17 @@ class Qpcc():
         self.lbg = np.copy(mpcc.g.lb)
         self.ubg = np.copy(mpcc.g.ub)
 
+        self.solver = None
 
-    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=1.0):
+
+    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=np.inf):
+        """
+        Linearize the parent MPCC at the point given by `x0`, and optionally `lam_g`, `lam_G`, `lam_H`.
+        Optionally also apply a ell infinity trust region constraint on the primal variables with radius `tr`.
+
+        Todo:
+           Implement convexification options!
+        """
         self.mpcc.w.init = x0
         if lam_g is not None:
             self.mpcc.g.init_mult = lam_g
@@ -106,6 +121,9 @@ class Qpcc():
 
 
     def solve(self):
+        """
+        Solve the QPCC at the current linearization point.
+        """
         pval = np.concat([
             self.Q.nonzeros(),
             self.q.full().flatten(),
@@ -118,10 +136,28 @@ class Qpcc():
         ])
         res = self.solver(p=pval, lbx=self.lbx, ubx=self.ubx)
         self.mpcc.w.res = res["w"]
+        self.mpcc.w.mult = res["lam_x"]
         self.mpcc.g.val = res["g"]
-        return res
+        self.mpcc.g.mult = res["lam_g"]
+        self.mpcc.G.val = res["G"]
+        self.mpcc.H.val = res["H"]
 
-    def _build_mpccsol_solver(self, opts):
+    def create_solver(self, opts):
+        """
+        Create the solver for this QPCC.
+        Currently only supports solving the QPCC via `mpccsol`.
+        """
+        if isinstance(opts, RegHomotopyOptions):
+            self._build_mpccsol_solver("reg_homotopy", opts)
+        else:
+           raise NotImplementedError("Only the reg_homotopy plugin for mpccsol is currently supported.")
+        
+
+    def _build_mpccsol_solver(self, plugin, opts):
+        """
+        Build the mpccsol based solver for the QPCC.
+        Currently this only supports only the `reg_homotopy_solver
+        """
         Q = ca.SX.sym("Q", self.Q_sparsity)
         q = ca.SX.sym("q", self.q.size())
         A = ca.SX.sym("A", self.A_sparsity)
@@ -145,4 +181,4 @@ class Qpcc():
             "G": G_expr,
             "H": H_expr,
         }
-        self.solver = mpccsol("reg_homotopy", qpcc, opts)
+        self.solver = mpccsol(plugin, qpcc, opts)
