@@ -291,7 +291,6 @@ class RegHomotopySolver(MpccsolPlugin):
                     full_relax = ca.vertcat(relax[0], lb1[0], lb2[0])
                     full_lb = np.concatenate([relax[1], lb1[1], lb2[1]])
                     full_ub = np.concatenate([relax[2], lb1[2], lb2[2]])
-                    breakpoint()
                 else:
                     full_relax = relax[0]
                     full_lb = relax[1]
