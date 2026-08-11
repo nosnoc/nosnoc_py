@@ -47,7 +47,9 @@ class MpccsolPlugin(ABC):
             lam_g0 = np.zeros(len(self.mpcc.g))
         if p is None:
             p = np.zeros(len(self.mpcc.p))
+
         # TODO(@anton) check dimensions
+        # TODO(@anton) this is wasteful of memory, pass through Nones instead
         return self._solve(
             x0,
             y0,
@@ -57,5 +59,5 @@ class MpccsolPlugin(ABC):
             ubg,
             p,
             lam_g0,
-            lam_x0
+            lam_x0,
         )
