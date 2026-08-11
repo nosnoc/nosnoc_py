@@ -1,3 +1,5 @@
+from dataclasses import dataclass, field
+
 import casadi as ca
 import numpy as np
 import nosnoc as ns
