@@ -1,7 +1,8 @@
 # `nosnoc`
 
-More documentation can be found on
-https://nosnoc-py.readthedocs.io/en/latest/
+[![Tests](https://img.shields.io/github/actions/workflow/status/nosnoc/nosnoc_py/tests.yml?label=tests)](https://github.com/nosnoc/nosnoc/actions)
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue)](https://nosnoc-py.readthedocs.io/en/latest/)
+[![License](https://img.shields.io/github/license/nosnoc/nosnoc_py)](https://github.com/nosnoc/nosnoc/blob/main/LICENSE)
 
 ## About
 `nosnoc` is an open source Python software package for NOnSmooth Numerical Optimal Control.
@@ -19,6 +20,7 @@ More information can be found in the NOSNOC package (https://github.com/nurkanov
 
 ## Installation
 `nosnoc` is now available on `PyPI`! As such you can `pip` install it as you would any other package.
+
 1. Setup virtual environment:
 ```
 virtualenv env --python=python3
@@ -34,16 +36,19 @@ source env/bin/activate
 pip install nosnoc
 ```
 
-## Optional additional installation steps
-1. In order to build docs also run:
+### Optional additional installation steps
+In case you are developing the `nosnoc` package you can install the following optional [dependency-groups](https://packaging.python.org/en/latest/specifications/dependency-groups/):
+
+1. `docs`, for building the docs:
 ```
-pip -r docs/docs_reqirements.txt
+pip install --group docs -e .
 ```
 2. In order to run tests you should install the testing requirements:
 ```
-pip -r requirements-test.txt
+pip install --group test -e .
 ```
 
+Note that for this you will need a sufficiently modern version of your python package manager (normally `pip`).
 ## Citing nosnoc
 
 If you use **nosnoc** in research, please cite the software paper:
