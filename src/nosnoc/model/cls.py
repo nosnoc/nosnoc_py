@@ -1,5 +1,3 @@
-from warnings import warn
-
 from .base import Base, BaseDims
 from ..dims import Dims
 
@@ -122,10 +120,6 @@ class Cls(Base):
             if isinstance(self.M, np.ndarray):
                 self.inv_M = np.linalg.inv(self.M)
             else:
-                warn("The inverse of the inertia matrix M(q) is not provided, computing it symbolically. This may be slow to build and evaluate." \
-                "Consider providing the inverse of M(q) via inv_M if it is known.",
-                stacklevel=2, #points warning to CLS constructor call, rather than backfill
-                ) 
                 self.inv_M = ca.inv(self.M)
 
         

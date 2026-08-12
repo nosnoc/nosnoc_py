@@ -125,7 +125,6 @@ class OcpSolver():
                 h = sot*h
         t_grid = [0]
         for ii in range(1,self.opts.N_stages+1):
-            
             h_sum = np.sum(self.dtp.w.h[ii,:].res) 
             sot = self.dtp._get_stage_sot(ii)
             h_sum *= sot
