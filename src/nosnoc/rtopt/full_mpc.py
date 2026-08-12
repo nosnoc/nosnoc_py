@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import override
+from typing import override, List, Union
 
 import casadi as ca
 import numpy as np
 
-from .rtopt import RealtimeOptimizationAlgortihm, RealtimeOptimizationStats
+from .rtopt import RealtimeOptimizationAlgorithm, RealtimeOptimizationStats
 from ..mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 from ..mpccsol.plugins.ccopt import CCOptOptions
 from ..ocp import OcpSolver
@@ -21,7 +21,7 @@ class WarmstartType(Enum):
 @dataclass
 class FullMPCOptions():
     warmstart: WarmstartType = WarmstartType.SHIFT
-    mpcc_solver_opts = field(default_factory=RegHomotopyOptions)
+    mpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
 
 @dataclass
 class FullMPCStats(RealtimeOptimizationStats):

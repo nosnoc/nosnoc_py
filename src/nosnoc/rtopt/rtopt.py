@@ -9,7 +9,7 @@ class RealtimeOptimizationStats():
     prepare_time: List[float] = field(default_factory=list)
 
 
-class RealtimeOptimizationAlgortihm(ABC):
+class RealtimeOptimizationAlgorithm(ABC):
     """
     Base class for real-time optimization algorithms including the MPC and MHE.
     """

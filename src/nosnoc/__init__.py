@@ -12,6 +12,7 @@ from .plot_utils import plot_timings, latexify_plot, plot_sparsity
 from . import model
 from . import dcs
 from . import discrete_time_problem
+from . import rtopt
 from .options import Options
 from .dims import Dims
 from .mpcc import MPCC
