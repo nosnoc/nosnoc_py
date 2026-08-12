@@ -195,6 +195,10 @@ class OcpSolver():
         var[*indices](**kwargs)
 
     def warmstart(self, duals=False):
+        """
+        Warmstart by copying the results vector into the init vector.
+        If `duals==True` we do the same for all multipliers.
+        """
         np.copyto(self.dtp.w.init, self.dtp.w.res)
         if duals:
             np.copyto(self.dtp.w.init_mult, self.dtp.w.mult)
