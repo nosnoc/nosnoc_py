@@ -19,17 +19,8 @@ GRAVITY = 9.81
 
 X0 = np.array([0.8, 0.0])
 T_SIM = 3.0
-N_SIM = 10
+N_SIM = 30
 N_FE = 2
-
-#supress warning until new vdx release
-import warnings
-
-warnings.filterwarnings(
-    "ignore",
-    message=".*__array_wrap__.*",
-    category=DeprecationWarning,
-)
 
 def get_bouncing_ball_model(e=0.0, x0=X0):
     """Build the 1d bouncing ball as a `nosnoc.model.Cls`."""
@@ -51,10 +42,10 @@ def get_default_options(**kwargs):
     default_args = {
         "N_stages": 1,
         "N_finite_elements": N_FE,
-        "n_s": 1,
+        "n_s": 3,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "use_fesd": True,
-        "cross_comp_mode": nosnoc.CrossComplementarityMode.STAGE_STAGE,
+        "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_STAGE,
         "no_initial_impacts": True,
         "step_equilibration": nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
         # A zero initial guess for the contact quantities works best for this example.
@@ -71,7 +62,7 @@ def get_default_integrator_options(**kwargs):
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
 
     solver_opts.homotopy_update_slope = 0.2
-    solver_opts.N_homotopy = 25
+    solver_opts.N_homotopy = 15
     solver_opts.complementarity_tol = 1e-8
     default_args = {
         "T_sim": T_SIM,
