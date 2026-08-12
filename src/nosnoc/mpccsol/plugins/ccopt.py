@@ -6,6 +6,7 @@ import nosnoc as ns
 from vdx import NLP
 from vdx.vartypes import *
 from .plugin import MpccsolPlugin
+from .utils import find_nonscalar
 
 @dataclass
 class CCOptOptions():
@@ -53,10 +54,29 @@ class CCOptSolver(MpccsolPlugin):
         #               this is inefficient.
         ng = len(self.mpcc.g)
         ncc = len(self.mpcc.g)
-        ind_cc1 = np.arange(ng, ng+ncc)
-        ind_cc2 = np.arange(ng+ncc, ng+2*ncc)
-        cc_pairs = np.vstack(np.array(ind_cc1), np.array(ind_cc2))
-        cc_types = 3*np.ones(len(self.mpcc.G))
+
+        # Get nonscalar G
+        ind_scalar_G, ind_nonscalar_G, ind_map_G = find_nonscalar(self.mpcc.G.sym, self.mpcc.w.sym, p=self.mpcc.p.sym)
+        ind_scalar_H, ind_nonscalar_H, ind_map_H = find_nonscalar(self.mpcc.H.sym, self.mpcc.w.sym, p=self.mpcc.p.sym)
+
+        n_nonscalar_G = len(ind_nonscalar_G)
+        n_nonscalar_H = len(ind_nonscalar_H)
+
+        # build ind_cc1
+        ind_cc1 = np.zeros(ncc)
+        ind_cc1[ind_scalar_G] = ind_map_G # Scalars should point to the variables themselves!
+        ind_cc1[ind_nonscalar_G] = np.arange(ng, n_nonscalar_G) # nonscalars are appened to g.
+        # build ind_cc2
+        ind_cc2 = np.zeros(ncc)
+        ind_cc2[ind_scalar_H] = ind_map_H # Scalars should point to the variables themselves!
+        ind_cc2[ind_nonscalar_H] = np.arange(ng+n_nonscalar_G, ng+n_nonscalar_G+n_nonscalar_H) # nonscalars ar appended to g.
+        cc_pairs = np.vstack(ind_cc1, ind_cc2)
+        # build cc_types
+        cc_types = np.zeros(ncc)
+        cc_types[ind_nonscalar_G] += 2
+        cc_types[ind_nonscalar_H] += 1
+
+
         casadi_solver_opts = {
             "madnlp": self.opts.madnlp_opts,
             "ccopt": self.opts.ccopt_opts,
