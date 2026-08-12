@@ -99,7 +99,7 @@ class FrictionModel(Enum):
     CONIC = auto()
     """Exact nonlinear friction cone, ||lambda_t||_2 <= mu*lambda_n."""
     POLYHEDRAL = auto()
-    """Polyhedral approximation of the friction cone spanned by D_tangent."""
+    """Polyhedral approximation of the friction cone spanned by D_tangent, in 2D this is equivalent to the conic model"""
 
 
 class ConicModelSwitchHandling(Enum):
