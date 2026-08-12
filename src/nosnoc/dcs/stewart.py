@@ -75,7 +75,7 @@ class Stewart(Base):
         self.G_path_fun  = ca.Function('G_path', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.G_path])
         self.H_path_fun  = ca.Function('H_path', [self.model.x, self.model.z, self.model.u, self.model.v_global, self.model.p], [self.model.H_path])
         self.g_terminal_fun  = ca.Function('g_terminal', [self.model.x, self.model.z, self.model.v_global, self.model.p_global], [self.model.g_terminal])
-        self.f_q_T_fun = ca.Function('f_q_T', [self.model.x, self.model.z, self.model.v_global, self.model.p], [self.model.f_q_T])
+        self.f_q_T_fun = ca.Function('f_q_T', [self.model.x, self.model.z, self.model.v_global, self.model.p_global], [self.model.f_q_T])
 
         self.f_x_rk = ca.Function(
             'f_x_rk',

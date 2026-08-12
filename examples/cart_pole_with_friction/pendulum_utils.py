@@ -7,32 +7,34 @@ import numpy as np
 nosnoc.latexify_plot()
 
 
-def plot_results(results):
-
-    x_traj = np.array(results["x_traj"])
+def plot_results(solver):
+    x_traj = solver.get("x")
+    u_traj = solver.get("u")
+    t_grid = solver.get_time_grid()
+    control_grid = solver.get_control_grid()
 
     plt.figure()
     # states
     plt.subplot(3, 1, 1)
-    plt.plot(results["t_grid"], x_traj[:, 0], label='$q_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 1], label='$q_2$ - pole')
+    plt.plot(t_grid, x_traj[:, 0], label='$q_1$ - cart')
+    plt.plot(t_grid, x_traj[:, 1], label='$q_2$ - pole')
     plt.legend()
     plt.grid()
 
     plt.subplot(3, 1, 2)
-    plt.plot(results["t_grid"], x_traj[:, 2], label='$v_1$ - cart')
-    plt.plot(results["t_grid"], x_traj[:, 3], label='$v_2$ - pole')
+    plt.plot(t_grid, x_traj[:, 2], label='$v_1$ - cart')
+    plt.plot(t_grid, x_traj[:, 3], label='$v_2$ - pole')
     plt.legend()
     plt.grid()
 
     # controls
     plt.subplot(3, 1, 3)
-    plt.step(results["t_grid_u"], [results["u_traj"][0]] + results["u_traj"], label='u')
+    plt.step(control_grid, np.concatenate([[u_traj[0]], u_traj]), label='u')
 
     plt.legend()
     plt.grid()
 
-    dt = results["t_grid"][1] - results["t_grid"][0]
+    dt = t_grid[1] - t_grid[0]
     ani = animate_cart_pole(x_traj, dt=dt, saveas='cart_pole.gif')
 
     plt.show()
