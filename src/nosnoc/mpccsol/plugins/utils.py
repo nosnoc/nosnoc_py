@@ -12,6 +12,9 @@ def ind2sub(array_shape, ind):
 # TODO(@anton) This may or may not work for ca.MX :/
 
 def find_nonscalar(g,w,p=None):
+    """
+    Returns the indicies in g which are scalar functions of w, the complement of that, and the selection map from w which corresponds to the scalar indices.
+    """
     Sym = type(w)
     if p is None:
         p = Sym([])
@@ -32,6 +35,7 @@ def find_nonscalar(g,w,p=None):
     # Find monomial and scalar parts of g with no offeset
     # TODO(@anton) we can actually handle offsets by offsetting the bounds but for now we do not.
     ind_nonoffset = np.where(np.array([ca.is_equal(bi,Sym(0.0)) for bi in b.nonzeros()]))
+    # Get scalar indices, map, and nonscalar via the A matrix and ind_linear
     ind_scalar_ = np.intersect1d(ind_scalar_monomial, ind_nonoffset, assume_unique=True)
     ind_map = np.array(J)[i[ind_scalar_]]
     ind_scalar = ind_linear[ind_scalar_]
