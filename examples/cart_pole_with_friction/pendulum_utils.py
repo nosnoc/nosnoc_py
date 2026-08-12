@@ -34,7 +34,7 @@ def plot_results(solver):
     plt.legend()
     plt.grid()
 
-    dt = t_grid[1] - t_grid[0]
+    dt = np.mean(np.diff(t_grid))
     ani = animate_cart_pole(x_traj, dt=dt, saveas='cart_pole.gif')
 
     plt.show()

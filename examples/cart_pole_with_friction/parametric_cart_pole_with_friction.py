@@ -2,17 +2,7 @@ import numpy as np
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc
 
-def solve_paramteric_example(with_global_var=False):
-    # options
-    opts = nosnoc.Options(
-        rk_scheme         = nosnoc.RKScheme.RADAU_IIA,
-        n_s               = 2,
-        N_stages          = 20,  # number of control intervals
-        N_finite_elements = 2,   # number of finite element on every control intevral
-        T                 = 5.0, # Time horizon
-        print_level       = 0,
-    )
-
+def parameteric_cart_pole_model(with_global_var=False):
     ## Model defintion
     q = SX.sym('q', 2)
     v = SX.sym('v', 2)
@@ -30,7 +20,7 @@ def solve_paramteric_example(with_global_var=False):
     u_ref_val = np.array([0.0])
 
     p_time_var = vertcat(x_ref, u_ref)
-    p_time_var_val = np.tile(np.concatenate((x_ref_val, u_ref_val)), (opts.N_stages, 1))
+    p_time_var_val = np.concatenate((x_ref_val, u_ref_val))
 
     if with_global_var:
         p_global = vertcat(x_ref_T,m2)
@@ -77,8 +67,8 @@ def solve_paramteric_example(with_global_var=False):
     S = [np.array([[1], [-1]])]
 
     # specify initial and end state, cost ref and weight matrix
-    x0 = np.array([1, 0 / 180 * np.pi, 0, 0])  # start downwards
-
+    #x0 = np.array([1, 0 / 180 * np.pi, 0, 0])  # start downwards
+    x0 = np.array([0.0, 0 / 180 * np.pi, 0, 0])  # start downwards
 
     Q = np.diag([10, 100, 1, 1])
     Q_terminal = np.diag([500, 100, 10, 10])
@@ -93,7 +83,7 @@ def solve_paramteric_example(with_global_var=False):
     ubx = np.array([5.0, np.inf, np.inf, np.inf])
     lbx = -np.array([5.0, np.inf, np.inf, np.inf])
 
-    u_max = 10.0
+    u_max = 15.0
     lbu = -np.array([u_max])
     ubu = np.array([u_max])
 
@@ -107,6 +97,7 @@ def solve_paramteric_example(with_global_var=False):
         p_global=p_global,
         p_global_val=p_global_val,
         p_time_var=p_time_var,
+        p_time_var_val=p_time_var_val,
         v_global=v_global,
         lbu=lbu,
         f_q=f_q,
@@ -118,15 +109,34 @@ def solve_paramteric_example(with_global_var=False):
         ubv_global=ubv_global,
         v0_global=v_global_guess,
     )
+    return model
+
+def get_default_opts(**kwargs):
+    default_opts = {
+        "rk_scheme"          : nosnoc.RKScheme.RADAU_IIA,
+        "n_s"                : 2,
+        "N_stages"           : 20,  # number of control intervals
+        "N_finite_elements"  : 2,   # number of finite element on every control intevral
+        "T"                  : 5.0, # Time horizon
+        "print_level"        : 0,
+    }
+    return nosnoc.Options(**(default_opts | kwargs))
+
+def solve_paramteric_example(with_global_var=False):
+    # options
+    opts = get_default_opts()
+
+    model = parameteric_cart_pole_model(with_global_var=False)
+
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
 
     # create solver
     solver = nosnoc.OcpSolver(model, opts, solver_opts)
+
+    p_time_var_val = np.tile(model.p_time_var_val, (opts.N_stages, 1))
     # set / update parameters
-    solver.set_param('p_global', (), p_global_val)
     solver.set_param('p_time_var', (range(1,opts.N_stages+1),), p_time_var_val)
 
     # solve OCP
     solver.solve()
-    breakpoint()
     return solver
