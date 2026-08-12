@@ -27,15 +27,14 @@ def find_nonscalar(g,w,p=None):
     # Find monomial parts of g
     ind_monomial = v[c==1]
     # Find monomial and scalar parts of g
-    ind_mult1, = np.where(np.array(ca.DM(A).nonzeros()) == 1.0)
+    ind_mult1, = np.where(np.array([ca.is_equal(Ai,Sym(1.0)) for Ai in A.nonzeros()]))
     ind_scalar_monomial = np.intersect1d(ind_monomial, ind_mult1, assume_unique=True)
     # Find monomial and scalar parts of g with no offeset
     # TODO(@anton) we can actually handle offsets by offsetting the bounds but for now we do not.
-    ind_nonoffset,_ = np.where(ca.DM(b).full() == 0.0)
+    ind_nonoffset = np.where(np.array([ca.is_equal(bi,Sym(0.0)) for bi in b.nonzeros()]))
     ind_scalar_ = np.intersect1d(ind_scalar_monomial, ind_nonoffset, assume_unique=True)
     ind_map = np.array(J)[i[ind_scalar_]]
     ind_scalar = ind_linear[ind_scalar_]
     ind_nonscalar = np.setdiff1d(np.arange(0,g.size(1)),ind_scalar, assume_unique=True)
 
     return ind_scalar, ind_nonscalar, ind_map
-
