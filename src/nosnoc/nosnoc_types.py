@@ -117,9 +117,6 @@ class ConicModelSwitchHandling(Enum):
 class ClsDiscretization(Enum):
     """
     Which discretization to use for the impact of a Complementarity Lagrangian System.
-
-    Both modes share everything except how the velocity is treated at a finite element boundary.
-    The numerical complementarity relaxation (homotopy) is shared machinery underneath both.
     """
     FESD_J = auto()
     """
@@ -132,7 +129,7 @@ class ClsDiscretization(Enum):
     """
     Patel et al.'s relaxed orthogonal-collocation formulation (IEEE RA-L 2019).
 
-    The velocity is *continuous* across finite element boundaries; the impact is produced by the
+    The velocity is continuous across finite element boundaries; the impact is produced by the
     contact force lambda_n acting over one shrinking finite element. It is an approximation at
     finite step size that converges to the exact plastic impact as h -> 0.
     """
