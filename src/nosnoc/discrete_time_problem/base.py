@@ -441,4 +441,57 @@ class Base(ABC,MPCC):
                 delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
                 self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
     
+    def warmstart_shift(self):
+        """Warmstart the current problem by shifting one control interval"""
+        # TODO(@anton) We could instead in principle calculate an indexmap and just do a copy
+        #              this will probably significantly improve performance.
+        opts = self.opts
+        rbp = self.rbp
+        # warmstart globals
+        self.w.v_global[()](init=self.w.v_global[()].res)
+        if opts.time_optimal_problem:
+            self.w.T_final[()](init=self.w.T_final[()].res)
+        # warmstart global speed of time
+        if opts.use_speed_of_time_variables and not opts.local_speed_of_time_variable:
+            self.w.sot[()](init=self.w.sot[()].res)
 
+        # iterate control stages
+        for ii in range(1, opts.N_stages+1):
+            next_ii = min(ii+1, opts.N_stages)
+            if not opts.N_finite_elements[ii-1] == opts.N_finite_elements[next_ii-1]:
+                raise RuntimeError("Shift warmstarting is currently only supported when the number of finite elements is constant!")
+            # warmstart speed of time
+            if opts.use_speed_of_time_variables and opts.local_speed_of_time_variable:
+                self.w.sot[ii](init=self.w.sot[next_ii].res)
+            # warmstart controls
+            self.w.u[ii](init=self.w.u[next_ii].res)
+            # warmstart h
+            self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                init=self.w.h[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+            )
+            # warmstart x
+            if opts.rk_representation in (RKRepresentation.INTEGRAL,RKRepresentation.DIFFERENTIAL_LIFT_X):
+                self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                    init=self.w.x[next_ii,range(1,opts.N_finite_elements[next_ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+                )
+            else:
+                self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),opts.n_s+rbp](
+                    init=self.w.x[next_ii,range(1,opts.N_finite_elements[next_ii-1]+1),opts.n_s+rbp].res.flatten()
+                )
+            # warmstart v
+            if opts.rk_representation in(RKRepresentation.DIFFERENTIAL,RKRepresentation.DIFFERENTIAL_LIFT_X):
+                self.w.v[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)](
+                    init=self.w.v[next_ii,range(1,opts.N_finite_elements[next_ii-1]+1),range(1,opts.n_s+1)].res.flatten()
+                )
+            # warmstart z
+            self.w.z[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.z[next_ii,range(1,opts.N_finite_elements[next_ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+
+        # call specialized warmstart_shift
+        self._warmstart_shift()
+
+    @abstractmethod
+    def _warmstart_shift(self):
+        """Warmstart the current problem by shifting one control interval"""
+        pass
