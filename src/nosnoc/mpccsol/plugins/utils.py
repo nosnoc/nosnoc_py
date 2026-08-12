@@ -12,20 +12,25 @@ def ind2sub(array_shape, ind):
 # TODO(@anton) This may or may not work for ca.MX :/
 
 def find_nonscalar(g,w,p=None):
+    Sym = type(w)
     if p is None:
-        p = type(w)([])
+        p = Sym([])
     #     g_sym
     # Get indices of all g which are linear in x.
     b_lin = np.array([ca.is_linear(gi,w) for gi in ca.vertsplit(g,1)])
     ind_linear, = np.nonzero(b_lin)
     g_linear = g[ind_linear]
     A, b = ca.linear_coeff(g_linear, w)
-    # Find exactly scalar
+    # Find linear parts of g
     I,J = A.sparsity().get_triplet()
     v,i,c = np.unique(I, return_counts=True, return_index=True)
+    # Find monomial parts of g
     ind_monomial = v[c==1]
+    # Find monomial and scalar parts of g
     ind_mult1, = np.where(np.array(ca.DM(A).nonzeros()) == 1.0)
     ind_scalar_monomial = np.intersect1d(ind_monomial, ind_mult1, assume_unique=True)
+    # Find monomial and scalar parts of g with no offeset
+    # TODO(@anton) we can actually handle offsets by offsetting the bounds but for now we do not.
     ind_nonoffset,_ = np.where(ca.DM(b).full() == 0.0)
     ind_scalar_ = np.intersect1d(ind_scalar_monomial, ind_nonoffset, assume_unique=True)
     ind_map = np.array(J)[i[ind_scalar_]]

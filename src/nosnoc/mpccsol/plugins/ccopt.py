@@ -9,16 +9,28 @@ from .utils import find_nonscalar
 
 @dataclass
 class CCOptOptions():
+    """
+    Options for the `CCOpt` plugin for `mpccsol`.
+    """
     madnlp_opts: dict = field(default_factory=lambda:
                               {
                                   "bound_relax_factor": 0.0
                               }
                               )
+    """
+    Dictionary containing `MadNLP` related options which are passed to `CCOpt`.
+    """
     ccopt_opts: dict = field(default_factory=dict)
+    """
+    Dictionary containing `CCOpt` specific options.
+    """
 
 
 
 class CCOptSolver(MpccsolPlugin):
+    """
+    The `mpccsol` plugin which uses the MPCC tailored solver `CCOpt`.
+    """
     @override
     def _build_solver(self):
         if isinstance(self.mpcc, dict):
