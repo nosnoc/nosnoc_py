@@ -17,6 +17,30 @@ class MPCC(NLP):
                 'H': self.H.sym,
                 'f': self.f}
 
+    def from_casadi_dict(mpcc_dict, symbolic_type=ca.SX):
+        """
+        Convert a raw casadi dict form of an MPCC to an MPCC object
+        This object inherits the lack of structure but allows us to reuse code in e.g. `mpccsol`.
+
+        Todo:
+            Anton should figure out if the SX symbolics are always a sane default.
+        """
+        mpcc = MPCC(symbolic_type=symbolic_type)
+        nx = mpcc_dict["x"].size(1)
+        np = mpcc_dict["p"].size(1)
+        f_fun = ca.Function("f", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["f"]])
+        g_fun = ca.Function("g", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["g"]])
+        G_fun = ca.Function("H", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["G"]])
+        H_fun = ca.Function("G", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["H"]])
+
+        mpcc.w.x[()] = Primal("x", nx)
+        mpcc.p.p[()] = Parameter("p", np)
+        mpcc.g.g[()] = Constraint(g_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.G.cc[()] = Constraint(G_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.H.cc[()] = Constraint(H_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.f = f_fun(mpcc.w.x[()], mpcc.p.p[()])
+        return mpcc
+
     def create_solver(self, mpccsol_opts, plugin="reg_homotopy"):
         # TODO(@anton) implement `mpccsol`
         self.solver = mpccsol.mpccsol(plugin, self, mpccsol_opts)

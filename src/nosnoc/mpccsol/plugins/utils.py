@@ -9,15 +9,17 @@ def ind2sub(array_shape, ind):
 # TODO(@anton) This may be slower but it is actually correct.
 #              We should move this directly into CasADi.
 
+# TODO(@anton) This may or may not work for ca.MX :/
+
 def find_nonscalar(g,w,p=None):
     if p is None:
         p = type(w)([])
-
+    #     g_sym
     # Get indices of all g which are linear in x.
     b_lin = np.array([ca.is_linear(gi,w) for gi in ca.vertsplit(g,1)])
     ind_linear, = np.nonzero(b_lin)
     g_linear = g[ind_linear]
-    A, b = ca.linear_coeff(g_linear, x)
+    A, b = ca.linear_coeff(g_linear, w)
     # Find exactly scalar
     I,J = A.sparsity().get_triplet()
     v,i,c = np.unique(I, return_counts=True, return_index=True)
@@ -32,11 +34,3 @@ def find_nonscalar(g,w,p=None):
 
     return ind_scalar, ind_nonscalar, ind_map
 
-
-if __name__ == "__main__":
-    x = ca.SX.sym("x", 10)
-    p = ca.SX.sym("p", 1)
-    g = ca.vertcat(x[0:5], x**2)
-    g = ca.vertcat(x[0:5],5*x[5:6], x[6:7]+1.0, p*x[7], x**2, x[9])
-    ind_scalar, ind_nonscalar, ind_map = find_nonscalar(g,x)
-    breakpoint()

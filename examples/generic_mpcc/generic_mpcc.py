@@ -2,6 +2,7 @@ import casadi as ca
 import nosnoc as ns
 import numpy  as np
 
+CCOPT = True
 
 def create_generic_mpcc1():
     # Variables
@@ -76,3 +77,10 @@ if __name__ == "__main__":
     mpcc2, init2 = create_generic_mpcc2()
     solver2 = ns.mpccsol.mpccsol("reg_homotopy", mpcc2, solver_opts)
     solution2 = solver2(**init2)
+
+    if CCOPT:
+        solver_opts = ns.mpccsol.plugins.ccopt.CCOptOptions()
+
+        mpcc_ccopt, init_ccopt = create_generic_mpcc1()
+        solver_ccopt = ns.mpccsol.mpccsol("ccopt", mpcc_ccopt, solver_opts)
+        solution_ccopt = solver_ccopt(**init_ccopt)

@@ -9,3 +9,5 @@ import nosnoc
 def mpccsol(plugin:str, mpcc, opts):
     if plugin == "reg_homotopy":
         return nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopySolver(mpcc, opts)
+    elif plugin == "ccopt":
+        return nosnoc.mpccsol.plugins.ccopt.CCOptSolver(mpcc, opts)
