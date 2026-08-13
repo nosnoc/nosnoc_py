@@ -10,6 +10,7 @@ from .discrete_time_problem import Heaviside as HeavisideDTP
 from .discrete_time_problem import Cls as ClsDTP
 from .nosnoc_types import DcsMode
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
+from .mpccsol.plugins.ccopt import CCOptOptions
 
 class OcpSolver():
 
@@ -41,6 +42,8 @@ class OcpSolver():
         self.set_param("rho_h",(), self.opts.rho_h)
         if isinstance(self.solver_opts, RegHomotopyOptions):
             plugin = "reg_homotopy"
+        elif isinstance(self.solver_opts, CCOptOptions):
+            plugin = "ccopt"
         else:
             raise NotImplementedError("Only reg_homotopy is implemented")
 

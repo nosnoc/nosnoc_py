@@ -5,6 +5,8 @@ import casadi as ca
 import numpy as np
 from .mpccsol import mpccsol
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
+from .mpccsol.plugins.ccopt import CCOptOptions
+from .mpcc import MPCC
 
 @dataclass
 class QpccDims():
@@ -29,7 +31,14 @@ class Qpcc():
         This includes constructing the Lagrange-Hessian function, constraint Jacobian, and objective gradient.
         Space is allocated for evaluating these functions.
         """
-        self.mpcc = copy(mpcc)
+        self.mpcc = MPCC(type(mpcc.f),name=f"{mpcc.name}_qpcc_copy")
+        self.mpcc.f = mpcc.f
+        self.mpcc.w = copy(mpcc.w)
+        self.mpcc.g = copy(mpcc.g)
+        self.mpcc.p = copy(mpcc.p)
+        self.mpcc.G = copy(mpcc.G)
+        self.mpcc.H = copy(mpcc.H)
+
         self.use_mpcc_multipliers = use_mpcc_multipliers
         dims = QpccDims(nx=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
         self.dims = dims
@@ -39,9 +48,9 @@ class Qpcc():
         lam_G = mpcc.G.symbolic_type.sym("lam_G", dims.ncc)
         lam_H = mpcc.H.symbolic_type.sym("lam_H", dims.ncc)
         if use_mpcc_multipliers: # TODO(@anton) check sign convention for lam_G, lam_H
-            L = mpcc.f - ca.dot(lam_g, mpcc.g.sym) - ca.dot(lam_G, mpcc.G.sym) - ca.dot(lam_H, mpcc.H.sym)
+            L = mpcc.f + ca.dot(lam_g, mpcc.g.sym) + ca.dot(lam_G, mpcc.G.sym) + ca.dot(lam_H, mpcc.H.sym)
         else:
-            L = mpcc.f - ca.dot(lam_g, mpcc.g.sym)
+            L = mpcc.f + ca.dot(lam_g, mpcc.g.sym)
         hess_L,nabla_L = ca.hessian(L, mpcc.w.sym)
         grad_f = ca.gradient(mpcc.f, mpcc.w.sym)
         jac_g = ca.jacobian(mpcc.g.sym, mpcc.w.sym)
@@ -115,9 +124,10 @@ class Qpcc():
         self.H = self.H_fun(self.mpcc.w.init, self.mpcc.p.val)
         self.h = self.h_fun(self.mpcc.w.init, self.mpcc.p.val)
 
+    def update_bounds(self, tr=np.inf):
         # setup tr
-        self.lbx = np.maximum(self.mpcc.w.lb - x0, -tr)
-        self.ubx = np.minimum(self.mpcc.w.ub - x0, tr)
+        self.lbx = np.maximum(self.mpcc.w.lb - self.mpcc.w.init, -tr)
+        self.ubx = np.minimum(self.mpcc.w.ub - self.mpcc.w.init, tr)
 
 
     def solve(self):
@@ -149,6 +159,8 @@ class Qpcc():
         """
         if isinstance(opts, RegHomotopyOptions):
             self._build_mpccsol_solver("reg_homotopy", opts)
+        elif isinstance(opts, CCOptOptions):
+            self._build_mpccsol_solver("ccopt", opts)
         else:
            raise NotImplementedError("Only the reg_homotopy plugin for mpccsol is currently supported.")
 
@@ -170,7 +182,7 @@ class Qpcc():
         G = ca.SX.sym("G", self.G_sparsity)
         g = ca.SX.sym("g", self.g.size())
         H = ca.SX.sym("H", self.H_sparsity)
-        h = ca.SX.sym("h", self.g.size())
+        h = ca.SX.sym("h", self.h.size())
 
         x = ca.SX.sym("x", self.dims.nx)
 

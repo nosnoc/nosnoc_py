@@ -1,7 +1,14 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import List
 from time import monotonic
+
+class WarmstartType(Enum):
+    NONE = auto()
+    WARMSTART_PRIMALS = auto()
+    WARMSTART_ALL = auto()
+    SHIFT = auto()
 
 @dataclass
 class RealtimeOptimizationStats():

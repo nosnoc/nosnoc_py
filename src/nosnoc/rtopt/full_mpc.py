@@ -5,18 +5,10 @@ from typing import override, List, Union
 import casadi as ca
 import numpy as np
 
-from .rtopt import RealtimeOptimizationAlgorithm, RealtimeOptimizationStats
+from .rtopt import RealtimeOptimizationAlgorithm, RealtimeOptimizationStats, WarmstartType
 from ..mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 from ..mpccsol.plugins.ccopt import CCOptOptions
 from ..ocp import OcpSolver
-
-
-class WarmstartType(Enum):
-    NONE = auto()
-    WARMSTART_PRIMALS = auto()
-    WARMSTART_ALL = auto()
-    SHIFT = auto()
-
 
 @dataclass
 class FullMPCOptions():

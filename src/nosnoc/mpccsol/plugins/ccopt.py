@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from time import monotonic
 
 import casadi as ca
 import numpy as np
@@ -49,7 +50,7 @@ class CCOptSolver(MpccsolPlugin):
                lam_g0: np.ndarray,
                lam_x0: np.ndarray,
                ):
-
+        start = monotonic()
         # TODO(@anton): Add support for multipliers, currently we don't support warmstarting the multipliers.
         res = self.solver(x0=x0,
                           lbx=lbx,
@@ -61,10 +62,10 @@ class CCOptSolver(MpccsolPlugin):
         ng = len(self.mpcc.g)
         ncc = len(self.mpcc.G)
         G = np.zeros(ncc)
-        G[self.ind_scalar_G] = res['x'].full()[self.ind_map_G]
+        G[self.ind_scalar_G] = np.reshape(res['x'].full()[self.ind_map_G], G[self.ind_scalar_G].shape)
         G[self.ind_nonscalar_G] = res['g'].full()[ng:ng+self.n_nonscalar_G].flatten()
         H = np.zeros(ncc)
-        H[self.ind_scalar_H] = res['x'].full()[self.ind_map_H]
+        H[self.ind_scalar_H] = np.reshape(res['x'].full()[self.ind_map_H], H[self.ind_scalar_H].shape)
         H[self.ind_nonscalar_H] = res['g'].full()[ng+self.n_nonscalar_G:ng+self.n_nonscalar_G+self.n_nonscalar_H].flatten()
         mpcc_results = {
             "f": res['f'].full()[0],
@@ -76,6 +77,8 @@ class CCOptSolver(MpccsolPlugin):
             "H": H,
         }
         self.stats["ccopt_stats"] = self.solver.stats()
+        self.stats["t_wall"] = monotonic() - start
+        self.stats["converged"] = self.solver.stats()["success"]
         return mpcc_results
 
 
