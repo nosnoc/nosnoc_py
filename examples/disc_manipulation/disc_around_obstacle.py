@@ -13,16 +13,6 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 
 import nosnoc
 
-#supress warning until new vdx release
-import warnings
-
-warnings.filterwarnings(
-    "ignore",
-    message=".*__array_wrap__.*",
-    category=DeprecationWarning,
-)
-
-
 # ------------------------------------------------------------------ problem data
 
 # masses and radii of the two discs
@@ -120,15 +110,17 @@ def get_default_options(**kwargs):
         #NOTE: this can be changed to nosnoc.ClsDiscretization.RELAXED_OC
         "cls_discretization": nosnoc.ClsDiscretization.FESD_J, 
 
-        # Matches the MATLAB reference, which leaves cross_comp_mode at the default FE_STAGE.
-        # For Patel OC use FE_FE 
-        "cross_comp_mode": nosnoc.CrossComplementarityMode.STAGE_STAGE,
+        # For Patel OC use FE_FE, use FE_FE as default
+        "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_FE,
         "step_equilibration": nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED,
        
                  
         "g_path_at_fe": True,    # enforce the obstacle constraint at every finite element boundary
         "T": T,
-        #"rho_h": 0.0, # no step equilibration, the finite element lengths are fixed
+        # NOTE: these are options for PATEL OC, for 20 percent box constraints on the step size
+        #"rho_h": 0.0, # no step equilibration, h stay free in [(1-gamma_h)h0, (1+gamma_h)h0]
+        #"gamma_h": 0.2, # step size bounds for step equilibration
+
     }
     return nosnoc.Options(**(default_args | kwargs))
 
