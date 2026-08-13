@@ -13,6 +13,8 @@ def plot_results(solver):
     t_grid = solver.get_time_grid()
     control_grid = solver.get_control_grid()
 
+
+def _plot_results(x_traj, u_traj, t_grid, control_grid):
     plt.figure()
     # states
     plt.subplot(3, 1, 1)
@@ -38,7 +40,6 @@ def plot_results(solver):
     ani = animate_cart_pole(x_traj, dt=dt, saveas='cart_pole.gif')
 
     plt.show()
-
 
 def animate_cart_pole(Xtraj, dt=0.03, saveas=None):
     '''

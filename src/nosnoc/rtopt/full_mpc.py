@@ -39,9 +39,9 @@ class FullMPC(RealtimeOptimizationAlgorithm):
     def _optimize(self, x0):
         self.ocp_solver.set_x0(x0)
         self.ocp_solver.solve()
-        self.stats.optimize_solve_time.push(self.ocp_solver.dtp.solver.stats["t_wall"])
+        self.stats.optimize_solve_time.append(self.ocp_solver.dtp.solver.stats["t_wall"])
         self.last_converged = self.ocp_solver.dtp.solver.stats["converged"]
-        return self.ocp_solver.dtp.w.u[1]
+        return self.ocp_solver.dtp.w.u[1].res
 
     @override
     def _prepare(self, x_pred):
@@ -54,3 +54,7 @@ class FullMPC(RealtimeOptimizationAlgorithm):
                 self.ocp_solver.warmstart_shift()
         else:
             pass
+
+
+    def get_predicted_state(self):
+        return self.ocp_solver.dtp.w.x[1,:,:].res[-1,:].flatten()

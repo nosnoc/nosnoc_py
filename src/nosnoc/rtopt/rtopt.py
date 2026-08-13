@@ -21,13 +21,13 @@ class RealtimeOptimizationAlgorithm(ABC):
     def optimize(self, **kwargs):
         start = monotonic()
         ret = self._optimize(**kwargs)
-        self.stats.optimize_time.push(monotonic() - start)
+        self.stats.optimize_time.append(monotonic() - start)
         return ret
 
     def prepare(self, **kwargs):
         start = monotonic()
         ret = self._prepare(**kwargs)
-        self.stats.prepare_time.push(monotonic() - start)
+        self.stats.prepare_time.append(monotonic() - start)
         return ret
 
     @abstractmethod
