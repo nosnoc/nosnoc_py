@@ -161,7 +161,10 @@ def animate(solver, save_path=None, show=True):
     "discs_switch_position_obstacle.gif").
     """
     nosnoc.latexify_plot()
-    x = solver.get("x")          # (N+1, n_x), states at the control grid points
+    # For a CLS `get` reports both boundary states of every finite element, so that the velocity
+    # jumps are visible in `plot_time_series`. The positions are continuous, therefore every second
+    # row is a duplicate here and only the finite element end points are animated.
+    x = solver.get("x")[::2]     # (N+1, n_x), states at the finite element end points
     q1, q2 = x[:, 0:2], x[:, 2:4]
     n_frames = q1.shape[0]
 

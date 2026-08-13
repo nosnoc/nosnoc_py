@@ -396,6 +396,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             for jj in range(len(h)):
                 start = t_grid_full[-1]
+                if self._is_cls():
+                    # `get_full` reports the post impact state at the left boundary point, which
+                    # shares its time with the end of the previous finite element.
+                    t_grid_full.append(start)
                 for kk in range(opts.n_s):
                     t_grid_full.append(start + c[kk]*h[jj])
                 if rbp:
