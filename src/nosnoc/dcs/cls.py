@@ -16,11 +16,11 @@ class ClsDcsDims(Dims):
 
 class Cls(Base):
     r"""
-    FESD-J reformulation of a Complementarity Lagrangian System into a DCS.
+    Reformulation of a Complementarity Lagrangian System into a DCS.
 
     The contact forces are determined by the complementarity conditions
 
-        0 <= lambda_normal  perpendicular  y_gap >= 0,   y_gap = f_c(q),
+        0 <= lambda_normal  _|_  y_gap >= 0,   y_gap = f_c(q),
 
     and, at the boundaries of the finite elements, the impulse equations determine either a state
     jump or the continuity of the velocities. `y_gap` and `Y_gap` are lifting variables for f_c(q),
@@ -46,7 +46,7 @@ class Cls(Base):
         self.Lambda_normal = ca.SX.sym("Lambda_normal", dims.n_c)
         self.Y_gap = ca.SX.sym("Y_gap", dims.n_c)
 
-        # Positive and negative parts of the restitution law residual. They lift the absolute value
+        # Positive and negative parts of the restitution law residual. They are used to encode the absolute value
         # in the aggregated impulse complementarity, cf. Eq. (A.2) of the FESD-J paper.
         self.P_vn = ca.SX.sym("P_vn", dims.n_c)
         self.N_vn = ca.SX.sym("N_vn", dims.n_c)

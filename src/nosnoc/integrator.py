@@ -305,7 +305,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             if var.get_depth() == 3:
                 end = opts.n_s+rbp
                 try:
-                    var_out.append(np.reshape(var[1:,:,end].res, (opts.N_finite_elements[0], var_len)))
+                    var_out.append(np.reshape(var[1:,:,end].res, var_shape))
                 except:
                     raise Exception(f"Cannot get {field} as this value is not evaluated at the element end points")
             elif var.get_depth() == 2:
