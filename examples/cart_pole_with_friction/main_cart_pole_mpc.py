@@ -5,7 +5,7 @@ from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
 import numpy as np
 
-CCOPT = False
+CCOPT = True
 RTI = True
 
 T_OCP = 1.0
@@ -171,17 +171,21 @@ def _build_full_mpc():
     return opts,model,mpc
 
 def _build_rti():
-    opts = get_default_opts(T=T_OCP, N_stages=N_STAGES, n_s=1, cross_comp_mode=ns.CrossComplementarityMode.FE_FE)
+    opts = get_default_opts(T=T_OCP, N_stages=N_STAGES, n_s=3, cross_comp_mode=ns.CrossComplementarityMode.FE_FE)
     model = cartpole_mpc_model()
     if CCOPT:
         mpcc_opts = ns.mpccsol.plugins.ccopt.CCOptOptions()
         mpcc_opts.madnlp_opts["tol"] = 1e-8
         mpcc_opts.madnlp_opts["linear_solver"] = "Ma27Solver"
+        mpcc_opts.madnlp_opts["print_level"] = 5
         qpcc_opts = ns.mpccsol.plugins.ccopt.CCOptOptions()
         qpcc_opts.madnlp_opts["tol"] = 1e-6
         qpcc_opts.madnlp_opts["linear_solver"] = "Ma27Solver"
+        qpcc_opts.madnlp_opts["print_level"] = 6
+        qpcc_opts.madnlp_opts["disable_garbage_collector"] = True
         #solver_opts.madnlp_opts["barrier.TYPE"] = "MonotoneUpdate"
-        #solver_opts.ccopt_opts["relaxation_update.TYPE"] = "RolloffRelaxationUpdate"
+        qpcc_opts.ccopt_opts["relaxation_update.TYPE"] = "RolloffRelaxationUpdate"
+        qpcc_opts.ccopt_opts["print_level"] = 6
         #solver_opts.ccopt_opts["relaxation_update.sigma_min"] = 1e-7
     else:
         mpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
@@ -190,14 +194,14 @@ def _build_rti():
     mpc_opts = ns.rtopt.RTIMPCOptions(
         mpcc_solver_opts=mpcc_opts,
         qpcc_solver_opts=qpcc_opts,
-        prepare_step=ns.rtopt.PreparationStep.FULL,
+        prepare_step=ns.rtopt.PreparationStep.NONE,
     )
     mpc = ns.rtopt.RTIMPC(model,opts,mpc_opts)
 
     return opts,model,mpc
 
 def _build_integrator():
-    opts = get_default_opts(T=T_OCP/N_STAGES, N_stages=1, cross_comp_mode=ns.CrossComplementarityMode.FE_FE)
+    opts = get_default_opts(T=T_OCP/N_STAGES, N_stages=1, n_s=4, cross_comp_mode=ns.CrossComplementarityMode.FE_FE)
     model = cartpole_dynamics_model()
     mpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions(
         homotopy_steering_strategy = ns.mpccsol.plugins.reg_homotopy.HomotopySteeringStrategy.ELL_INF
