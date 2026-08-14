@@ -410,3 +410,29 @@ class Base(ABC,MPCC):
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
                 self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
+
+    def _l2_relaxed_scaled(self):
+            opts = self.opts
+            for ii in range(1, opts.N_stages+1):
+                for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                    eta = self._get_eta(ii, jj)
+                    delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                    self.f += self.p.rho_h[()]*ca.tanh(eta/opts.step_equilibration_sigma)*delta_h**2
+
+    def _l2_relaxed(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                eta = self._get_eta(ii, jj)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.f += self.p.rho_h[()]*eta*delta_h**2
+    
+    def _direct(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                eta = self._get_eta(ii, jj)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
+    
+
