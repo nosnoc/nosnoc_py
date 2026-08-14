@@ -21,9 +21,10 @@ class Cls(Base):
     """
 
     def __init__(self, dcs, opts):
+        
         self.__apply_time_stepping_defaults(opts)
+        self.__check_restitution_supported(dcs.model, opts)
         super().__init__(dcs, opts)
-        self.__check_restitution_supported()
 
     def __apply_time_stepping_defaults(self, opts):
         """
@@ -39,7 +40,7 @@ class Cls(Base):
         opts.rk_scheme = RKScheme.RADAU_IIA
         opts.n_s = 1
 
-    def __check_restitution_supported(self):
+    def __check_restitution_supported(self, model, opts):
         """
         Reject a nonzero coefficient of restitution in the discretizations that cannot represent it.
 
@@ -51,19 +52,19 @@ class Cls(Base):
         approximated, so it is refused here.
 
         """
-        if not np.any(np.asarray(self.model.e) > 0.0):
+        if not np.any(np.asarray(model.e) > 0.0):
             return
-        if self._is_relaxed_oc():
+        if opts.cls_discretization == ClsDiscretization.RELAXED_OC:
             raise RuntimeError(
                 "cls_discretization = RELAXED_OC has no impulse variables. The velocity is "
                 "continuous across a finite element boundary, so every impact is plastic and the "
-                f"coefficient of restitution e = {self.model.e} cannot be represented. Use "
+                f"coefficient of restitution e = {model.e} cannot be represented. Use "
                 "cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
-        if not self.opts.use_fesd:
+        if not opts.use_fesd:
             raise RuntimeError(
                 "use_fesd = False selects the implicit Euler time stepping scheme, which has no "
                 "impulse variables and therefore produces plastic impacts only. The coefficient "
-                f"of restitution e = {self.model.e} cannot be represented. Use use_fesd = True "
+                f"of restitution e = {model.e} cannot be represented. Use use_fesd = True "
                 "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
     def _is_relaxed_oc(self):
