@@ -18,7 +18,7 @@ H0 = H_SIM/N_FE      # nominal finite element length, the floor is a fraction of
 
 # Floors on the finite element length, as a fraction of the nominal step h_0, in decreasing order.
 # `gamma_h_lb` is the fraction by which h may *shrink*, so a floor of f*h_0 is gamma_h_lb = 1 - f.
-MIN_H_FRACTIONS = [0.5, 0.1, 0.01, 0.001]
+MIN_H_FRACTIONS = [1e-3,1e-4,1e-5]
 
 # Ceiling on the finite element length, h <= (1 + GAMMA_H_UB)*h_0. Kept fixed over the sweep.
 GAMMA_H_UB = 1.0
