@@ -39,6 +39,10 @@ class IntegratorOptions():
 class FESDIntegratorOptions(IntegratorOptions):
     solver_opts: RegHomotopyOptions = field(kw_only=True)
     use_previous_solution: bool = True
+    # Guess for the contact multiplier when a failed CLS step is retried assuming an impact occurs.
+    # Any positive value works, it only has to push the solver away from the non impacting branch of
+    # the complementarity conditions.
+    impact_guess_init: float = 7.0
 
 # TODO(@anton) implement smoothed integrator
 
@@ -162,20 +166,21 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         into the following steps.
         """
         opts = self.opts
+        impact_guess = self.integrator_opts.impact_guess_init
         print("integrator_fesd: initial guess did not converge, retrying with an impact guess.")
         w_init = np.copy(self.dtp.w.init)
 
         start_fe = 2 if opts.no_initial_impacts else 1
         if self.dtp._is_relaxed_oc():
             # Patel's relaxed formulation has no impulse variables; the impact is a large contact
-            # force, so guess that instead (7 is the same magic positive number used for the impulse).
+            # force, so guess that instead, using the same positive value as for the impulse.
             for jj in range(1, opts.N_finite_elements[0]+1):
                 for kk in range(1, opts.n_s+1):
-                    self.dtp.w.lambda_normal[1,jj,kk](init=7.0)
+                    self.dtp.w.lambda_normal[1,jj,kk](init=impact_guess)
                     self.dtp.w.y_gap[1,jj,kk](init=0.0)
         else:
             for jj in range(start_fe, opts.N_finite_elements[0]+1):
-                self.dtp.w.Lambda_normal[1,jj](init=7.0) #as far as i(stefan) know 7 is magic number > 0
+                self.dtp.w.Lambda_normal[1,jj](init=impact_guess)
                 self.dtp.w.Y_gap[1,jj](init=0.0)
                 self.dtp.w.P_vn[1,jj](init=0.0)
                 self.dtp.w.N_vn[1,jj](init=0.0)

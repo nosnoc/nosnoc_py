@@ -69,6 +69,7 @@ def get_default_integrator_options(**kwargs):
         "N_sim": N_SIM,
         "solver_opts": solver_opts,
         "print_level": 0,
+        "impact_guess_init": 7.0
     }
     return nosnoc.FESDIntegratorOptions(**(default_args | kwargs))
 

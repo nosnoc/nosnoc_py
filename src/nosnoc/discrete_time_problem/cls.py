@@ -181,7 +181,7 @@ class Cls(Base):
     def _get_rk_stage_z(self, ii, jj, kk):
         # The stacked algebraic order (lambda_normal, y_gap) must match the dcs `z_alg` used to
         # build f_x_rk / f_q_rk / g_rk. The h_rescale of lambda_normal happens inside f_x (via the
-        # prk parameter), so the raw multiplier is stacked here.
+        # prk parameter), so its stacked here.
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
             return ca.vertcat(
                 self.w.x[ii,jj,kk],

@@ -103,9 +103,7 @@ class Cls(Base):
         # The RK functions additionally take h_rescale as a parameter. lambda_normal is a contact
         # force in FESD (h_rescale = 1) but a contact impulse in the non-FESD implicit-Euler scheme,
         # where the ODE right hand side divides it by the fixed step length. Following the MATLAB
-        # Cls.m, the division lives inside f_x only; f_q_rk and g_rk receive the raw multiplier
-        # (they ignore h_rescale), so the rescaling never leaks into the cost or the algebraic
-        # constraints.
+        # Cls.m, the division lives inside f_x only; contact force is not rescaled in the quadrature and algebraic equations.
         self.h_rescale = ca.SX.sym("h_rescale")
         f_x_rk_expr = ca.vertcat(
             model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale)))
