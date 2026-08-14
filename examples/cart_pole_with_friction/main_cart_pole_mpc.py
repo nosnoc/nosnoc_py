@@ -194,7 +194,7 @@ def _build_rti():
     mpc_opts = ns.rtopt.RTIMPCOptions(
         mpcc_solver_opts=mpcc_opts,
         qpcc_solver_opts=qpcc_opts,
-        prepare_step=ns.rtopt.PreparationStep.SQPCC,
+        prepare_step=ns.rtopt.PreparationStep.FULL,
         n_advanced_steps=3,
     )
     mpc = ns.rtopt.RTIMPC(model,opts,mpc_opts)
