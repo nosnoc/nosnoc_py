@@ -315,13 +315,13 @@ class Stewart(Base):
             self._heuristic_diff()
 
         if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-            self.__l2_relaxed_scaled()
-                
+            self._l2_relaxed_scaled()
+
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-            self.__l2_relaxed()
-                
+            self._l2_relaxed()
+
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
-            self.__direct()
+            self._direct()
 
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT_HOMOTOPY:
             raise NotImplementedError("Direct homotopy step-eq mode not currently implemented")
@@ -349,39 +349,6 @@ class Stewart(Base):
             eta = eta*nu[jjj]
 
         return eta
-
-    def __l2_relaxed_scaled(self):
-        opts = self.opts
-        rbp = self.rbp
-        eta_vec = []
-        for ii in range(1, opts.N_stages+1):
-            for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                eta = self._get_eta(ii,jj)
-                eta_vec = ca.vertcat(eta_vec,eta)
-                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
-                self.f += self.p.rho_h[()] * ca.tanh(eta/opts.step_equilibration_sigma) * delta_h**2
-
-    def __l2_relaxed(self):
-        opts = self.opts
-        rbp = self.rbp
-        eta_vec = []
-        for ii in range(1, opts.N_stages+1):
-            for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                eta = self._get_eta(ii,jj)
-                eta_vec = ca.vertcat(eta_vec,eta)
-                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
-                self.f += self.p.rho_h[()] * eta * delta_h**2
-
-    def __direct(self):
-        opts = self.opts
-        rbp = self.rbp
-        eta_vec = []
-        for ii in range(1, opts.N_stages+1):
-            for jj in range(2, opts.N_finite_elements[ii-1]+1):
-                eta = self._get_eta(ii,jj)
-                eta_vec = ca.vertcat(eta_vec,eta)
-                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
-                self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
 
     def __linear_complementarity(self):
         opts = self.opts
