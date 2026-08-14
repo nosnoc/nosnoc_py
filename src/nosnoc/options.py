@@ -48,7 +48,14 @@ class Options():
 
     # double: Fraction in the range $\gamma_h \in [0,1]$ by which the step size is relaxed:
     # $$(1-\gamma_h) h_0\le h \le (1+\gamma_h) h_0$$
+    # Relaxes both sides at once, use `gamma_h_lb`/`gamma_h_ub` to relax one side independently.
     gamma_h: float  = 1
+
+    # double: Per side override of `gamma_h`, None means "follow `gamma_h`". The fraction is
+    # relative to the nominal step length, so gamma_h_lb = 0.2 admits $h \geq 0.8 h_0$ and
+    # gamma_h_ub = 0.5 admits $h \leq 1.5 h_0$.
+    gamma_h_lb: Optional[float] = None
+    gamma_h_ub: Optional[float] = None
 
     dcs_mode: DcsMode = DcsMode.STEWART # DcsMode: Which DCS to reformulate the problem into.
 
@@ -352,6 +359,23 @@ class Options():
             raise Exception("Please provide exactly one of T, h_k, or h.")
 
 
+    def _make_gamma_h_consistent(self):
+        """
+        Resolve the per side step size relaxations, so that only `gamma_h_lb`/`gamma_h_ub` are read
+        downstream. A side that was left at None follows `gamma_h`.
+        """
+        if self.gamma_h_lb is None:
+            self.gamma_h_lb = self.gamma_h
+        if self.gamma_h_ub is None:
+            self.gamma_h_ub = self.gamma_h
+
+        if not 0.0 <= self.gamma_h_lb <= 1.0:
+            raise Exception(
+                f"gamma_h_lb = {self.gamma_h_lb} must lie in [0,1], a larger value would give the "
+                "finite element a negative lower bound on its length.")
+        if self.gamma_h_ub < 0.0:
+            raise Exception(f"gamma_h_ub = {self.gamma_h_ub} must be non-negative.")
+
     def __post_init__(self):
         # N_finite_elements always emnds up as a list.
         if isinstance(self.N_finite_elements, int):
@@ -363,3 +387,4 @@ class Options():
             raise Exception("cls_discretization = RELAXED_OC requires use_fesd = True.")
 
         self._make_T_h_consistent()
+        self._make_gamma_h_consistent()

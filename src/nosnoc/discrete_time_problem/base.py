@@ -94,8 +94,8 @@ class Base(ABC,MPCC):
         dims = self.dcs.dims
         h0 = opts.h_k[ii-1]/opts.N_finite_elements[ii-1]
         if opts.use_fesd:
-            ubh = (1 + opts.gamma_h) * h0 # upper bound for FE length
-            lbh = (1 - opts.gamma_h) * h0 # lower bound for FE length
+            ubh = (1 + opts.gamma_h_ub) * h0
+            lbh = (1 - opts.gamma_h_lb) * h0
             if opts.time_rescaling() and not opts.use_speed_of_time_variables:
                 # if only time_rescaling is true, speed of time and step size all lumped together, e.g., \hat{h}_{k,i} = s_n * h_{k,i}, hence the bounds need to be extended.
                 ubh = ubh*opts.s_sot_max
