@@ -20,6 +20,7 @@ class PreparationStep(Enum):
 class RTIMPCOptions():
     warmstart: WarmstartType = WarmstartType.SHIFT
     prepare_step: PreparationStep = PreparationStep.NONE
+    n_advanced_steps: int = 1
     mpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
     qpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
 
@@ -61,20 +62,31 @@ class RTIMPC(RealtimeOptimizationAlgorithm):
         # Initialize on the first time we call prepare by _always_ solving the full mpcc
         # Update qpcc linearization point and linearize
 
-        # Do initialization warmstart
+        if self.rt_opts.prepare_step == PreparationStep.FULL:
+           # Do initialization warmstart
+            self.__warstart_ocp()
+            self.ocp_solver.set_x0(x_pred)
+            self.ocp_solver.solve()
+        if self.rt_opts.prepare_step == PreparationStep.SQP:
+            for ii in range(self.rt_opts.n_advanced_steps):
+                # linearize at the current solution
+                self.qpcc.linearize(self.ocp_solver.dtp.w.res)
+                self.qpcc.update_bounds()
+                # solve a sinqle sqpcc step
+                self.qpcc.solve()
+                self._update_with_qpcc_sol()
+                # TODO(@anton): implement warmstart qpcc
+                
+            
+        self.qpcc.linearize(self.ocp_solver.dtp.w.res)
+
+    def __warmtart_ocp(self):
         if self.rt_opts.warmstart == WarmstartType.WARMSTART_PRIMALS:
             self.ocp_solver.warmstart(duals=False)
         elif self.rt_opts.warmstart == WarmstartType.WARMSTART_ALL:
             self.ocp_solver.warmstart(duals=True)
         elif self.rt_opts.warmstart == WarmstartType.SHIFT:
             self.ocp_solver.warmstart_shift()
-
-        if self.rt_opts.prepare_step == PreparationStep.FULL:
-            self.ocp_solver.set_x0(x_pred)
-            self.ocp_solver.solve()
-            print(f"u_as = {self.ocp_solver.dtp.w.u[1].res}")
-        self.qpcc.linearize(self.ocp_solver.dtp.w.res)
-
     def _set_qpcc_x0(self, x0):
         self.qpcc.mpcc.w.x[0,0,self.ocp_solver.opts.n_s](lb=x0,ub=x0)
         self.qpcc.update_bounds()

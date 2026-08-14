@@ -5,7 +5,7 @@ from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
 import numpy as np
 
-CCOPT = True
+CCOPT = False
 RTI = True
 
 T_OCP = 1.0
@@ -194,7 +194,8 @@ def _build_rti():
     mpc_opts = ns.rtopt.RTIMPCOptions(
         mpcc_solver_opts=mpcc_opts,
         qpcc_solver_opts=qpcc_opts,
-        prepare_step=ns.rtopt.PreparationStep.NONE,
+        prepare_step=ns.rtopt.PreparationStep.SQPCC,
+        n_advanced_steps=3,
     )
     mpc = ns.rtopt.RTIMPC(model,opts,mpc_opts)
 
