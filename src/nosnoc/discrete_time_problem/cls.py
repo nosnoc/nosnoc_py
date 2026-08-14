@@ -132,7 +132,7 @@ class Cls(Base):
         dims = self.dcs.dims
         rbp = self.rbp
         if opts.rk_representation in (RKRepresentation.INTEGRAL, RKRepresentation.DIFFERENTIAL_LIFT_X):
-            self.w.x[ii,range(1, opts.N_finite_elements[ii-1]+1),range(0,opts.n_s+rbp+1)] = Primal(f"x", dims.n_x,
+            self.w.x[ii,range(1, opts.N_finite_elements[ii-1]+1),range(opts.n_s+rbp+1)] = Primal("x", dims.n_x,
                                                                                                       lb=model.lbx, 
                                                                                                       ub=model.ubx, 
                                                                                                       init=model.x0)
