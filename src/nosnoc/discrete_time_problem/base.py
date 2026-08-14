@@ -398,6 +398,12 @@ class Base(ABC,MPCC):
         """Create step equilibration constraints"""
         pass
 
+    @abstractmethod
+    def _get_eta(self):
+        """Get FESD switch indicator function eta"""
+        pass
+
+
     def _heuristic_mean(self):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):

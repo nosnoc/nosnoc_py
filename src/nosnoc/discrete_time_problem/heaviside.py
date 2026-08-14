@@ -343,6 +343,7 @@ class Heaviside(Base):
         if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
             self.__linear_complementarity()
 
+    @override
     def _get_eta(self, ii, jj):
         assert ii >= 1, jj<=opts.N_stages
         assert jj >= 2, jj<=opts.N_finite_elements[ii-1]

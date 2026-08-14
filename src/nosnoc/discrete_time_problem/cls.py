@@ -21,7 +21,6 @@ class Cls(Base):
     """
 
     def __init__(self, dcs, opts):
-        
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
         super().__init__(dcs, opts)
@@ -406,6 +405,7 @@ class Cls(Base):
         elif opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
             raise NotImplementedError("MLCP formulation of step equilibration not yet supported for FESD-J.")
 
+    @override
     def _get_eta(self, ii, jj):
         """
         Switch indicator eta_n built from the gap and contact force.
