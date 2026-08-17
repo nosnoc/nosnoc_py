@@ -4,11 +4,13 @@ from enum import Enum, auto
 from typing import override, List, Union
 from time import monotonic
 
+import numpy as np
+
 from .rtopt import RealtimeOptimizationAlgorithm, RealtimeOptimizationStats, WarmstartType
 from ..mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 from ..mpccsol.plugins.ccopt import CCOptOptions
 from ..ocp import OcpSolver
-from ..qpcc import Qpcc
+from ..qpcc import Qpcc, ConvexificationOptions, ConvexificationMode
 
 class PreparationStep(Enum):
     NONE = auto()
@@ -20,6 +22,9 @@ class RTIOptions():
     warmstart: WarmstartType = WarmstartType.SHIFT
     prepare_step: PreparationStep = PreparationStep.NONE
     n_advanced_steps: int = 1
+    cvx_opts: ConvexificationOptions = field(default_factory=ConvexificationOptions)
+    gauss_newton_hessian: bool = True
+    use_complementarity_hessian: bool = True
     mpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
     qpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
 
@@ -33,7 +38,10 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
     def __init__(self, model, ocp_opts, rt_opts):
         super().__init__(model, ocp_opts, rt_opts)
         self.ocp_solver = OcpSolver(model, ocp_opts, rt_opts.mpcc_solver_opts)
-        self.qpcc = Qpcc(self.ocp_solver.dtp)
+        self.qpcc = Qpcc(
+            self.ocp_solver.dtp,
+            use_mpcc_multipliers=rt_opts.use_complementarity_hessian
+        )
         self.qpcc.create_solver(rt_opts.qpcc_solver_opts)
         self.initialized = False
         self.last_converged = False
@@ -70,6 +78,8 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
     def _take_qpcc_step(self):
         self.qpcc.solve()
         self.ocp_solver.dtp.w.res += self.qpcc.mpcc.w.res
+        np.copyto(self.ocp_solver.dtp.w.mult,self.qpcc.mpcc.w.mult)
+        np.copyto(self.ocp_solver.dtp.g.mult,self.qpcc.mpcc.g.mult)
 
     @override
     def _optimize(self, **kwargs):
@@ -78,8 +88,7 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
             self.initialized = True
         else:
             self._measurement(**kwargs)
-            self.qpcc.solve()
-            self.__update_with_qpcc_sol()
+            self._take_qpcc_step()
             self.stats.optimize_solve_time.append(self.qpcc.solver.stats["t_wall"])
             self.last_converged = self.qpcc.solver.stats["converged"]
         return self._get_result()
@@ -92,16 +101,28 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
             self._prediction(**kwargs)
             self.ocp_solver.solve()
         elif self.rt_opts.prepare_step == PreparationStep.SQPCC:
+            self._prediction(**kwargs)
             for ii in range(self.rt_opts.n_advanced_steps):
                 # linearize at the current solution + predicted update
-                self._prediction(**kwargs)
-                self.qpcc.linearize(self.ocp_solver.dtp.w.res)
+                self.qpcc.linearize(
+                    self.ocp_solver.dtp.w.res,
+                    lam_g=self.ocp_solver.dtp.g.mult if not self.rt_opts.gauss_newton_hessian else None,
+                    lam_G=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
+                    lam_H=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
+                    cvx_opts=self.rt_opts.cvx_opts
+                )
                 self.qpcc.update_bounds()
                 # solve a sinqle sqpcc step
                 self._take_qpcc_step()
                 # TODO(@anton): implement warmstart qpcc
                 
-        self.qpcc.linearize(self.ocp_solver.dtp.w.res)
+        self.qpcc.linearize(
+            self.ocp_solver.dtp.w.res,
+            lam_g=self.ocp_solver.dtp.g.mult if not self.rt_opts.gauss_newton_hessian else None,
+            lam_G=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
+            lam_H=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
+            cvx_opts=self.rt_opts.cvx_opts
+        )
 
     def __warmstart_ocp(self):
         if self.rt_opts.warmstart == WarmstartType.WARMSTART_PRIMALS:
@@ -110,6 +131,3 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
             self.ocp_solver.warmstart(duals=True)
         elif self.rt_opts.warmstart == WarmstartType.SHIFT:
             self.ocp_solver.warmstart_shift()
-
-    def __update_with_qpcc_sol(self):
-        self.ocp_solver.dtp.w.res += self.qpcc.mpcc.w.res

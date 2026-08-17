@@ -190,12 +190,12 @@ def _build_rti():
     else:
         mpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
         qpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
-        #qpcc_opts.opts_casadi_nlp["ipopt"]["print_level"] = 5
     mpc_opts = ns.rtopt.RTIMPCOptions(
         mpcc_solver_opts=mpcc_opts,
         qpcc_solver_opts=qpcc_opts,
-        prepare_step=ns.rtopt.PreparationStep.FULL,
-        n_advanced_steps=3,
+        prepare_step=ns.rtopt.PreparationStep.SQPCC,
+        n_advanced_steps=1,
+        cvx_opts=ns.ConvexificationOptions(mode=ns.ConvexificationMode.MIRROR)
     )
     mpc = ns.rtopt.RTIMPC(model,opts,mpc_opts)
 
