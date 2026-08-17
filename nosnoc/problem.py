@@ -271,7 +271,10 @@ class FiniteElement(FiniteElementBase):
         self.ind_bool = []
 
         # create variables
-        h_ctrl_stage = opts.terminal_time / opts.N_stages
+        if opts.h_ctrl_intervals is None:
+            h_ctrl_stage = opts.terminal_time / opts.N_stages
+        else:
+            h_ctrl_stage = opts.h_ctrl_intervals[ctrl_idx]
         h0 = np.array([h_ctrl_stage / np.array(opts.Nfe_list[ctrl_idx])])
         if opts.use_fesd:
             self.h = ca.SX.sym(f'h_{ctrl_idx}_{fe_idx}')
@@ -571,7 +574,10 @@ class FiniteElement(FiniteElementBase):
 
         # only step equilibration mode that does not require previous finite element
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
-            h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
+            if opts.h_ctrl_intervals is None:
+                h_fe = opts.terminal_time / (opts.N_stages * opts.Nfe_list[self.ctrl_idx])
+            else:
+                h_fe = opts.h_ctrl_intervals[self.ctrl_idx] / opts.Nfe_list[self.ctrl_idx]
             self.cost += opts.rho_h * (self.h - h_fe)**2
             return
         elif not self.fe_idx > 0:
@@ -797,8 +803,10 @@ class NosnocProblem(NosnocFormulationObject):
                 self.cost += fe.cost
                 self.add_fe_constraints(fe, ctrl_idx)
 
-            if opts.use_fesd and opts.equidistant_control_grid:
+            if opts.use_fesd and opts.equidistant_control_grid and opts.h_ctrl_intervals is None:
                 self.add_constraint(sum([fe.h for fe in stage]) - h_ctrl_stage)
+            elif opts.use_fesd and opts.h_ctrl_intervals is not None:
+                self.add_constraint(sum([fe.h for fe in stage]) - opts.h_ctrl_intervals[ctrl_idx])
 
             if opts.time_freezing and opts.equidistant_control_grid:
                 # TODO: make t0 dynamic (since now it needs to be 0!)

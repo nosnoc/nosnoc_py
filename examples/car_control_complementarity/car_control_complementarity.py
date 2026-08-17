@@ -83,6 +83,8 @@ def solve_ocp(opts=None):
     model, ocp = car_model()
     opts.terminal_time = 30
 
+    opts.h_ctrl_intervals = [0.5] * 10 + [2.0] * 10 + [0.5] * 10
+
     solver = nosnoc.NosnocSolver(opts, model, ocp)
 
     results = solver.solve()

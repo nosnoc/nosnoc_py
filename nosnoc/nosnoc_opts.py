@@ -70,6 +70,7 @@ class NosnocOpts:
     # OCP only
     N_stages: int = 1
     equidistant_control_grid: bool = True  # NOTE: tested in test_ocp
+    h_ctrl_intervals: Optional[list] = None  # Manual time grid, list of length N_stages
 
     # generic path constraint handling
     g_path_at_fe: bool = False  # g_path evaluated at every finite element
@@ -186,6 +187,11 @@ class NosnocOpts:
             Warning(
                 "UNSUPPORTED option combination: StepEquilibrationMode.DIRECT* and constraint_handling != ConstraintHandling.LEAST_SQUARES"
             )
+        if self.h_ctrl_intervals is not None:
+            if len(self.h_ctrl_intervals) != self.N_stages:
+                raise ValueError(f"h_ctrl_intervals length must be equal to N_stages ({self.N_stages}), got {len(self.h_ctrl_intervals)}")
+            if abs(sum(self.h_ctrl_intervals) - self.terminal_time) > 1e-8:
+                raise ValueError(f"Sum of h_ctrl_intervals ({sum(self.h_ctrl_intervals)}) must equal terminal_time ({self.terminal_time})")
         return
 
     ## Options in matlab..
