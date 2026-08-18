@@ -30,8 +30,8 @@ class MPCC(NLP):
         np = mpcc_dict["p"].size(1)
         f_fun = ca.Function("f", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["f"]])
         g_fun = ca.Function("g", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["g"]])
-        G_fun = ca.Function("H", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["G"]])
-        H_fun = ca.Function("G", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["H"]])
+        G_fun = ca.Function("G", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["G"]])
+        H_fun = ca.Function("H", [mpcc_dict["x"], mpcc_dict["p"]], [mpcc_dict["H"]])
 
         mpcc.w.x[()] = Primal("x", nx)
         mpcc.p.p[()] = Parameter("p", np)

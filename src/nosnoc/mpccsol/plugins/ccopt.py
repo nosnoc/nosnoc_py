@@ -75,6 +75,7 @@ class CCOptSolver(MpccsolPlugin):
             "G": G,
             "H": H,
         }
+        self.stats["ccopt_stats"] = self.solver.stats()
         return mpcc_results
 
 
