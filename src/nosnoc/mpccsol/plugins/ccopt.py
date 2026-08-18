@@ -77,7 +77,7 @@ class CCOptSolver(MpccsolPlugin):
             "H": H,
         }
         self.stats["ccopt_stats"] = self.solver.stats()
-        self.stats["t_wall"] = monotonic() - start
+        self.stats["wall_time_total"] = monotonic() - start
         self.stats["converged"] = self.solver.stats()["success"]
         return mpcc_results
 

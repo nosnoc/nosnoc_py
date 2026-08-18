@@ -97,8 +97,6 @@ class Qpcc():
         self.h = ca.DM.zeros(dims.ncc)
         self.lbx = np.copy(mpcc.w.lb)
         self.ubx = np.copy(mpcc.w.ub)
-        self.lbg = np.copy(mpcc.g.lb)
-        self.ubg = np.copy(mpcc.g.ub)
 
         self.solver_opts = None
         self.solver = None
@@ -110,14 +108,10 @@ class Qpcc():
         if cvx_opts.mode == ConvexificationMode.NONE:
             return
 
-        start = time.monotonic()
-        try:
-            L,D = ca.chol(self.Q)
+        L = ca.chol(self.Q)
+        if not np.any(np.isnan(np.array(L.nonzeros()))):
             return # cholesky succeeded, we are done.
-        except:
-            pass
-        print(f"time spent in chol: {time.monotonic() - start}")
-        start = time.monotonic()
+
         if cvx_opts.mode in (ConvexificationMode.PROJECT, ConvexificationMode.MIRROR):
             E,V = np.linalg.eig(self.Q.full())
             V = np.real(V)
@@ -126,10 +120,11 @@ class Qpcc():
             elif cvx_opts.mode == ConvexificationMode.MIRROR:
                 E = np.maximum(np.abs(E), cvx_opts.eps_hessian)
             Q = np.real(V@np.diag(E)@V.T)
-            # make small values in Q zero
+            # Make small values in Q zero
+            # This is done to minimize the numerical noise and subnormals which occur due to the Q calculation.
             Q[Q<10*np.finfo(float).eps] = 0.0
-            Q = 0.5*(Q+Q.T)
-            self.Q = ca.sparsify(ca.DM(Q), np.finfo(float).eps)
+            Q = 0.5*(Q+Q.T) # Make sure Q is numerically symmetric
+            self.Q = ca.sparsify(ca.DM(Q), np.finfo(float).eps) # Call sparsify so the numpy array isn't treated as dense.
                 
         elif cvx_opts.mode == ConvexificationMode.LEVENBERG_MARQUARDT:
             self.Q += ca.DM(np.diag(cvx_opts.lambda_lm)) # sledgehammer, but not guaranteed to be convex
@@ -139,12 +134,9 @@ class Qpcc():
                 self.Q += ca.DM(-np.abs(gersh_lb) + opts.eps_hessian*np.eye(self.dims.nx))
 
         self.Q_sparsity = self.Q.sparsity()
-        print(f"time spent in convexification: {time.monotonic() - start}")
         if self.solver_opts is not None:
-            start = time.monotonic()
             self.create_solver(self.solver_opts)
-            print(f"time spent in create_solver: {time.monotonic() - start}")
-        
+
 
     def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=np.inf, cvx_opts=None):
         """

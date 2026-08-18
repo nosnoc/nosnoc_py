@@ -13,25 +13,73 @@ from ..ocp import OcpSolver
 from ..qpcc import Qpcc, ConvexificationOptions, ConvexificationMode
 
 class PreparationStep(Enum):
-    NONE = auto()
-    SQPCC = auto()
-    FULL = auto()
+    """
+    An enum representing the several RTI Style algorithms.
+    """
+
+    NONE = auto()  #: HyRTI: No preparation step is taken other than re-linearizing.
+    SQPCC = auto() #: AS-HyRTI: Some number of QPCCs are solved as predictors.
+    FULL = auto()  #: Full-MPCC-HyRTI: The full nonlinar problem is solved during the preparation step.
 
 @dataclass
 class RTIOptions():
+    """
+    Options class for Real-Time Iteration style algorithms.
+    """
     warmstart: WarmstartType = WarmstartType.SHIFT
+    """
+    How to warmstart the nonlinear problem, if we are solving it.
+    """
+
     prepare_step: PreparationStep = PreparationStep.NONE
+    """
+    What kind of preparation step to take.
+    """
+
     n_advanced_steps: int = 1
+    """
+    The number of SQP(CC) steps to take during the preparation phase.
+
+    Info:
+        This only does anything when `prepare_step == PreparationStep.SQPCC`.
+    """
+
     cvx_opts: ConvexificationOptions = field(default_factory=ConvexificationOptions)
+    """
+    Convexification options for the QPCC solved in the `optimize` phase (and in the `prepare` phase if using an AS-RTI style algorithm).
+    """
+
     gauss_newton_hessian: bool = True
+    """
+    Whether to use the Gauss-Newton Hessian (i.e. dropping constraint contributuion) or the exact Hessian.
+    """
+
     use_complementarity_hessian: bool = True
+    """
+    Whether to use the MPCC Lagrangian or the to ignore the complementarity constraint multiplier contribution.
+    """
+
     mpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
+    """
+    Options for the solver which is used to solve the nonlinear problem.
+    """
+
     qpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
+    """
+    Options for the solver which is used to solve the QPCC.
+    """
 
 @dataclass
 class RTIStats(RealtimeOptimizationStats):
     optimize_solve_time: List[float] = field(default_factory=list)
+    """
+    Time spent in the solver during the "feedback" (using the mpc language) phase.
+    """
+
     advanced_step_solve_time: List[float] = field(default_factory=list)
+    """
+    Time spent in the solver during the "preparation" phase.
+    """
 
 class RTIAlgorithm(RealtimeOptimizationAlgorithm):
 
@@ -80,6 +128,8 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
         self.ocp_solver.dtp.w.res += self.qpcc.mpcc.w.res
         np.copyto(self.ocp_solver.dtp.w.mult,self.qpcc.mpcc.w.mult)
         np.copyto(self.ocp_solver.dtp.g.mult,self.qpcc.mpcc.g.mult)
+        np.copyto(self.ocp_solver.dtp.G.mult,self.qpcc.mpcc.G.mult)
+        np.copyto(self.ocp_solver.dtp.G.mult,self.qpcc.mpcc.H.mult)
 
     @override
     def _optimize(self, **kwargs):
@@ -89,7 +139,7 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
         else:
             self._measurement(**kwargs)
             self._take_qpcc_step()
-            self.stats.optimize_solve_time.append(self.qpcc.solver.stats["t_wall"])
+            self.stats.optimize_solve_time.append(self.qpcc.solver.stats["wall_time_total"])
             self.last_converged = self.qpcc.solver.stats["converged"]
         return self._get_result()
 
@@ -100,22 +150,27 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
             self.__warmstart_ocp()
             self._prediction(**kwargs)
             self.ocp_solver.solve()
+            self.stats.advanced_step_solve_time.append(self.ocp_solver.dtp.solver.stats["wall_time_total"])
         elif self.rt_opts.prepare_step == PreparationStep.SQPCC:
             self._prediction(**kwargs)
             for ii in range(self.rt_opts.n_advanced_steps):
                 # linearize at the current solution + predicted update
+                advanced_step_solve_time = 0.0
                 self.qpcc.linearize(
                     self.ocp_solver.dtp.w.res,
                     lam_g=self.ocp_solver.dtp.g.mult if not self.rt_opts.gauss_newton_hessian else None,
                     lam_G=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
-                    lam_H=self.ocp_solver.dtp.G.mult if not self.rt_opts.gauss_newton_hessian else None,
-                    cvx_opts=self.rt_opts.cvx_opts
+                    lam_H=self.ocp_solver.dtp.H.mult if not self.rt_opts.gauss_newton_hessian else None,
+                    cvx_opts=self.rt_opts.cvx_opts,
                 )
                 self.qpcc.update_bounds()
                 # solve a sinqle sqpcc step
                 self._take_qpcc_step()
+                advanced_step_solve_time += self.qpcc.solver.stats["wall_time_total"]
                 # TODO(@anton): implement warmstart qpcc
-                
+            self.stats.advanced_step_solve_time.append(advanced_step_solve_time)
+        else:
+            self.stats.advanced_step_solve_time.append(0)
         self.qpcc.linearize(
             self.ocp_solver.dtp.w.res,
             lam_g=self.ocp_solver.dtp.g.mult if not self.rt_opts.gauss_newton_hessian else None,
