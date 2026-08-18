@@ -1,5 +1,4 @@
-from parametric_cart_pole_with_friction import get_default_opts, parameteric_cart_pole_model
-from pendulum_utils import _plot_results
+from .pendulum_utils import _plot_results
 
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
@@ -7,6 +6,7 @@ import numpy as np
 
 CCOPT = False
 RTI = True
+PRINT_LOG = False
 
 T_OCP = 1.0
 N_STAGES = 10
@@ -14,6 +14,18 @@ T_STEP = T_OCP/N_STAGES
 T_MPC = 5.0
 N_MPC = round(T_MPC/T_STEP)
 N_SIM = 5
+
+def get_default_opts(**kwargs):
+    default_opts = {
+        "rk_scheme"          : ns.RKScheme.RADAU_IIA,
+        "n_s"                : 2,
+        "N_stages"           : 20,  # number of control intervals
+        "N_finite_elements"  : 2,   # number of finite element on every control intevral
+        "T"                  : 5.0, # Time horizon
+        "print_level"        : 0,
+    }
+    return ns.Options(**(default_opts | kwargs))
+
 
 def cartpole_mpc_model():
     ## Model defintion
@@ -65,7 +77,7 @@ def cartpole_mpc_model():
     #x0 = np.array([0.0, 0 / 180 * np.pi, 0, 0])  # start downwards
 
     Q = np.diag([1, 10, 1, 1])
-    Q_terminal = np.diag([1000, 1000, 1, 1])
+    Q_terminal = np.diag([1000, 1000, 10, 10])
     R = 0.1
 
     # Stage cost
@@ -170,7 +182,7 @@ def _build_full_mpc():
 
     return opts,model,mpc
 
-def _build_rti():
+def _build_rti(prepare_step=ns.rtopt.PreparationStep.SQPCC, n_advanced_steps=3):
     opts = get_default_opts(T=T_OCP, N_stages=N_STAGES, n_s=3, cross_comp_mode=ns.CrossComplementarityMode.FE_FE)
     model = cartpole_mpc_model()
     if CCOPT:
@@ -183,19 +195,17 @@ def _build_rti():
         qpcc_opts.madnlp_opts["linear_solver"] = "Ma27Solver"
         qpcc_opts.madnlp_opts["print_level"] = 6
         qpcc_opts.madnlp_opts["disable_garbage_collector"] = True
-        #solver_opts.madnlp_opts["barrier.TYPE"] = "MonotoneUpdate"
         qpcc_opts.ccopt_opts["relaxation_update.TYPE"] = "RolloffRelaxationUpdate"
         qpcc_opts.ccopt_opts["print_level"] = 6
-        #solver_opts.ccopt_opts["relaxation_update.sigma_min"] = 1e-7
     else:
         mpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
         qpcc_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     mpc_opts = ns.rtopt.RTIMPCOptions(
         mpcc_solver_opts=mpcc_opts,
         qpcc_solver_opts=qpcc_opts,
-        prepare_step=ns.rtopt.PreparationStep.SQPCC,
-        n_advanced_steps=1,
-        cvx_opts=ns.ConvexificationOptions(mode=ns.ConvexificationMode.MIRROR)
+        prepare_step=prepare_step,
+        n_advanced_steps=n_advanced_steps,
+        cvx_opts=ns.ConvexificationOptions(mode=ns.ConvexificationMode.NONE)
     )
     mpc = ns.rtopt.RTIMPC(model,opts,mpc_opts)
 
@@ -211,10 +221,10 @@ def _build_integrator():
 
     return ns.Integrator(model, opts, integrator_opts)
 
-def main():
+def main(rti=RTI, plot=False, prepare_step=ns.rtopt.PreparationStep.SQPCC, n_advanced_steps=3):
 
-    if RTI:
-        opts,model,mpc = _build_rti()
+    if rti:
+        opts,model,mpc = _build_rti(prepare_step=prepare_step, n_advanced_steps=n_advanced_steps)
     else:
         opts,model,mpc = _build_full_mpc()
     integrator = _build_integrator()
@@ -233,15 +243,20 @@ def main():
         t_grid.append(control_grid[-1]+t_grid_ii[1:])
         control_grid.append(control_grid[-1] + T_STEP)
         x_last = x_ii[-1,:]
-        #x_last = mpc.get_predicted_state()
-        print(f"x_last = {x_last}")
-        print(f"x_pred = {mpc.get_predicted_state()}")
-        print(f"error = {np.linalg.norm(x_last - mpc.get_predicted_state())}")
-        print(f"u = {u}")
+        if PRINT_LOG:
+            print(f"x_last = {x_last}")
+            print(f"x_pred = {mpc.get_predicted_state()}")
+            print(f"error = {np.linalg.norm(x_last - mpc.get_predicted_state())}")
+            print(f"u = {u}")
         mpc.prepare(x_pred=mpc.get_predicted_state())
 
-    _plot_results(np.vstack(X),np.array(U),np.concatenate(t_grid),np.array(control_grid))
-
+    x_res = np.vstack(X)
+    u_res = np.array(U)
+    t_grid = np.concatenate(t_grid)
+    control_grid = np.array(control_grid)
+    if plot:
+        _plot_results(x_res,u_res,t_grid,control_grid)
+    return x_res,u_res,t_grid,control_grid
 
 if __name__ == "__main__":
-    main()
+    main(plot=True)
