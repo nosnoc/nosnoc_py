@@ -466,9 +466,10 @@ class Base(ABC,MPCC):
             # warmstart controls
             self.w.u[ii](init=self.w.u[next_ii].res)
             # warmstart h
-            self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)](
-                init=self.w.h[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
-            )
+            if opts.use_fesd:
+                self.w.h[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                    init=self.w.h[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+                )
             # warmstart x
             if opts.rk_representation in (RKRepresentation.INTEGRAL,RKRepresentation.DIFFERENTIAL_LIFT_X):
                 self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](

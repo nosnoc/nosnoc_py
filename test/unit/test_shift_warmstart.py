@@ -8,16 +8,17 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
 )
 
 rk_options = [
-    (rk_representation, rk_scheme)
+    (rk_representation, rk_scheme, use_fesd)
     for rk_representation in ns.RKRepresentation
     for rk_scheme in ns.RKScheme
+    for use_fesd in (True,False)
 ]
 
 
 class TestShiftWarmstart(unittest.TestCase):
 
     @parameterized.expand(rk_options)
-    def test_stewart(self, rk_representation, rk_scheme):
+    def test_stewart(self, rk_representation, rk_scheme, use_fesd):
         """
         Test Stewart DTP shift warmstart routine.
         """
@@ -30,7 +31,8 @@ class TestShiftWarmstart(unittest.TestCase):
             n_s = 2,
             rk_representation = rk_representation,
             rk_scheme = rk_scheme,
-            dcs_mode = ns.DcsMode.STEWART
+            dcs_mode = ns.DcsMode.STEWART,
+            use_fesd=use_fesd,
         )
         solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
         model = get_sliding_mode_ocp_description()
@@ -50,7 +52,7 @@ class TestShiftWarmstart(unittest.TestCase):
             res = var[N_stages,:,:].res
             self.assertTrue(np.allclose(init,res))
         # check depth 2 variables
-        for name in ["h"]:
+        for name in (["h"] if opts.use_fesd else []):
             var = getattr(solver.dtp.w,name)
             for ii in range(1,N_stages):
                 init = var[ii,:].init
@@ -73,7 +75,7 @@ class TestShiftWarmstart(unittest.TestCase):
 
 
     @parameterized.expand(rk_options)
-    def test_heaviside(self, rk_representation, rk_scheme):
+    def test_heaviside(self, rk_representation, rk_scheme, use_fesd):
         """
         Test Heaviside DTP shift warmstart routine.
         """
@@ -86,7 +88,8 @@ class TestShiftWarmstart(unittest.TestCase):
             n_s = 2,
             rk_representation = rk_representation,
             rk_scheme = rk_scheme,
-            dcs_mode = ns.DcsMode.STEP
+            dcs_mode = ns.DcsMode.STEP,
+            use_fesd=use_fesd,
         )
         solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
         model = get_sliding_mode_ocp_description()
@@ -106,7 +109,7 @@ class TestShiftWarmstart(unittest.TestCase):
             res = var[N_stages,:,:].res
             self.assertTrue(np.allclose(init,res))
         # check depth 2 variables
-        for name in ["h"]:
+        for name in (["h"] if opts.use_fesd else []):
             var = getattr(solver.dtp.w,name)
             for ii in range(1,N_stages):
                 init = var[ii,:].init
