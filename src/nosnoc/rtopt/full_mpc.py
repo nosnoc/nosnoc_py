@@ -17,7 +17,7 @@ class FullMPCOptions():
 
 @dataclass
 class FullMPCStats(RealtimeOptimizationStats):
-    optimize_solve_time: List[float] = field(default_factory=list)
+    update_solve_time: List[float] = field(default_factory=list)
 
 
 class FullMPC(RealtimeOptimizationAlgorithm):
@@ -28,10 +28,10 @@ class FullMPC(RealtimeOptimizationAlgorithm):
         self.stats = FullMPCStats()
 
     @override
-    def _optimize(self, x0):
+    def _update(self, x0):
         self.ocp_solver.set_x0(x0)
         self.ocp_solver.solve()
-        self.stats.optimize_solve_time.append(self.ocp_solver.dtp.solver.stats["t_wall"])
+        self.stats.update_solve_time.append(self.ocp_solver.dtp.solver.stats["t_wall"])
         self.last_converged = self.ocp_solver.dtp.solver.stats["converged"]
         return self.ocp_solver.dtp.w.u[1].res
 

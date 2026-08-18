@@ -12,8 +12,8 @@ class WarmstartType(Enum):
 
 @dataclass
 class RealtimeOptimizationStats():
-    optimize_time: List[float] = field(default_factory=list) #: Total time spent in the "feedback" (using the mpc terms) phase.
-    prepare_time: List[float]  = field(default_factory=list) #: Total time spent in the "preparation" phase.
+    update_time: List[float] = field(default_factory=list) #: Total time spent in the "feedback" (using the mpc terms) phase.
+    prepare_time: List[float]  = field(default_factory=list) #: Total time spent in the "preparation" phase.\
 
 
 class RealtimeOptimizationAlgorithm(ABC):
@@ -25,20 +25,27 @@ class RealtimeOptimizationAlgorithm(ABC):
         self.ocp_opts = ocp_opts
         self.rt_opts = rt_opts
 
-    def optimize(self, **kwargs):
+    def update(self, **kwargs):
+        """
+        The "correction" phase of an real-time optimization algorithm where the next output is calculated.
+        """
         start = monotonic()
-        ret = self._optimize(**kwargs)
-        self.stats.optimize_time.append(monotonic() - start)
+        ret = self._update(**kwargs)
+        self.stats.update_time.append(monotonic() - start)
         return ret
 
     def prepare(self, **kwargs):
+        """
+        The "preparation" phase of an real-time optimization algorithm where numerical data is calculated in preparation for the next update.
+        """
+
         start = monotonic()
         ret = self._prepare(**kwargs)
         self.stats.prepare_time.append(monotonic() - start)
         return ret
 
     @abstractmethod
-    def _optimize(self, **kwargs):
+    def _update(self, **kwargs):
         """
         Take single optimization step for the current time step parameters.
         """

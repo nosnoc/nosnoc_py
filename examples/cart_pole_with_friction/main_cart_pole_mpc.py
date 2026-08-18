@@ -225,7 +225,7 @@ def main():
     U = []
     control_grid = [0.0]
     for ii in range(N_MPC):
-        u = mpc.optimize(x0=x_last)
+        u = mpc.update(x0=x_last)
         u_sim = np.kron(np.ones((N_SIM,1)), u)
         t_grid_ii, x_ii,_,_ = integrator.simulate(x_last, u=u_sim)
         X.append(x_ii[1:,:])

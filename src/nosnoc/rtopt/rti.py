@@ -71,7 +71,7 @@ class RTIOptions():
 
 @dataclass
 class RTIStats(RealtimeOptimizationStats):
-    optimize_solve_time: List[float] = field(default_factory=list)
+    update_solve_time: List[float] = field(default_factory=list)
     """
     Time spent in the solver during the "feedback" (using the mpc language) phase.
     """
@@ -132,14 +132,14 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
         np.copyto(self.ocp_solver.dtp.G.mult,self.qpcc.mpcc.H.mult)
 
     @override
-    def _optimize(self, **kwargs):
+    def _update(self, **kwargs):
         if not self.initialized:
             self.last_converged = self._initial_solve(**kwargs)
             self.initialized = True
         else:
             self._measurement(**kwargs)
             self._take_qpcc_step()
-            self.stats.optimize_solve_time.append(self.qpcc.solver.stats["wall_time_total"])
+            self.stats.update_solve_time.append(self.qpcc.solver.stats["wall_time_total"])
             self.last_converged = self.qpcc.solver.stats["converged"]
         return self._get_result()
 
