@@ -1,0 +1,52 @@
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import override, List, Union
+
+import casadi as ca
+import numpy as np
+
+from .rtopt import RealtimeOptimizationAlgorithm, RealtimeOptimizationStats, WarmstartType
+from ..mpccsol.plugins.reg_homotopy import RegHomotopyOptions
+from ..mpccsol.plugins.ccopt import CCOptOptions
+from ..ocp import OcpSolver
+
+@dataclass
+class FullMPCOptions():
+    warmstart: WarmstartType = WarmstartType.SHIFT
+    mpcc_solver_opts: Union[RegHomotopyOptions,CCOptOptions] = field(default_factory=RegHomotopyOptions)
+
+@dataclass
+class FullMPCStats(RealtimeOptimizationStats):
+    update_solve_time: List[float] = field(default_factory=list)
+
+
+class FullMPC(RealtimeOptimizationAlgorithm):
+    def __init__(self, model, ocp_opts, rt_opts):
+        super().__init__(model, ocp_opts, rt_opts)
+        self.ocp_solver = OcpSolver(model, ocp_opts, rt_opts.mpcc_solver_opts)
+        self.last_converged = False
+        self.stats = FullMPCStats()
+
+    @override
+    def _update(self, x0):
+        self.ocp_solver.set_x0(x0)
+        self.ocp_solver.solve()
+        self.stats.update_solve_time.append(self.ocp_solver.dtp.solver.stats["t_wall"])
+        self.last_converged = self.ocp_solver.dtp.solver.stats["converged"]
+        return self.ocp_solver.dtp.w.u[1].res
+
+    @override
+    def _prepare(self, x_pred):
+        if self.last_converged:
+            if self.rt_opts.warmstart == WarmstartType.WARMSTART_PRIMALS:
+                self.ocp_solver.warmstart(duals=False)
+            elif self.rt_opts.warmstart == WarmstartType.WARMSTART_ALL:
+                self.ocp_solver.warmstart(duals=True)
+            elif self.rt_opts.warmstart == WarmstartType.SHIFT:
+                self.ocp_solver.warmstart_shift()
+        else:
+            pass
+
+
+    def get_predicted_state(self):
+        return self.ocp_solver.dtp.w.x[1,:,:].res[-1,:].flatten()

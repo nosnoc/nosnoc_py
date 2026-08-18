@@ -1,16 +1,33 @@
 from copy import copy
 from dataclasses import dataclass
+from enum import Enum, auto
+import time
 
 import casadi as ca
 import numpy as np
 from .mpccsol import mpccsol
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
+from .mpccsol.plugins.ccopt import CCOptOptions
+from .mpcc import MPCC
 
 @dataclass
 class QpccDims():
     nx: int
     ng: int
     ncc: int
+
+class ConvexificationMode(Enum):
+    NONE                = auto() #: No convexification.
+    PROJECT             = auto() #: Clip eigenvalues to `>=eps_hessian`.
+    MIRROR              = auto() #: Take the absolute value of the eigenvalues and clip them to `>=eps_hessian`.
+    LEVENBERG_MARQUARDT = auto() #: Add `lambda_lm` times the identity to the Hessian
+    GERSHGORIN          = auto() #: Use Gershgorin circle theorem to add a sufficiently large identity to the Hessian.
+
+@dataclass
+class ConvexificationOptions():
+    mode: ConvexificationMode = ConvexificationMode.NONE #: Convexification mode
+    eps_hessian: float        = 1e-6 #: Minimum Hessian eigenvalue.
+    lambda_lm: float          = 1e-8 #: Levenberg Marquardt constant.
     
 class Qpcc():
     """
@@ -29,7 +46,14 @@ class Qpcc():
         This includes constructing the Lagrange-Hessian function, constraint Jacobian, and objective gradient.
         Space is allocated for evaluating these functions.
         """
-        self.mpcc = copy(mpcc)
+        self.mpcc = MPCC(type(mpcc.f),name=f"{mpcc.name}_qpcc_copy")
+        self.mpcc.f = mpcc.f
+        self.mpcc.w = copy(mpcc.w)
+        self.mpcc.g = copy(mpcc.g)
+        self.mpcc.p = copy(mpcc.p)
+        self.mpcc.G = copy(mpcc.G)
+        self.mpcc.H = copy(mpcc.H)
+
         self.use_mpcc_multipliers = use_mpcc_multipliers
         dims = QpccDims(nx=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
         self.dims = dims
@@ -39,9 +63,9 @@ class Qpcc():
         lam_G = mpcc.G.symbolic_type.sym("lam_G", dims.ncc)
         lam_H = mpcc.H.symbolic_type.sym("lam_H", dims.ncc)
         if use_mpcc_multipliers: # TODO(@anton) check sign convention for lam_G, lam_H
-            L = mpcc.f - ca.dot(lam_g, mpcc.g.sym) - ca.dot(lam_G, mpcc.G.sym) - ca.dot(lam_H, mpcc.H.sym)
+            L = mpcc.f + ca.dot(lam_g, mpcc.g.sym) + ca.dot(lam_G, mpcc.G.sym) + ca.dot(lam_H, mpcc.H.sym)
         else:
-            L = mpcc.f - ca.dot(lam_g, mpcc.g.sym)
+            L = mpcc.f + ca.dot(lam_g, mpcc.g.sym)
         hess_L,nabla_L = ca.hessian(L, mpcc.w.sym)
         grad_f = ca.gradient(mpcc.f, mpcc.w.sym)
         jac_g = ca.jacobian(mpcc.g.sym, mpcc.w.sym)
@@ -49,6 +73,7 @@ class Qpcc():
         jac_H = ca.jacobian(mpcc.H.sym, mpcc.w.sym)
 
         self.Q_sparsity = hess_L.sparsity()
+        self.Q_sparsity_orig = self.Q_sparsity
         self.A_sparsity = jac_g.sparsity()
         self.G_sparsity = jac_G.sparsity()
         self.H_sparsity = jac_H.sparsity()
@@ -72,19 +97,51 @@ class Qpcc():
         self.h = ca.DM.zeros(dims.ncc)
         self.lbx = np.copy(mpcc.w.lb)
         self.ubx = np.copy(mpcc.w.ub)
-        self.lbg = np.copy(mpcc.g.lb)
-        self.ubg = np.copy(mpcc.g.ub)
 
+        self.solver_opts = None
         self.solver = None
 
+    def convexify(self, cvx_opts):
+        """
+        Convexifies the hessian and rebuilds the parmetric solve object.
+        """
+        if cvx_opts.mode == ConvexificationMode.NONE:
+            return
 
-    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=np.inf):
+        L = ca.chol(self.Q)
+        if not np.any(np.isnan(np.array(L.nonzeros()))):
+            return # cholesky succeeded, we are done.
+
+        if cvx_opts.mode in (ConvexificationMode.PROJECT, ConvexificationMode.MIRROR):
+            E,V = np.linalg.eig(self.Q.full())
+            V = np.real(V)
+            if cvx_opts.mode == ConvexificationMode.PROJECT:
+                E = np.maximum(E, cvx_opts.eps_hessian)
+            elif cvx_opts.mode == ConvexificationMode.MIRROR:
+                E = np.maximum(np.abs(E), cvx_opts.eps_hessian)
+            Q = np.real(V@np.diag(E)@V.T)
+            # Make small values in Q zero
+            # This is done to minimize the numerical noise and subnormals which occur due to the Q calculation.
+            Q[Q<10*np.finfo(float).eps] = 0.0
+            Q = 0.5*(Q+Q.T) # Make sure Q is numerically symmetric
+            self.Q = ca.sparsify(ca.DM(Q), np.finfo(float).eps) # Call sparsify so the numpy array isn't treated as dense.
+                
+        elif cvx_opts.mode == ConvexificationMode.LEVENBERG_MARQUARDT:
+            self.Q += ca.DM(np.diag(cvx_opts.lambda_lm)) # sledgehammer, but not guaranteed to be convex
+        elif cvx_opts.mode == ConvexificationMode.GERSHGORIN:
+            gersh_lb = ca.min(ca.diag(self.Q) - ca.sum(ca.abs(self.Q - ca.diag(Qsym)), 2))
+            if gersh_lb < cvx_opt.eps_hessian:
+                self.Q += ca.DM(-np.abs(gersh_lb) + opts.eps_hessian*np.eye(self.dims.nx))
+
+        self.Q_sparsity = self.Q.sparsity()
+        if self.solver_opts is not None:
+            self.create_solver(self.solver_opts)
+
+
+    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=np.inf, cvx_opts=None):
         """
         Linearize the parent MPCC at the point given by `x0`, and optionally `lam_g`, `lam_G`, `lam_H`.
         Optionally also apply a ell infinity trust region constraint on the primal variables with radius `tr`.
-
-        Todo:
-           Implement convexification options!
         """
         self.mpcc.w.init = x0
         if lam_g is not None:
@@ -104,6 +161,9 @@ class Qpcc():
 
 
         self.Q = self.Q_fun(self.mpcc.w.init, self.mpcc.g.init_mult, self.mpcc.G.init_mult, self.mpcc.H.init_mult, self.mpcc.p.val)
+        self.Q_sparsity = self.Q_sparsity_orig
+        if cvx_opts is not None:
+            self.convexify(cvx_opts)
         self.q = self.q_fun(self.mpcc.w.init, self.mpcc.p.val)
 
         self.A = self.A_fun(self.mpcc.w.init, self.mpcc.p.val)
@@ -115,9 +175,10 @@ class Qpcc():
         self.H = self.H_fun(self.mpcc.w.init, self.mpcc.p.val)
         self.h = self.h_fun(self.mpcc.w.init, self.mpcc.p.val)
 
+    def update_bounds(self, tr=np.inf):
         # setup tr
-        self.lbx = np.maximum(self.mpcc.w.lb - x0, -tr)
-        self.ubx = np.minimum(self.mpcc.w.ub - x0, tr)
+        self.lbx = np.maximum(self.mpcc.w.lb - self.mpcc.w.init, -tr)
+        self.ubx = np.minimum(self.mpcc.w.ub - self.mpcc.w.init, tr)
 
 
     def solve(self):
@@ -147,8 +208,11 @@ class Qpcc():
         Create the solver for this QPCC.
         Currently only supports solving the QPCC via `mpccsol`.
         """
+        self.solver_opts = opts
         if isinstance(opts, RegHomotopyOptions):
             self._build_mpccsol_solver("reg_homotopy", opts)
+        elif isinstance(opts, CCOptOptions):
+            self._build_mpccsol_solver("ccopt", opts)
         else:
            raise NotImplementedError("Only the reg_homotopy plugin for mpccsol is currently supported.")
 
@@ -163,14 +227,18 @@ class Qpcc():
         Build the mpccsol based solver for the QPCC.
         Currently this only supports only the `reg_homotopy_solver
         """
-        Q = ca.SX.sym("Q", self.Q_sparsity)
+        Q_flat = ca.SX.sym("Q", self.Q_sparsity.nnz())
+        Q = ca.sparsity_cast(Q_flat,self.Q_sparsity)
         q = ca.SX.sym("q", self.q.size())
-        A = ca.SX.sym("A", self.A_sparsity)
+        A_flat = ca.SX.sym("A", self.A_sparsity.nnz())
+        A = ca.sparsity_cast(A_flat, self.A_sparsity)
         b = ca.SX.sym("b", self.b.size())
-        G = ca.SX.sym("G", self.G_sparsity)
+        G_flat = ca.SX.sym("G", self.G_sparsity.nnz())
+        G = ca.sparsity_cast(G_flat, self.G_sparsity)
         g = ca.SX.sym("g", self.g.size())
-        H = ca.SX.sym("H", self.H_sparsity)
-        h = ca.SX.sym("h", self.g.size())
+        H_flat = ca.SX.sym("H", self.H_sparsity.nnz())
+        H = ca.sparsity_cast(H_flat, self.H_sparsity)
+        h = ca.SX.sym("h", self.h.size())
 
         x = ca.SX.sym("x", self.dims.nx)
 
@@ -180,7 +248,7 @@ class Qpcc():
         H_expr = H@x + h
         qpcc = {
             "x": x,
-            "p": ca.vertcat(*(Q.nonzeros()),q, *(A.nonzeros()),b, *(G.nonzeros()),g, *(H.nonzeros()),h),
+            "p": ca.vertcat(Q_flat, q, A_flat, b, G_flat, g, H_flat, h),
             "f": f_expr,
             "g": g_expr,
             "G": G_expr,
