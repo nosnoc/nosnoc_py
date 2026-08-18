@@ -1,9 +1,15 @@
-import numpy as np
-
 import matplotlib.pyplot as plt
 import matplotlib
 
+from scipy import sparse
+import numpy as np
 
+def plot_sparsity(A, show=True):
+    I, J = A.sparsity().get_triplet()
+    A_sparse = sparse.coo_array((np.ones(len(I)),np.array([I,J])), shape=A.size())
+    plt.figure();plt.spy(A_sparse, marker='o', markersize=2)
+    if show:
+        plt.show(block=False)
 
 def latexify_plot():
     params = {
