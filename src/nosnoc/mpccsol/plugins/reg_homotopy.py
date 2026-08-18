@@ -1,4 +1,5 @@
 import time
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Optional, List, override
 from copy import copy
@@ -20,77 +21,74 @@ class HomotopySteeringStrategy(Enum):
     ELL_1 = auto()
     ELL_INF = auto()
 
-# TODO(@anton) make this a dataclass?
-
+@dataclass
 class RegHomotopyOptions():
-    def __init__(self):
-        self.solver_name: str = 'nosnoc_solver'
-        self.solver: str      = 'ipopt'
+    solver_name: str = 'nosnoc_solver'
+    solver: str      = 'ipopt'
 
-        # MPCC and Homotopy Settings
-        self.complementarity_tol: float               = 1e-8
-        self.objective_scaling_direct: bool           = True
-        self.sigma_0: float                           = 1
-        self.sigma_N: float                           = 1e-9
-        self.homotopy_update_rule: HomotopyUpdateRule = HomotopyUpdateRule.LINEAR
-        self.assume_lower_bounds: bool                = True;
-        self.lift_complementarities: bool             = False;
+    # MPCC and Homotopy Settings
+    complementarity_tol: float               = 1e-8
+    objective_scaling_direct: bool           = True
+    sigma_0: float                           = 1
+    sigma_N: float                           = 1e-15
+    homotopy_update_rule: HomotopyUpdateRule = HomotopyUpdateRule.LINEAR
+    assume_lower_bounds: bool                = True
+    lift_complementarities: bool             = False # TODO(@anton) Not implemented
 
-        self.homotopy_update_slope: float           = 0.1
-        self.homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule
-        self.N_homotopy                             = 10 # Maximum number of nlp solves
-        self.s_elastic_max: float                   = 1e1
-        self.s_elastic_min: float                   = 0.0
-        self.s_elastic_0: float                     = 1.0
-        self.decreasing_s_elastic_upper_bound: bool = True
+    homotopy_update_slope: float           = 0.1
+    homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule
+    N_homotopy: int                        = 10 # Maximum number of nlp solves
+    s_elastic_max: float                   = 1e1
+    s_elastic_min: float                   = 0.0
+    s_elastic_0: float                     = 1.0
+    decreasing_s_elastic_upper_bound: bool = True
 
-        # Verbose
-        self.print_level: int = 3
+    # Verbose
+    print_level: int = 3
 
-        # nlp solver Settings
-        self.opts_casadi_nlp: dict = {
-            "print_time": 0,
-            "verbose": False,
-            "ipopt": {
-                "sb"                      : 'yes',
-                "print_level"             : 0,
-                "max_iter"                : 3000,
-                "bound_relax_factor"      : 0,
-                "tol"                     : 1e-8,
-                "dual_inf_tol"            : 1e-8,
-                "dual_inf_tol"            : 1e-8,
-                "compl_inf_tol"           : 1e-8,
-                "acceptable_tol"          : 1e-6,
-                "mu_strategy"             : 'adaptive',
-                "mu_oracle"               : 'quality-function',
-                "warm_start_init_point"   : 'yes',
-                "linear_solver"           : 'mumps',
-                "mumps_pivtol"            : 1e-4,
-                "mumps_permuting_scaling" : 3
-            }
-            #snopt: {}
-            #worhp: {}
-            #uno: {}
+    # nlp solver Settings
+    opts_casadi_nlp: dict = field(default_factory=lambda: {
+        "print_time": 0,
+        "verbose": False,
+        "ipopt": {
+            "sb"                      : 'yes',
+            "print_level"             : 0,
+            "max_iter"                : 3000,
+            "bound_relax_factor"      : 0,
+            "tol"                     : 1e-8,
+            "dual_inf_tol"            : 1e-8,
+            "dual_inf_tol"            : 1e-8,
+            "compl_inf_tol"           : 1e-8,
+            "acceptable_tol"          : 1e-6,
+            "mu_strategy"             : 'adaptive',
+            "mu_oracle"               : 'quality-function',
+            "warm_start_init_point"   : 'yes',
+            "linear_solver"           : 'mumps',
+            "mumps_pivtol"            : 1e-4,
+            "mumps_permuting_scaling" : 3
         }
+        #snopt: {}
+        #worhp: {}
+        #uno: {}
+    })
 
-        #
-        self.relaxation_strategy: MpccRelaxation                  = ScholtesRelaxation(inequality=True)
-        self.homotopy_steering_strategy: HomotopySteeringStrategy = HomotopySteeringStrategy.DIRECT
+    #
+    relaxation_strategy: MpccRelaxation                  = ScholtesRelaxation(inequality=True)
+    homotopy_steering_strategy: HomotopySteeringStrategy = HomotopySteeringStrategy.DIRECT
 
-        self.timeout_cpu: float  = 0
-        self.timeout_wall: float = 0
+    timeout_cpu: float  = 0
+    timeout_wall: float = 0
 
-        self.store_all_homotopy_iters: bool  = True # store every NLP solution in the homotopy loop;
+    store_all_homotopy_iters: bool  = True # store every NLP solution in the homotopy loop;
 
 
 class RegHomotopySolver(MpccsolPlugin):
     @override
     def _build_solver(self):
         self.f_relax = 0.0
-        if isinstance(self.mpcc, ns.MPCC):
-            self._build_solver_vdx()
-        elif isinstance(self.mpcc, dict):
-            self._build_solver_dict()
+        if isinstance(self.mpcc, dict):
+            self._convert_dict_to_mpcc()
+        self._build_solver_impl()
 
     def _update_nlp_vectors(
             self,
@@ -228,7 +226,6 @@ class RegHomotopySolver(MpccsolPlugin):
                 self.nlp.f = self.nlp.f*self.nlp.p.sigma[()] + self.nlp.w.s_elastic[()]
 
     def _get_relaxation_var(self, name, idx, length):
-
         if self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.DIRECT:
             return np.ones(length)*self.nlp.p.sigma[()].sym
         elif self.opts.homotopy_steering_strategy == HomotopySteeringStrategy.ELL_INF:
@@ -249,7 +246,29 @@ class RegHomotopySolver(MpccsolPlugin):
                 self.f_relax += self.nlp.f*self.nlp.p.sigma[()] + ca.norm_1(s)
             return s
 
-    def _build_solver_vdx(self):
+    def _convert_dict_to_mpcc(self):
+        """
+        If reg_homotopy is passed a dictionary, we convert it to an nosnoc MPCC object.
+        This object inherits the lack of structure but allows us to reuse the vdx based handling in _build_solver.
+        In order to minimize memory overhead, we use MX symbolics.
+        """
+        mpcc = ns.MPCC(symbolic_type=ca.MX)
+        nx = self.mpcc["x"].size(1)
+        np = self.mpcc["p"].size(1)
+        f_fun = ca.Function("f", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["f"]])
+        g_fun = ca.Function("g", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["g"]])
+        G_fun = ca.Function("G", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["G"]])
+        H_fun = ca.Function("H", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["H"]])
+
+        mpcc.w.x[()] = Primal("x", nx)
+        mpcc.p.p[()] = Parameter("p", np)
+        mpcc.g.g[()] = Constraint(g_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.G.cc[()] = Constraint(G_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.H.cc[()] = Constraint(H_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.f = f_fun(mpcc.w.x[()], mpcc.p.p[()])
+        self.mpcc = mpcc
+
+    def _build_solver_impl(self):
         """
         Build the regularization homotopy solver from a vdx MPCC class.
         """
@@ -264,13 +283,13 @@ class RegHomotopySolver(MpccsolPlugin):
         for (name,Gvar) in self.mpcc.G.variables.items():
             Hvar = self.mpcc.H.variables[name]
             for idx in Gvar.ind_map.keys():
-                # TODO(@anton) do non sholtes
+                # TODO(@anton) do non scholtes
                 length = Gvar[*idx].sym.size(1)
                 relax, lb1, lb2 = self.opts.relaxation_strategy.relax(Gvar[*idx].sym, Hvar[*idx].sym, self._get_relaxation_var(name,idx,length))
                 if not self.opts.assume_lower_bounds:
                     full_relax = ca.vertcat(relax[0], lb1[0], lb2[0])
                     full_lb = np.concatenate([relax[1], lb1[1], lb2[1]])
-                    full_ub = np.concatenate([relax[1], lb1[2], lb2[2]])
+                    full_ub = np.concatenate([relax[2], lb1[2], lb2[2]])
                 else:
                     full_relax = relax[0]
                     full_lb = relax[1]
@@ -295,12 +314,6 @@ class RegHomotopySolver(MpccsolPlugin):
         self.G_mpcc_fun = ca.Function("G_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.G.sym])
         self.H_mpcc_fun = ca.Function("H_mpcc", [self.nlp.w.sym, self.nlp.p.sym], [self.mpcc.H.sym])
         self.comp_res_fun = ca.Function("comp_res", [self.nlp.w.sym, self.nlp.p.sym], [ca.mmax(self.mpcc.G.sym * self.mpcc.H.sym)])
-
-    def _build_solver_dict(self):
-        """
-        Build the regularization homotopy solver from a mpcc dict.
-        """
-        raise NotImplementedError("Generic (non-vdx) mpccs not yet supported, use CCOpt instead.")
 
     def _print_header(self):
         print('-------------------------------------------')
