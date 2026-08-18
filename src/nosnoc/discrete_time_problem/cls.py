@@ -430,3 +430,8 @@ class Cls(Base):
             eta = eta*nu[kk]
         return eta
 
+
+    @override
+    def _warmstart_shift(self):
+        """Warmstart the current problem by shifting one control interval"""
+        raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
