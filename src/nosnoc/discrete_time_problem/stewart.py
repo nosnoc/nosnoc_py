@@ -337,10 +337,10 @@ class Stewart(Base):
             self._heuristic_diff()
 
         if opts.step_equilibration == StepEquilibrationMode.L2_RELAXED_SCALED:
-            self.__l2_relaxed_scaled()
+            self._l2_relaxed_scaled()
 
         elif opts.step_equilibration == StepEquilibrationMode.L2_RELAXED:
-            self.__l2_relaxed()
+            self._l2_relaxed()
 
         elif opts.step_equilibration == StepEquilibrationMode.DIRECT:
             self._direct()
