@@ -94,7 +94,7 @@ class Heaviside(Base):
             self.w.lambda_n[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
                 init=self.w.lambda_n[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
             )
-            # warmstart lambda_n
+            # warmstart lambda_p
             self.w.lambda_p[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
                 init=self.w.lambda_p[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
             )
