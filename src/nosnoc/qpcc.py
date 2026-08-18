@@ -127,7 +127,7 @@ class Qpcc():
             self.Q = ca.sparsify(ca.DM(Q), np.finfo(float).eps) # Call sparsify so the numpy array isn't treated as dense.
                 
         elif cvx_opts.mode == ConvexificationMode.LEVENBERG_MARQUARDT:
-            self.Q += ca.DM(np.diag(cvx_opts.lambda_lm)) # sledgehammer, but not guaranteed to be convex
+            self.Q += cvx_opts.lambda_lm*ca.DM.eye(self.dims.nx) # sledgehammer, but not guaranteed to be convex
         elif cvx_opts.mode == ConvexificationMode.GERSHGORIN:
             gersh_lb = ca.min(ca.diag(self.Q) - ca.sum(ca.abs(self.Q - ca.diag(Qsym)), 2))
             if gersh_lb < cvx_opt.eps_hessian:
@@ -138,7 +138,7 @@ class Qpcc():
             self.create_solver(self.solver_opts)
 
 
-    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, tr=np.inf, cvx_opts=None):
+    def linearize(self, x0, lam_g=None, lam_G=None, lam_H=None, cvx_opts=None):
         """
         Linearize the parent MPCC at the point given by `x0`, and optionally `lam_g`, `lam_G`, `lam_H`.
         Optionally also apply a ell infinity trust region constraint on the primal variables with radius `tr`.
@@ -221,6 +221,37 @@ class Qpcc():
         Get the primal step from the last solve.
         """
         return self.mpcc.w.res
+
+    def get_lam_g(self):
+        """
+        Get the general constraint multiplier from the last solve.
+        """
+        return self.mpcc.g.mult
+
+    def get_lam_x(self):
+        """
+        Get the simple bound multiplier from the last solve.
+        """
+        return self.mpcc.w.mult
+
+    def get_lam_G(self):
+        """
+        Get the complementarity constraint multiplier from the last solve.
+
+        Warning:
+           This is currently not supported well.
+        """
+        return self.mpcc.G.mult
+
+    def get_lam_H(self):
+        """
+        Get the bound dual from the last solve.
+
+        Warning:
+           This is currently not supported well.
+        """
+        return self.mpcc.H.mult
+
 
     def _build_mpccsol_solver(self, plugin, opts):
         """

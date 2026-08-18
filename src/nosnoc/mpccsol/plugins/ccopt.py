@@ -127,6 +127,7 @@ class CCOptSolver(MpccsolPlugin):
         casadi_solver_opts = {
             "cc_pairs": cc_pairs.tolist(),
             "cc_types": cc_types.tolist(),
+            "print_time": False,
         }
         if self.opts.ccopt_opts:
             casadi_solver_opts["ccopt"] = self.opts.ccopt_opts
