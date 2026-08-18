@@ -92,6 +92,49 @@ class DcsMode(Enum):
     """
 
 
+class FrictionModel(Enum):
+    """
+    Which representation of the Coulomb friction cone to use for a CLS.
+    """
+    CONIC = auto()
+    """Exact nonlinear friction cone, ||lambda_t||_2 <= mu*lambda_n."""
+    POLYHEDRAL = auto()
+    """Polyhedral approximation of the friction cone spanned by D_tangent, in 2D this is equivalent to the conic model"""
+
+
+class ConicModelSwitchHandling(Enum):
+    """
+    How switches of the tangential velocity are detected with the Conic friction model.
+    """
+    PLAIN = auto()
+    """No extra variables, switches of the tangential velocity are not isolated."""
+    ABS = auto()
+    """Positive/negative parts of the tangential velocity, 0 <= p_vt perp n_vt >= 0."""
+    LP = auto()
+    """Positive/negative parts plus a step function alpha_vt for the tangential velocity."""
+
+
+class ClsDiscretization(Enum):
+    """
+    Which discretization to use for the impact of a Complementarity Lagrangian System.
+    """
+    FESD_J = auto()
+    """
+    Finite Elements with Switch Detection for Jumps (default).
+
+    The impact is exact: impulse equations at the finite element boundaries let the velocity
+    *jump*, M(v^+ - v^-) = J_n Lambda_n with 0 <= Lambda_n perp Y_gap >= 0.
+    """
+    RELAXED_OC = auto()
+    """
+    Patel et al.'s relaxed orthogonal-collocation formulation (IEEE RA-L 2019).
+
+    The velocity is continuous across finite element boundaries; the impact is produced by the
+    contact force lambda_n acting over one shrinking finite element. It is an approximation at
+    finite step size that converges to the exact plastic impact as h -> 0.
+    """
+
+
 class Status(Enum):
     SUCCESS = auto()
     INFEASIBLE = auto()

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ClsDiscretization
 
 @dataclass
 class Options():
@@ -48,7 +48,14 @@ class Options():
 
     # double: Fraction in the range $\gamma_h \in [0,1]$ by which the step size is relaxed:
     # $$(1-\gamma_h) h_0\le h \le (1+\gamma_h) h_0$$
+    # Relaxes both sides at once, use `gamma_h_lb`/`gamma_h_ub` to relax one side independently.
     gamma_h: float  = 1
+
+    # double: Per side override of `gamma_h`, None means "follow `gamma_h`". The fraction is
+    # relative to the nominal step length, so gamma_h_lb = 0.2 admits $h \geq 0.8 h_0$ and
+    # gamma_h_ub = 0.5 admits $h \leq 1.5 h_0$.
+    gamma_h_lb: Optional[float] = None
+    gamma_h_ub: Optional[float] = None
 
     dcs_mode: DcsMode = DcsMode.STEWART # DcsMode: Which DCS to reformulate the problem into.
 
@@ -190,26 +197,48 @@ class Options():
     # double: Constant used for stabilizing auxiliary dynamics in \nabla f_c(q) direction.
     kappa_stabilizing_q_dynamics: float         = 1e-5
 
-    ############################# NOT IMPLEMENTED
+    #--------------------- Complementarity Lagrangian System (FESD-J) ---------------------#
+
     # FrictionModel: Which Friction model to use for the Complementarity Lagrangian System.
     #
-    # Default: :mat:class:`FrictionModel.Conic`
+    # Warning:
+    #     Friction is not yet implemented in the Python CLS. Any model with a nonzero
+    #     coefficient of friction is currently rejected by `nosnoc.model.Cls`.
     #
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
-    #friction_model : FrictionModel = FrictionModel.Conic;
+    # ClsDiscretization: Which discretization to use for the impact of a Complementarity Lagrangian
+    # System. FESD_J (default) is exact (impulse + velocity jump at FE boundaries); RELAXED_OC is
+    # Patel et al.'s relaxed orthogonal-collocation formulation (velocity continuity + contact force
+    # over a shrinking element), approximate at finite h. RELAXED_OC requires `use_fesd = True`.
+    #
+    # See Also:
+    #     `ClsDiscretization` for more details on the difference between the two.
+    cls_discretization: ClsDiscretization = ClsDiscretization.FESD_J
+
+    friction_model: FrictionModel = FrictionModel.CONIC
 
     # ConicModelSwitchHandling: Which velocity switch handling mode to use when using the Conic friction model
     #
     # See Also:
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
-    #conic_model_switch_handling : ConicModelSwitchHandling = ConicModelSwitchHandling.Abs;
+    conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
+
+    # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.
+    no_initial_impacts: bool = False
+
+    # double: enforce $f_c \ge 0$ at an explicit Euler step of length `eps_cls`*h after the impact.
+    #
+    # This is Eq. (18) of :cite:`Nurkanovic2024` and excludes spurious solutions with a zero
+    # impulse and a very large contact force. Set to 0 to disable.
+    eps_cls: float = 1e-3
+    fixed_eps_cls: bool = False # boolean: use fixed step eps_cls instead of a multiple of h.
+
+    ############################# NOT IMPLEMENTED
 
     #kappa_friction_reg : float  = 0; # double: Regularization term in friction equations to avoid large multipliers if no contact happens.
 
     #lift_velocity_state: bool = 0; # boolean: If true define auxliary algebraic vairable, $dot = z_v$, to avoid symbolic inversion of the inertia matrix.
-    #eps_cls: float = 1e-3 # double: enforce $f_c$ at Euler step with h * eps_cls
-    #fixed_eps_cls: bool = False # boolean: use fixed step eps_cls instead of a multiple of h.
 
     # double: The constant radius of relaxation for the friction force which enforces a nonempty interior around zero velocity
     #
@@ -330,9 +359,32 @@ class Options():
             raise Exception("Please provide exactly one of T, h_k, or h.")
 
 
+    def _make_gamma_h_consistent(self):
+        """
+        Resolve the per side step size relaxations, so that only `gamma_h_lb`/`gamma_h_ub` are read
+        downstream. A side that was left at None follows `gamma_h`.
+        """
+        if self.gamma_h_lb is None:
+            self.gamma_h_lb = self.gamma_h
+        if self.gamma_h_ub is None:
+            self.gamma_h_ub = self.gamma_h
+
+        if not 0.0 <= self.gamma_h_lb <= 1.0:
+            raise Exception(
+                f"gamma_h_lb = {self.gamma_h_lb} must lie in [0,1], a larger value would give the "
+                "finite element a negative lower bound on its length.")
+        if self.gamma_h_ub < 0.0:
+            raise Exception(f"gamma_h_ub = {self.gamma_h_ub} must be non-negative.")
+
     def __post_init__(self):
         # N_finite_elements always emnds up as a list.
         if isinstance(self.N_finite_elements, int):
             self.N_finite_elements = [self.N_finite_elements]*self.N_stages
 
+        # The relaxed orthogonal-collocation formulation needs the variable finite element lengths
+        # and cross complementarity that only exist in the FESD machinery.
+        if self.cls_discretization == ClsDiscretization.RELAXED_OC and not self.use_fesd:
+            raise Exception("cls_discretization = RELAXED_OC requires use_fesd = True.")
+
         self._make_T_h_consistent()
+        self._make_gamma_h_consistent()

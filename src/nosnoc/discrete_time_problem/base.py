@@ -94,8 +94,8 @@ class Base(ABC,MPCC):
         dims = self.dcs.dims
         h0 = opts.h_k[ii-1]/opts.N_finite_elements[ii-1]
         if opts.use_fesd:
-            ubh = (1 + opts.gamma_h) * h0 # upper bound for FE length
-            lbh = (1 - opts.gamma_h) * h0 # lower bound for FE length
+            ubh = (1 + opts.gamma_h_ub) * h0
+            lbh = (1 - opts.gamma_h_lb) * h0
             if opts.time_rescaling() and not opts.use_speed_of_time_variables:
                 # if only time_rescaling is true, speed of time and step size all lumped together, e.g., \hat{h}_{k,i} = s_n * h_{k,i}, hence the bounds need to be extended.
                 ubh = ubh*opts.s_sot_max
@@ -398,6 +398,12 @@ class Base(ABC,MPCC):
         """Create step equilibration constraints"""
         pass
 
+    @abstractmethod
+    def _get_eta(self, ii, jj):
+        """Get FESD switch indicator function eta at the boundary between FE jj-1 and jj"""
+        pass
+
+
     def _heuristic_mean(self):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):
@@ -410,3 +416,29 @@ class Base(ABC,MPCC):
         for ii in range(1, opts.N_stages+1):
             for jj in range(2, opts.N_finite_elements[ii-1]+1):
                 self.f += self.p.rho_h[()]*(self.w.h[ii,jj]-self.w.h[ii,jj-1])**2
+
+    def _l2_relaxed_scaled(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                eta = self._get_eta(ii, jj)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.f += self.p.rho_h[()]*ca.tanh(eta/opts.step_equilibration_sigma)*delta_h**2
+
+    def _l2_relaxed(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                eta = self._get_eta(ii, jj)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.f += self.p.rho_h[()]*eta*delta_h**2
+    
+    def _direct(self):
+        opts = self.opts
+        for ii in range(1, opts.N_stages+1):
+            for jj in range(2, opts.N_finite_elements[ii-1]+1):
+                eta = self._get_eta(ii, jj)
+                delta_h = self.w.h[ii,jj] - self.w.h[ii,jj-1]
+                self.g.step_equilibration[ii,jj] = Constraint(eta*delta_h)
+    
+

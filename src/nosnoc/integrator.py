@@ -9,10 +9,13 @@ import casadi as ca
 
 from .model import Pss
 from .model import Heaviside
+from .model import Cls
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
+from .dcs import Cls as ClsDCS
 from .discrete_time_problem import Stewart as StewartDTP
 from .discrete_time_problem import Heaviside as HeavisideDTP
+from .discrete_time_problem import Cls as ClsDTP
 from .nosnoc_types import DcsMode, RKRepresentation
 from nosnoc.mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
@@ -36,6 +39,10 @@ class IntegratorOptions():
 class FESDIntegratorOptions(IntegratorOptions):
     solver_opts: RegHomotopyOptions = field(kw_only=True)
     use_previous_solution: bool = True
+    # Guess for the contact multiplier when a failed CLS step is retried assuming an impact occurs.
+    # Any positive value works, it only has to push the solver away from the non impacting branch of
+    # the complementarity conditions.
+    impact_guess_init: float = 7.0
 
 # TODO(@anton) implement smoothed integrator
 
@@ -92,8 +99,15 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             self.dcs = HeavisideDCS(model)
             self.dtp = HeavisideDTP(self.dcs, opts)
             self.dtp.populate_problem()
+        elif isinstance(model, Cls):
+            self.dcs = ClsDCS(model)
+            self.dtp = ClsDTP(self.dcs, opts)
+            self.dtp.populate_problem()
         else:
-            raise NotImplementedError("Only Pss is implemented")
+            raise NotImplementedError("Only Pss, Heaviside and Cls are implemented")
+
+    def _is_cls(self):
+        return isinstance(self.model, Cls)
 
 
     def _clear_history(self):
@@ -112,6 +126,76 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         self.stats.append(stats)
         self.w_all.append(np.copy(self.dtp.w.res))
         return stats
+
+    def _cls_step_result(self, h, t_start):
+        """
+        Collect the state trajectory of one CLS integration step, starting at time `t_start`.
+
+        For every finite element both boundary states are reported, the post impact state
+        `x[ii,jj,0]` and the pre impact state `x[ii,jj,n_s+rbp]`. They belong to the same physical
+        time, therefore the finite element boundary times appear twice in the time grid, which makes
+        the velocity jumps visible. The first finite element only contributes its right boundary if
+        impacts at the beginning of a step are excluded, as there is no jump there.
+        """
+        opts = self.opts
+        rbp = self.dtp.rbp
+        n_x = self.model.dims.n_x
+
+        x_lbp = np.reshape(self.dtp.w.x[1:,:,0].res, (opts.N_finite_elements[0], n_x))
+        x_rbp = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], n_x))
+
+        x_step = []
+        t_step = []
+        t = t_start
+        for jj in range(opts.N_finite_elements[0]):
+            if jj > 0 or not opts.no_initial_impacts:
+                # post impact state at the left boundary of this finite element
+                x_step.append(x_lbp[jj,:])
+                t_step.append(t)
+            x_step.append(x_rbp[jj,:])
+            t = t + h[jj]
+            t_step.append(t)
+        return np.vstack(x_step), np.array(t_step)
+
+    def _retry_cls_step(self):
+        """
+        Re-solve the current step with an initial guess that assumes an impact occurs.
+
+        The failed attempt is dropped from the history so that a retried step contributes a single
+        entry, and the initial guess is restored afterwards so that the perturbation does not leak
+        into the following steps.
+        """
+        opts = self.opts
+        impact_guess = self.integrator_opts.impact_guess_init
+        print("integrator_fesd: initial guess did not converge, retrying with an impact guess.")
+        w_init = np.copy(self.dtp.w.init)
+
+        start_fe = 2 if opts.no_initial_impacts else 1
+        if self.dtp._is_relaxed_oc():
+            # Patel's relaxed formulation has no impulse variables; the impact is a large contact
+            # force, so guess that instead, using the same positive value as for the impulse.
+            for jj in range(1, opts.N_finite_elements[0]+1):
+                for kk in range(1, opts.n_s+1):
+                    self.dtp.w.lambda_normal[1,jj,kk](init=impact_guess)
+                    self.dtp.w.y_gap[1,jj,kk](init=0.0)
+        else:
+            for jj in range(start_fe, opts.N_finite_elements[0]+1):
+                self.dtp.w.Lambda_normal[1,jj](init=impact_guess)
+                self.dtp.w.Y_gap[1,jj](init=0.0)
+                self.dtp.w.P_vn[1,jj](init=0.0)
+                self.dtp.w.N_vn[1,jj](init=0.0)
+            for jj in range(1, opts.N_finite_elements[0]+1):
+                for kk in range(1, opts.n_s+1):
+                    self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
+                    self.dtp.w.y_gap[1,jj,kk](init=0.0)
+
+        # Drop the failed attempt, then re-solve.
+        self.stats.pop()
+        self.w_all.pop()
+        solver_stats = self._solve()
+
+        np.copyto(self.dtp.w.init, w_init)
+        return solver_stats
 
     @override
     def simulate(self, x0, u=None):
@@ -145,24 +229,42 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dtp.w.u[1](lb = u[ii,:], ub = u[ii,:], init = u[ii,:])
 
             solver_stats = self._solve()
+            
             if not solver_stats["converged"]:
                 constr_viol = solver_stats['constraint_violation']
                 warn(f"integrator_fesd: did not converge in step {ii+1} constraint violation is: {constr_viol}")
+                if self._is_cls() and opts.use_fesd:
+                    solver_stats = self._retry_cls_step()
+                    if integrator_opts.print_level >= 2:
+                        if not solver_stats["converged"]:
+                            print(f"integrator_fesd: retry did not converge in step {ii+1} constraint violation is: {solver_stats['constraint_violation']}")
+                        else:
+                            print(f"Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {solver_stats['wall_time_total']} s.")
             elif integrator_opts.print_level >= 2:
                 wall_time_total = solver_stats["wall_time_total"]
                 print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
-            x_step = np.reshape(self.dtp.w.x[0,0,opts.n_s].res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
-            x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
-            x_step = np.vstack([x_step, x_int])
-            x_step_full = np.reshape(self.dtp.w.x[1:,:,:].res, (opts.N_finite_elements[0]*(n_steps), self.model.dims.n_x))
-            x_res.append(x_step)
-            x_res_full.append(x_step_full)
             if opts.use_fesd:
                 h = self.dtp.w.h[:,:].res
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
-            t_grid.append(t_grid[-1][-1] + np.cumsum(h))
+
+            if self._is_cls():
+                # The velocity of a CLS is discontinuous at the finite element boundaries, so both
+                # the post impact state (third index 0) and the pre impact state (third index
+                # n_s+rbp) are reported, and the impact times appear twice in the time grid.
+                x_step, t_step = self._cls_step_result(h, t_grid[-1][-1])
+                t_grid.append(t_step)
+            else:
+                x_step = np.reshape(self.dtp.w.x[0,0,opts.n_s].res, (1, self.model.dims.n_x)) if rbp else np.empty((0,self.model.dims.n_x))
+                x_int = np.reshape(self.dtp.w.x[1:,:,opts.n_s+rbp].res, (opts.N_finite_elements[0], self.model.dims.n_x))
+                x_step = np.vstack([x_step, x_int])
+                t_grid.append(t_grid[-1][-1] + np.cumsum(h))
+            # Skipping the third index 0 only has an effect for a CLS, as the other discretizations
+            # do not have a left boundary point.
+            x_step_full = np.reshape(self.dtp.w.x[1:,:,1:].res, (opts.N_finite_elements[0]*n_steps, self.model.dims.n_x))
+            x_res.append(x_step)
+            x_res_full.append(x_step_full)
             t_current = t_grid[-1][-1]
             c = self.dtp.rk.colloc_points()
             for jj in range(len(h)):
@@ -194,8 +296,14 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         np.copyto(self.dtp.w.res, self.w_all[0])
         var = getattr(self.dtp.w, field)
         var_len = len(next(iter(var.ind_map.values()))) # Assumes all are same length, we don't enforce this however
-        var_shape = (opts.N_finite_elements[0], var_len)
-        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 else None
+        # Some variables (e.g. the CLS impulse variables under `no_initial_impacts`) are not defined
+        # on every finite element, so the number of rows is derived from the index map.
+        n_fe = len([k for k in var.ind_map.keys() if len(k) >= 2 and k[0] != 0]) if var.get_depth() == 2 else opts.N_finite_elements[0]
+        var_shape = (n_fe, var_len)
+        # Not every stage variable is also defined at the initial point. The CLS contact forces for
+        # example only exist from the first finite element onwards.
+        has_initial = (0,0,opts.n_s) in var.ind_map
+        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 and has_initial else None
         var_out = [] if var_0 is None else [var_0]
         for w in self.w_all:
             np.copyto(self.dtp.w.res, w)
@@ -223,19 +331,22 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         if not self.w_all:
             return None # TODO(@anton) probably raise an error instead
         opts = self.opts
-        rbp = self.dtp.rbp
         dims = self.dcs.dims
         w_curr = np.copy(self.dtp.w.res)
         np.copyto(self.dtp.w.res, self.w_all[0])
-        var = getattr(self.dtp.w, field)
+        var =  getattr(self.dtp.w, field)
         var_len = len(next(iter(var.ind_map.values()))) # Assumes all are same length, we don't enforce this however
-        var_shape = (opts.N_finite_elements[0]*opts.n_s, var_len) if var.get_depth() == 3 else (opts.N_finite_elements[0], var_len)
-        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 else None
+        # Derive the number of rows from the index map, as not every variable is defined on every
+        # finite element or at every stage point.
+        n_entries = len([k for k in var.ind_map.keys() if k[0] != 0])
+        var_shape = (n_entries, var_len)
+        # Not every stage variable is also defined at the initial point.
+        has_initial = (0,0,opts.n_s) in var.ind_map
+        var_0 = np.reshape(var[0,0,opts.n_s].res, (1,var_len)) if var.get_depth() == 3 and has_initial else None
         var_out = [] if var_0 is None else [var_0]
         for w in self.w_all:
             np.copyto(self.dtp.w.res, w)
             if var.get_depth() == 3:
-                end = opts.n_s + rbp
                 var_out.append(np.reshape(var[1:,:,:].res, var_shape))
             elif var.get_depth() == 2:
                 var_out.append(np.reshape(var[1:,:].res, var_shape))
@@ -290,6 +401,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             for jj in range(len(h)):
                 start = t_grid_full[-1]
+                if self._is_cls():
+                    # `get_full` reports the post impact state at the left boundary point, which
+                    # shares its time with the end of the previous finite element.
+                    t_grid_full.append(start)
                 for kk in range(opts.n_s):
                     t_grid_full.append(start + c[kk]*h[jj])
                 if rbp:
