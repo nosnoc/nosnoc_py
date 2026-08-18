@@ -87,7 +87,7 @@ class RegHomotopySolver(MpccsolPlugin):
     def _build_solver(self):
         self.f_relax = 0.0
         if isinstance(self.mpcc, dict):
-            self._convert_dict_to_mpcc()
+            self.mpcc = ns.MPCC.from_casadi_dict(self.mpcc)
         self._build_solver_impl()
 
     def _update_nlp_vectors(
