@@ -221,7 +221,7 @@ def _build_integrator():
 
     return ns.Integrator(model, opts, integrator_opts)
 
-def main(rti=RTI, plot=False, prepare_step=ns.rtopt.PreparationStep.SQPCC, n_advanced_steps=3):
+def main(rti=RTI, plot=False, prepare_step=ns.rtopt.PreparationStep.SQPCC, n_advanced_steps=3, max_iter=N_MPC):
 
     if rti:
         opts,model,mpc = _build_rti(prepare_step=prepare_step, n_advanced_steps=n_advanced_steps)
@@ -234,7 +234,7 @@ def main(rti=RTI, plot=False, prepare_step=ns.rtopt.PreparationStep.SQPCC, n_adv
     t_grid = [[0.0]]
     U = []
     control_grid = [0.0]
-    for ii in range(N_MPC):
+    for ii in range(max_iter):
         u = mpc.update(x0=x_last)
         u_sim = np.kron(np.ones((N_SIM,1)), u)
         t_grid_ii, x_ii,_,_ = integrator.simulate(x_last, u=u_sim)
@@ -256,7 +256,7 @@ def main(rti=RTI, plot=False, prepare_step=ns.rtopt.PreparationStep.SQPCC, n_adv
     control_grid = np.array(control_grid)
     if plot:
         _plot_results(x_res,u_res,t_grid,control_grid)
-    return x_res,u_res,t_grid,control_grid
+    return x_res,u_res,t_grid,control_grid, mpc
 
 if __name__ == "__main__":
     main(plot=True)

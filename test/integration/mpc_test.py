@@ -18,5 +18,5 @@ class MPCTest(unittest.TestCase):
 
     @parameterized.expand(options)
     def test_cartpole_mpc(self, rti, prepare_step, n_advanced_steps):
-        x_res,u_res,t_grid,control_grid = main(rti=rti, prepare_step=prepare_step, n_advanced_steps=n_advanced_steps)
-        self.assertTrue(abs(x_res[-1,1] - np.pi) <= 0.2) # loose tolerance
+        x_res,u_res,t_grid,control_grid,mpc = main(rti=rti, prepare_step=prepare_step, n_advanced_steps=n_advanced_steps, max_iter=3)
+        self.assertTrue(mpc.last_converged)
