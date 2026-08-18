@@ -19,7 +19,7 @@ class MPCC(NLP):
 
     def from_casadi_dict(mpcc_dict, symbolic_type=ca.SX):
         """
-        Convert a raw casadi dict form of an MPCC to an MPCC object
+        Convert a raw CasADi dict form of an MPCC to an MPCC object
         This object inherits the lack of structure but allows us to reuse code in e.g. `mpccsol`.
 
         Todo:
@@ -36,8 +36,8 @@ class MPCC(NLP):
         mpcc.w.x[()] = Primal("x", nx)
         mpcc.p.p[()] = Parameter("p", np)
         mpcc.g.g[()] = Constraint(g_fun(mpcc.w.x[()], mpcc.p.p[()]))
-        mpcc.G.cc[()] = Constraint(G_fun(mpcc.w.x[()], mpcc.p.p[()]))
-        mpcc.H.cc[()] = Constraint(H_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.G.cc[()] = CConstraint(G_fun(mpcc.w.x[()], mpcc.p.p[()]))
+        mpcc.H.cc[()] = CConstraint(H_fun(mpcc.w.x[()], mpcc.p.p[()]))
         mpcc.f = f_fun(mpcc.w.x[()], mpcc.p.p[()])
         return mpcc
 

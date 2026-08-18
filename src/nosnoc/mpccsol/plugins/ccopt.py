@@ -81,7 +81,7 @@ class CCOptSolver(MpccsolPlugin):
     def _build_solver_impl(self):
         # Build vectors:
         ng = len(self.mpcc.g)
-        ncc = len(self.mpcc.g)
+        ncc = len(self.mpcc.G)
 
         # Get nonscalar G
         ind_scalar_G, ind_nonscalar_G, ind_map_G = find_nonscalar(self.mpcc.G.sym, self.mpcc.w.sym, p=self.mpcc.p.sym)
@@ -93,7 +93,7 @@ class CCOptSolver(MpccsolPlugin):
         # build ind_cc1
         ind_cc1 = np.zeros(ncc, int)
         ind_cc1[ind_scalar_G] = ind_map_G # Scalars should point to the variables themselves!
-        ind_cc1[ind_nonscalar_G] = np.arange(ng, n_nonscalar_G) # nonscalars are appened to g.
+        ind_cc1[ind_nonscalar_G] = np.arange(ng, ng+n_nonscalar_G) # nonscalars are appened to g.
         # build ind_cc2
         ind_cc2 = np.zeros(ncc, int)
         ind_cc2[ind_scalar_H] = ind_map_H # Scalars should point to the variables themselves!
