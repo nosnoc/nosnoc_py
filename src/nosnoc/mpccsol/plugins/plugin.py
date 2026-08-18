@@ -17,7 +17,7 @@ class MpccsolPlugin(ABC):
     @abstractmethod
     def _solve(self,
                x0:     np.ndarray,
-               y0:     np.ndarray,
+               y0:     np.ndarray, # Note: y0 is unused and is the initial complementarity active set
                lbx:    np.ndarray,
                ubx:    np.ndarray,
                lbg:    np.ndarray,
@@ -52,7 +52,7 @@ class MpccsolPlugin(ABC):
         # TODO(@anton) this is wasteful of memory, pass through Nones instead
         return self._solve(
             x0,
-            y0,
+            y0, # Note y0 is unused and is the initial complementarity active set
             lbx,
             ubx,
             lbg,
