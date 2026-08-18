@@ -30,7 +30,7 @@ class Qpcc():
         Space is allocated for evaluating these functions.
         """
         self.mpcc = copy(mpcc)
-        self.use_mpcc_multipliers = mpcc
+        self.use_mpcc_multipliers = use_mpcc_multipliers
         dims = QpccDims(nx=len(mpcc.w), ng=len(mpcc.g), ncc=len(mpcc.G))
         self.dims = dims
         ## linearize around mpcc.w.init
@@ -124,7 +124,7 @@ class Qpcc():
         """
         Solve the QPCC at the current linearization point.
         """
-        pval = np.concat([
+        pval = np.concatenate([
             self.Q.nonzeros(),
             self.q.full().flatten(),
             self.A.nonzeros(),
@@ -134,7 +134,7 @@ class Qpcc():
             self.H.nonzeros(),
             self.h.full().flatten(),
         ])
-        res = self.solver(p=pval, lbx=self.lbx, ubx=self.ubx)
+        res = self.solver(p=pval, lbx=self.lbx, ubx=self.ubx, lbg=self.mpcc.g.lb, ubg=self.mpcc.g.ub)
         self.mpcc.w.res = res["w"]
         self.mpcc.w.mult = res["lam_x"]
         self.mpcc.g.val = res["g"]
