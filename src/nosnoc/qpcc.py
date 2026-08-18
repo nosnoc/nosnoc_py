@@ -222,6 +222,18 @@ class Qpcc():
         """
         return self.mpcc.w.res
 
+    def get_y(self):
+        """
+        Get the primal step from the last solve.
+        """
+        return self.mpcc.g.mult
+
+    def get_z(self):
+        """
+        Get the primal step from the last solve.
+        """
+        return self.mpcc.w.mult
+
     def _build_mpccsol_solver(self, plugin, opts):
         """
         Build the mpccsol based solver for the QPCC.

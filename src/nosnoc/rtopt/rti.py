@@ -125,9 +125,9 @@ class RTIAlgorithm(RealtimeOptimizationAlgorithm):
 
     def _take_qpcc_step(self):
         self.qpcc.solve()
-        self.ocp_solver.dtp.w.res += self.qpcc.mpcc.w.res
-        np.copyto(self.ocp_solver.dtp.w.mult,self.qpcc.mpcc.w.mult)
-        np.copyto(self.ocp_solver.dtp.g.mult,self.qpcc.mpcc.g.mult)
+        self.ocp_solver.dtp.w.res += self.qpcc.get_dx()
+        np.copyto(self.ocp_solver.dtp.w.mult,self.qpcc.get_z())
+        np.copyto(self.ocp_solver.dtp.g.mult,self.qpcc.get_y())
         np.copyto(self.ocp_solver.dtp.G.mult,self.qpcc.mpcc.G.mult)
         np.copyto(self.ocp_solver.dtp.G.mult,self.qpcc.mpcc.H.mult)
 
