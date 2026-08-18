@@ -13,7 +13,7 @@ def create_generic_mpcc1():
     f = (x1-1)**2+x2**3+x2**2+p
     x0 = np.zeros(2)
     p0 = np.zeros(1)
-    lbx = np.zeros(1)
+    lbx = np.zeros(2)
     ubx = np.inf*np.ones(2)
 
     mpcc = {
@@ -76,4 +76,3 @@ if __name__ == "__main__":
     mpcc2, init2 = create_generic_mpcc2()
     solver2 = ns.mpccsol.mpccsol("reg_homotopy", mpcc2, solver_opts)
     solution2 = solver2(**init2)
-    breakpoint()

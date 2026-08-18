@@ -21,7 +21,6 @@ class HomotopySteeringStrategy(Enum):
     ELL_1 = auto()
     ELL_INF = auto()
 
-# TODO(@anton) make this a dataclass?
 @dataclass
 class RegHomotopyOptions():
     solver_name: str = 'nosnoc_solver'
@@ -38,7 +37,7 @@ class RegHomotopyOptions():
 
     homotopy_update_slope: float           = 0.1
     homotopy_update_exponent: float        = 1.5 # the exponent in the superlinear rule
-    N_homotopy                             = 10 # Maximum number of nlp solves
+    N_homotopy: int                        = 10 # Maximum number of nlp solves
     s_elastic_max: float                   = 1e1
     s_elastic_min: float                   = 0.0
     s_elastic_0: float                     = 1.0
@@ -258,8 +257,8 @@ class RegHomotopySolver(MpccsolPlugin):
         np = self.mpcc["p"].size(1)
         f_fun = ca.Function("f", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["f"]])
         g_fun = ca.Function("g", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["g"]])
-        G_fun = ca.Function("H", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["G"]])
-        H_fun = ca.Function("G", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["H"]])
+        G_fun = ca.Function("G", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["G"]])
+        H_fun = ca.Function("H", [self.mpcc["x"], self.mpcc["p"]], [self.mpcc["H"]])
 
         mpcc.w.x[()] = Primal("x", nx)
         mpcc.p.p[()] = Parameter("p", np)
