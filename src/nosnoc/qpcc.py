@@ -222,17 +222,36 @@ class Qpcc():
         """
         return self.mpcc.w.res
 
-    def get_y(self):
+    def get_lam_g(self):
         """
-        Get the primal step from the last solve.
+        Get the general constraint multiplier from the last solve.
         """
         return self.mpcc.g.mult
 
-    def get_z(self):
+    def get_lam_x(self):
         """
-        Get the primal step from the last solve.
+        Get the simple bound multiplier from the last solve.
         """
         return self.mpcc.w.mult
+
+    def get_lam_G(self):
+        """
+        Get the complementarity constraint multiplier from the last solve.
+
+        Warning:
+           This is currently not supported well.
+        """
+        return self.mpcc.G.mult
+
+    def get_lam_H(self):
+        """
+        Get the bound dual from the last solve.
+
+        Warning:
+           This is currently not supported well.
+        """
+        return self.mpcc.H.mult
+
 
     def _build_mpccsol_solver(self, plugin, opts):
         """
