@@ -193,3 +193,20 @@ class OcpSolver():
     def set(self, varname, indices, **kwargs):
         var = getattr(self.dtp.w, varname)
         var[*indices](**kwargs)
+
+    def warmstart(self, duals=False):
+        np.copyto(self.dtp.w.init, self.dtp.w.res)
+        if duals:
+            np.copyto(self.dtp.w.init_mult, self.dtp.w.mult)
+            np.copyto(self.dtp.g.init_mult, self.dtp.g.mult)
+            np.copyto(self.dtp.G.init_mult, self.dtp.G.mult)
+            np.copyto(self.dtp.H.init_mult, self.dtp.H.mult)
+
+    def warmstart_shift(self):
+        """
+        This method does a shift initialization by moving each control interval to the left by one.
+
+        Warning:
+            This is currently experimental and not guaranteed to work for all discretization settings.
+        """
+        self.dtp.warmstart_shift()

@@ -188,6 +188,28 @@ class Stewart(Base):
             )
 
     @override
+    def _warmstart_shift(self):
+        opts = self.opts
+        rbp = self.rbp
+        if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
+            raise NotImplementedError("Currently shift warmstarting is unsupported for MCP based step equilibration!")
+        # iterate control stages
+        for ii in range(1, opts.N_stages+1):
+            next_ii = min(ii+1, opts.N_stages)
+            # warmstart lambda
+            self.w.lam[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.lam[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+            # warmstart theta
+            self.w.theta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)](
+                init=self.w.theta[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)].res.flatten()
+            )
+            # warmstart mu
+            self.w.mu[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.mu[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+
+    @override
     def _generate_complementarity_constraints(self):
         model = self.model
         opts = self.opts
@@ -310,7 +332,7 @@ class Stewart(Base):
 
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_MEAN:
             self._heuristic_mean()
-                
+
         if opts.step_equilibration == StepEquilibrationMode.HEURISTIC_DELTA:
             self._heuristic_diff()
 

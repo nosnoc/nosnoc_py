@@ -78,6 +78,29 @@ class Heaviside(Base):
         self._handle_x_box_constraints()
 
     @override
+    def _warmstart_shift(self):
+        opts = self.opts
+        rbp = self.rbp
+        if opts.step_equilibration == StepEquilibrationMode.LINEAR_COMPLEMENTARITY:
+            raise NotImplementedError("Currently shift warmstarting is unsupported for MCP based step equilibration!")
+        # iterate control stages
+        for ii in range(1, opts.N_stages+1):
+            next_ii = min(ii+1, opts.N_stages)
+            # warmstart alpha
+            self.w.alpha[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)](
+                init=self.w.alpha[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)].res.flatten()
+            )
+            # warmstart lambda_n
+            self.w.lambda_n[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.lambda_n[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+            # warmstart lambda_p
+            self.w.lambda_p[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.lambda_p[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+
+
+    @override
     def _generate_direct_transcription_constraints(self):
         """Create direct transcription constraints"""
         opts = self.opts
