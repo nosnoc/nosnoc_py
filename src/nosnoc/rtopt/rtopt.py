@@ -5,15 +5,15 @@ from typing import List
 from time import monotonic
 
 class WarmstartType(Enum):
-    NONE = auto()
-    WARMSTART_PRIMALS = auto()
-    WARMSTART_ALL = auto()
-    SHIFT = auto()
+    NONE              = auto() #: Don't warmstart the nonlinear problem.
+    WARMSTART_PRIMALS = auto() #: Warmstart only the primal values with previous result.
+    WARMSTART_ALL     = auto() #: Warmstart primals and (generic constraint) duals with previous result.
+    SHIFT             = auto() #: Warmstart by shifting the previous result
 
 @dataclass
 class RealtimeOptimizationStats():
-    optimize_time: List[float] = field(default_factory=list)
-    prepare_time: List[float] = field(default_factory=list)
+    optimize_time: List[float] = field(default_factory=list) #: Total time spent in the "feedback" (using the mpc terms) phase.
+    prepare_time: List[float]  = field(default_factory=list) #: Total time spent in the "preparation" phase.
 
 
 class RealtimeOptimizationAlgorithm(ABC):

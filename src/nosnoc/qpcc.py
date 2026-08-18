@@ -17,17 +17,17 @@ class QpccDims():
     ncc: int
 
 class ConvexificationMode(Enum):
-    NONE = auto()
-    PROJECT = auto()
-    MIRROR = auto()
-    LEVENBERG_MARQUARDT = auto()
-    GERSHGORIN = auto()
+    NONE                = auto() #: No convexification.
+    PROJECT             = auto() #: Clip eigenvalues to `>=eps_hessian`.
+    MIRROR              = auto() #: Take the absolute value of the eigenvalues and clip them to `>=eps_hessian`.
+    LEVENBERG_MARQUARDT = auto() #: Add `lambda_lm` times the identity to the Hessian
+    GERSHGORIN          = auto() #: Use Gershgorin circle theorem to add a sufficiently large identity to the Hessian.
 
 @dataclass
 class ConvexificationOptions():
-    mode: ConvexificationMode = ConvexificationMode.NONE
-    eps_hessian: float = 1e-6
-    lambda_lm: float = 1e-8
+    mode: ConvexificationMode = ConvexificationMode.NONE #: Convexification mode
+    eps_hessian: float        = 1e-6 #: Minimum Hessian eigenvalue.
+    lambda_lm: float          = 1e-8 #: Levenberg Marquardt constant.
     
 class Qpcc():
     """
