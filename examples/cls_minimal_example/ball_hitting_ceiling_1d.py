@@ -25,7 +25,7 @@ GAMMA_H_UB = 1.0
 
 # MPCC solver to run the sweep with, either "reg_homotopy" or "ccopt". `ccopt` needs the libMad
 # based casadi build, see the export block at the end of `env_ccopt/bin/activate`.
-MPCC_SOLVER = "MPCC"
+MPCC_SOLVER = "ccopt"
 
 
 
