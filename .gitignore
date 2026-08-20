@@ -1,5 +1,6 @@
 __pycache__
 env
+env_ccopt
 .vscode
 .coverage
 

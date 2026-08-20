@@ -76,9 +76,14 @@ class CCOptSolver(MpccsolPlugin):
             "G": G,
             "H": H,
         }
-        self.stats["ccopt_stats"] = self.solver.stats()
+        ccopt_stats = self.solver.stats()
+        self.stats["ccopt_stats"] = ccopt_stats
         self.stats["wall_time_total"] = monotonic() - start
-        self.stats["converged"] = self.solver.stats()["success"]
+        self.stats["converged"] = ccopt_stats["success"]
+        # Same measure as the reg_homotopy plugin reports: the worse of the complementarity
+        # residual and the residual of the remaining constraints.
+        self.stats["constraint_violation"] = max(ccopt_stats["ccopt"]["cc_feas"],
+                                                 ccopt_stats["ccopt"]["primal_feas"])
         return mpcc_results
 
 

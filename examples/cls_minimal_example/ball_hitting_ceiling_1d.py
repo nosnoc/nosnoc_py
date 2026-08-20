@@ -11,17 +11,21 @@ CEILING = 1.0
 X0 = np.array([0.0, 5.0])  # start on the ground, thrown upwards
 T_SIM = 1
 N_SIM = 1
-N_FE = 100
+N_FE = 3
 
 H_SIM = T_SIM/N_SIM  # length of one integrator step, i.e. of the single control stage
 H0 = H_SIM/N_FE      # nominal finite element length, the floor is a fraction of this
 
 # Floors on the finite element length, as a fraction of the nominal step h_0, in decreasing order.
 # `gamma_h_lb` is the fraction by which h may *shrink*, so a floor of f*h_0 is gamma_h_lb = 1 - f.
-MIN_H_FRACTIONS = [1e-3,1e-4,1e-5]
+MIN_H_FRACTIONS = [1.4e-4]
 
 # Ceiling on the finite element length, h <= (1 + GAMMA_H_UB)*h_0. Kept fixed over the sweep.
 GAMMA_H_UB = 1.0
+
+# MPCC solver to run the sweep with, either "reg_homotopy" or "ccopt". `ccopt` needs the libMad
+# based casadi build, see the export block at the end of `env_ccopt/bin/activate`.
+MPCC_SOLVER = "MPCC"
 
 
 
@@ -48,14 +52,14 @@ def get_default_options(min_h_fraction, **kwargs):
         "n_s": 3,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
         "use_fesd": True,
-        "cls_discretization": nosnoc.ClsDiscretization.RELAXED_OC,
+        "cls_discretization": nosnoc.ClsDiscretization.FESD_J,
         "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_FE,
         "no_initial_impacts": True,
-        "gamma_h_ub": GAMMA_H_UB,  # upper bound on the finite element length, h <= (1+gamma_h_ub)*h_0
+        # "gamma_h_ub": GAMMA_H_UB,  # upper bound on the finite element length, h <= (1+gamma_h_ub)*h_0
         # Lower bound h >= (1-gamma_h_lb)*h_0, i.e. h >= min_h_fraction*h_0.
-        "gamma_h_lb": 1.0 - min_h_fraction,
+        #"gamma_h_lb": 1.0 - min_h_fraction,
         "step_equilibration": nosnoc.StepEquilibrationMode.L2_RELAXED_SCALED,
-        "rho_h": 0.0, # no step equilibration, h stay free in [(1-gamma_h_lb)*h0, (1+gamma_h_ub)*h0]
+        #"rho_h": 0.0, # no step equilibration, h stay free in [(1-gamma_h_lb)*h0, (1+gamma_h_ub)*h0]
         "initial_Y_gap": 0.0,
         "initial_y_gap": 0.0,
         # `Options` wants exactly one of T, h, h_k. With N_stages = 1 the control stage is one
@@ -65,14 +69,24 @@ def get_default_options(min_h_fraction, **kwargs):
     return nosnoc.Options(**(default_args | kwargs))
 
 
-def get_default_integrator_options(**kwargs):
+def get_default_solver_options():
+    """Options for the MPCC solver picked by `MPCC_SOLVER`."""
+    if MPCC_SOLVER == "ccopt":
+        return nosnoc.mpccsol.plugins.ccopt.CCOptOptions()
+
     solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+    solver_opts.opts_casadi_nlp["ipopt"]["linear_solver"] = "ma27"
 
     solver_opts.homotopy_update_slope = 0.2
     solver_opts.N_homotopy = 15
     # The relaxed OC satisfies the complementarity only up to O(h) on the contact element, so the
     # homotopy cannot be driven as far as it can for FESD-J.
     solver_opts.complementarity_tol = 1e-6
+    return solver_opts
+
+
+def get_default_integrator_options(**kwargs):
+    solver_opts = get_default_solver_options()
     default_args = {
         "T_sim": T_SIM,
         "N_sim": N_SIM,
@@ -114,7 +128,11 @@ def solve_ceiling(min_h_fraction, x0=X0):
     opts = get_default_options(min_h_fraction)
     model = get_ceiling_model(x0=x0)
     integrator = nosnoc.Integrator(model, opts, get_default_integrator_options())
+    if MPCC_SOLVER == "reg_homotopy":  # the dump hooks into the homotopy loop, ccopt has none
+        dump_at_homotopy_iters(integrator, iters=(2,))
     t_grid, x_res, _, _ = integrator.simulate(x0)
+
+    
 
     # One row per integrator step, one column per finite element. `get_full` is needed for the
     # contact force, whose peak sits at an interior collocation point; `get` only reports the
@@ -211,6 +229,37 @@ def example(plot=True):
         plot_results(results)
     
     return results
+
+
+def dump_at_homotopy_iters(integrator, iters=(2,)):
+    """Print the dtp (vars, bounds, residuals) after the given reg_homotopy iterations."""
+    dtp = integrator.plugin.dtp
+    if dtp.solver is None:            # solver is built lazily on the first solve
+        dtp.create_solver(integrator.plugin.integrator_opts.solver_opts,
+                          plugin="reg_homotopy")
+    pl = dtp.solver
+    orig = pl._solve_nlp
+    k = {"i": 0}
+
+    def patched():
+        orig()
+        k["i"] += 1
+        if k["i"] in iters:
+            w, p = pl.nlp.w.res, pl.nlp.p.val
+            dtp.w.res  = pl.w_mpcc_fun(w).full().flatten()
+            dtp.w.mult = pl.w_mpcc_fun(pl.nlp.w.mult).full().flatten()
+            dtp.g.val  = pl.g_mpcc_fun(w, p).full().flatten()
+            dtp.g.mult = pl.nlp.g.mult[pl.ind_g_mpcc]
+            dtp.G.val  = pl.G_mpcc_fun(w, p).full().flatten()
+            dtp.H.val  = pl.H_mpcc_fun(w, p).full().flatten()
+            st = pl.stats["nlp_stats"][-1]
+            print(f"\nHOMOTOPY ITER {k['i']}  sigma={pl._sigma_curr():.3e}  "
+                    f"status={st['return_status']}  inf_pr={st['iterations']['inf_pr'][-1]:.3e}")
+            print(dtp)
+
+    pl._solve_nlp = patched
+    return pl
+
 
 
 if __name__ == "__main__":

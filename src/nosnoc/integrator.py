@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, List, override
+from typing import Optional, List, Union, override
 from warnings import warn
 
 import numpy as np
@@ -18,6 +18,7 @@ from .discrete_time_problem import Heaviside as HeavisideDTP
 from .discrete_time_problem import Cls as ClsDTP
 from .nosnoc_types import DcsMode, RKRepresentation
 from nosnoc.mpccsol.plugins.reg_homotopy import RegHomotopyOptions
+from nosnoc.mpccsol.plugins.ccopt import CCOptOptions
 
 @dataclass
 class IntegratorOptions():
@@ -37,7 +38,7 @@ class IntegratorOptions():
 
 @dataclass
 class FESDIntegratorOptions(IntegratorOptions):
-    solver_opts: RegHomotopyOptions = field(kw_only=True)
+    solver_opts: Union[RegHomotopyOptions, CCOptOptions] = field(kw_only=True)
     use_previous_solution: bool = True
     # Guess for the contact multiplier when a failed CLS step is retried assuming an impact occurs.
     # Any positive value works, it only has to push the solver away from the non impacting branch of
@@ -119,8 +120,10 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         self.set_param("rho_h",(), self.opts.rho_h)
         if isinstance(self.solver_opts, RegHomotopyOptions):
             plugin = "reg_homotopy"
+        elif isinstance(self.solver_opts, CCOptOptions):
+            plugin = "ccopt"
         else:
-            raise NotImplementedError("Only reg_homotopy is implemented")
+            raise NotImplementedError("Only reg_homotopy and ccopt are implemented")
 
         stats = self.dtp.solve(casadi_opts=self.solver_opts, plugin=plugin)
         self.stats.append(stats)
