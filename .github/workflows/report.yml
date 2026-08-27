@@ -1,11 +1,12 @@
 name: report
 on:
   workflow_run:
-    workflows: [nosnoc tests]
+    workflows: ["nosnoc tests"]
     types: [completed]
 
 permissions:
   checks: write
+  pull-requests: write
 
 jobs:
   checks:
