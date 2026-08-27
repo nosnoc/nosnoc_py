@@ -51,7 +51,7 @@ jobs:
     needs: [test_nosnoc]
     steps:
       - name: Download Test Report
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v8
         with:
           pattern: test-results-*
       - name: Publish Test Report
