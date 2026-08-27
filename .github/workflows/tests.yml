@@ -12,18 +12,20 @@ permissions:
 
 jobs:
   test_nosnoc:
-    runs-on: ubuntu-latest
+    name: nosnoc_py - python ${{ matrix.python-version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    matrix:
+      os: [ubuntu-latest] # windows-latest, macos-latest] for now just ubuntu
+      python-version: ['3.11', '3.12', '3.13', '3.14']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
     - name: Install Python and pip package
       shell: bash
       run: |
-        python3 --version
-        sudo pip3 install virtualenv
-        virtualenv --python=python3 env
-        source env/bin/activate
-        which python
         pip install -e . --group test
 
     - name: Run tests
