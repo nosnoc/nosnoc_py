@@ -8,7 +8,7 @@ dependencies = [
   'matplotlib',
   'vdx>=0.0.2'
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 authors = [
   {name = "Anton Pozharskiy", email = "anton.pozharskiy@imtek.uni-freiburg.de"},
   {name = "Jonathan Frey", email = "jonathan.frey@imtek.uni-freiburg.de"},
