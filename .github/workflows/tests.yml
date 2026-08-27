@@ -34,7 +34,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p test-results-${{ matrix.python-version }}
-        python -m pytest --junitxml test-results/results.xml --cov=nosnoc --cov-report=html:test-results/coverage test --tb=long -n 2
+        python -m pytest --junitxml test-results-${{ matrix.python-version }}/results.xml --cov=nosnoc --cov-report=html:test-results-${{ matrix.python-version }}/coverage test --tb=long -n 2
 
     - name: Upload test results
       if: always()
