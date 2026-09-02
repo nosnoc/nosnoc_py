@@ -174,7 +174,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         w_init = np.copy(self.dtp.w.init)
 
         start_fe = 2 if opts.no_initial_impacts else 1
-        if self.dtp._is_relaxed_oc():
+        if not self.dtp._has_impulse():
             # Patel's relaxed formulation has no impulse variables; the impact is a large contact
             # force, so guess that instead, using the same positive value as for the impulse.
             for jj in range(1, opts.N_finite_elements[0]+1):
@@ -187,9 +187,12 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 self.dtp.w.Y_gap[1,jj](init=0.0)
                 self.dtp.w.P_vn[1,jj](init=0.0)
                 self.dtp.w.N_vn[1,jj](init=0.0)
+            # The impulse-only discretization has no contact force to zero out, only the gap.
+            has_lambda = self.dtp._has_contact_force()
             for jj in range(1, opts.N_finite_elements[0]+1):
                 for kk in range(1, opts.n_s+1):
-                    self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
+                    if has_lambda:
+                        self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
                     self.dtp.w.y_gap[1,jj,kk](init=0.0)
 
         # Drop the failed attempt, then re-solve.
@@ -248,7 +251,9 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 print(f"'Integration step {ii+1} / {integrator_opts.N_sim} ({t_current} s / {integrator_opts.N_sim*self.dtp.p.T[()].val} s) converged in {wall_time_total} s.")
 
             if opts.use_fesd:
-                h = self.dtp.w.h[:,:].res
+                # A single finite element per stage yields a 0-d array, which the consumers
+                # below index element wise, so keep it 1-d.
+                h = np.atleast_1d(self.dtp.w.h[:,:].res)
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
 
@@ -375,7 +380,9 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         for w in self.w_all:
             np.copyto(self.dtp.w.res, w)
             if opts.use_fesd:
-                h = self.dtp.w.h[:,:].res
+                # A single finite element per stage yields a 0-d array, which the consumers
+                # below index element wise, so keep it 1-d.
+                h = np.atleast_1d(self.dtp.w.h[:,:].res)
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             t_grid.append(t_grid[-1][-1] + np.cumsum(h))
@@ -399,7 +406,9 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         for w in self.w_all:
             np.copyto(self.dtp.w.res, w)
             if opts.use_fesd:
-                h = self.dtp.w.h[:,:].res
+                # A single finite element per stage yields a 0-d array, which the consumers
+                # below index element wise, so keep it 1-d.
+                h = np.atleast_1d(self.dtp.w.h[:,:].res)
             else:
                 h = np.ones(opts.N_finite_elements[0]) * self.dtp.p.T[()].val/opts.N_finite_elements[0]
             for jj in range(len(h)):

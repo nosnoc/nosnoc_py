@@ -133,6 +133,46 @@ class ClsDiscretization(Enum):
     contact force lambda_n acting over one shrinking finite element. It is an approximation at
     finite step size that converges to the exact plastic impact as h -> 0.
     """
+    RELAXED_OC_IMPULSE = auto()
+    """
+    The relaxed OC with FESD-J's impulse block added, but not its cross complementarity.
+
+    The finite element boundaries carry the impulse variables and Newton's restitution law,
+    M(v^+ - v^-) = J_n Lambda_n with 0 <= Lambda_n perp Y_gap + P_vn + N_vn >= 0, so the velocity
+    may *jump* and a nonzero coefficient of restitution is representable.
+
+    What it does not carry is FESD-J's `lambda_normal perp Y_gap` cross complementarity, which is
+    what forbids a contact force on an element whose left boundary still has a positive gap. The
+    relaxed OC's *smeared* impact -- a large contact force over one collapsing element -- therefore
+    remains feasible alongside the exact one: at a boundary the trajectory reaches with v^- = 0,
+    because the impact already happened inside the previous element, the restitution law degenerates
+    to 0 = 0 and constrains nothing.
+
+    This mode is therefore not exact. It exists to separate the two ingredients of FESD-J: it offers
+    the exact impact without forbidding the smeared one, so comparing it against `RELAXED_OC` and
+    `FESD_J` tells apart which of the two rules out a spurious solution.
+    """
+    RELAXED_OC_IMPULSE_ONLY = auto()
+    """
+    Contact enters only as an impulse at the finite element boundaries, never as a force.
+
+    Like `RELAXED_OC_IMPULSE` the boundaries carry the impulse variables and Newton's restitution
+    law, but the continuous contact force `lambda_normal` does not exist at all: the right hand side
+    of the ODE is pure free flight, M v' = f_v, and the whole cross complementarity
+    `lambda_normal perp y_gap` is gone with it. Non-penetration comes from the lifted gap alone,
+    y_gap = f_c(q) >= 0 at the RK stage points and the right boundary point.
+
+    Because there is no force, the *smeared* impact that `RELAXED_OC` and `RELAXED_OC_IMPULSE` both
+    admit -- a large contact force over one collapsing element -- is structurally impossible here
+    rather than merely disfavoured by the solver. FESD-J rules it out too, but by adding a
+    constraint (`lambda_normal perp Y_gap`); this mode rules it out by removing the variable.
+
+    Note:
+        Sustained contact cannot be represented. Holding a resting contact needs a steady contact
+        force, and with only impulses available the discretization would have to fire one at every
+        element boundary. Use it for problems whose contacts are genuinely impulsive, such as a ball
+        that bounces away immediately; a body coming to rest on a surface is out of scope.
+    """
 
 
 class Status(Enum):

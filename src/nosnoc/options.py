@@ -82,7 +82,9 @@ class Options():
     initial_N_vt: float           = 1 # double: Initial value for negative tangential velocity slack in FESD-J reformulation impulse calculation.
     initial_Alpha_vt: float       = 1 # double: Initial value fo tangential velocity step function in FESD-J reformulation impulse calculation.
 
-    initial_lambda_normal: float  = 1 # double: Initial value for $\lambda_n$ in FESD-J reformulation.
+    # double: Initial value for $\lambda_n$ in FESD-J reformulation. No effect under
+    # `cls_discretization = RELAXED_OC_IMPULSE_ONLY`, which has no contact force.
+    initial_lambda_normal: float  = 1
     initial_p_vn: float           = 1 # double: Initial value for positive normal velocity slack in FESD-J reformulation.
     initial_n_vn: float           = 1 # double: Initial value for negative normal velocity slack in FESD-J reformulation.
     initial_y_gap: float          = 1 # double: Initial value for gap function in FESD-J reformulation.
@@ -116,7 +118,9 @@ class Options():
     ub_N_vt: float           = np.inf # double: Max value for negative tangential velocity slack in FESD-J reformulation impulse calculation.
     ub_Alpha_vt: float       = np.inf # double: Max value fo tangential velocity step function in FESD-J reformulation impulse calculation.
 
-    ub_lambda_normal: float  = np.inf # double: Max value for $\lambda_n$ in FESD-J reformulation.
+    # double: Max value for $\lambda_n$ in FESD-J reformulation. No effect under
+    # `cls_discretization = RELAXED_OC_IMPULSE_ONLY`, which has no contact force.
+    ub_lambda_normal: float  = np.inf
     ub_p_vn: float           = np.inf # double: Max value for positive normal velocity slack in FESD-J reformulation.
     ub_n_vn: float           = np.inf # double: Max value for negative normal velocity slack in FESD-J reformulation.
     ub_y_gap: float          = np.inf # double: Max value for gap function in FESD-J reformulation.
@@ -208,12 +212,26 @@ class Options():
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
     # ClsDiscretization: Which discretization to use for the impact of a Complementarity Lagrangian
-    # System. FESD_J (default) is exact (impulse + velocity jump at FE boundaries); RELAXED_OC is
-    # Patel et al.'s relaxed orthogonal-collocation formulation (velocity continuity + contact force
-    # over a shrinking element), approximate at finite h. RELAXED_OC requires `use_fesd = True`.
+    # System. The three modes form a ladder, each adding one piece to the one above it:
+    #
+    #   * RELAXED_OC: Patel et al.'s relaxed orthogonal-collocation formulation (velocity continuity
+    #     + contact force over a shrinking element), approximate at finite h.
+    #   * RELAXED_OC_IMPULSE: adds the impulse and Newton's restitution law at the element
+    #     boundaries, so the velocity may jump and a nonzero `e` is representable. The *smeared*
+    #     impact of the relaxed OC stays feasible beside the exact one.
+    #   * FESD_J (default): additionally adds the cross complementarity
+    #     $\lambda_n^{i,j,k} \perp Y_\mathrm{gap}^{i,j}$, which makes the smeared impact infeasible,
+    #     and the non-penetration constraint of `eps_cls`. Exact.
+    #
+    # RELAXED_OC_IMPULSE_ONLY branches off RELAXED_OC_IMPULSE rather than continuing the ladder: it
+    # *removes* the contact force $\lambda_n$ instead of adding a constraint, so contact is only
+    # ever an impulse and the smeared impact is impossible rather than merely forbidden. It cannot
+    # hold a sustained contact, see `ClsDiscretization`.
+    #
+    # Everything but FESD_J with `use_fesd = False` requires `use_fesd = True`.
     #
     # See Also:
-    #     `ClsDiscretization` for more details on the difference between the two.
+    #     `ClsDiscretization` for more details on the differences between the three.
     cls_discretization: ClsDiscretization = ClsDiscretization.FESD_J
 
     friction_model: FrictionModel = FrictionModel.CONIC
@@ -230,7 +248,8 @@ class Options():
     # double: enforce $f_c \ge 0$ at an explicit Euler step of length `eps_cls`*h after the impact.
     #
     # This is Eq. (18) of :cite:`Nurkanovic2024` and excludes spurious solutions with a zero
-    # impulse and a very large contact force. Set to 0 to disable.
+    # impulse and a very large contact force. Set to 0 to disable. Only emitted by
+    # `cls_discretization = FESD_J`, which is the only mode carrying the rest of Eq. (17) too.
     eps_cls: float = 1e-3
     fixed_eps_cls: bool = False # boolean: use fixed step eps_cls instead of a multiple of h.
 
@@ -381,10 +400,13 @@ class Options():
         if isinstance(self.N_finite_elements, int):
             self.N_finite_elements = [self.N_finite_elements]*self.N_stages
 
-        # The relaxed orthogonal-collocation formulation needs the variable finite element lengths
+        # The relaxed orthogonal-collocation formulations need the variable finite element lengths
         # and cross complementarity that only exist in the FESD machinery.
-        if self.cls_discretization == ClsDiscretization.RELAXED_OC and not self.use_fesd:
-            raise Exception("cls_discretization = RELAXED_OC requires use_fesd = True.")
+        relaxed_oc = (ClsDiscretization.RELAXED_OC, ClsDiscretization.RELAXED_OC_IMPULSE,
+                      ClsDiscretization.RELAXED_OC_IMPULSE_ONLY)
+        if self.cls_discretization in relaxed_oc and not self.use_fesd:
+            raise Exception(f"cls_discretization = {self.cls_discretization.name} requires "
+                            "use_fesd = True.")
 
         self._make_T_h_consistent()
         self._make_gamma_h_consistent()
