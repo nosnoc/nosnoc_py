@@ -1,12 +1,13 @@
 from .base import Base, BaseDims
 from ..dims import Dims
+from ..nosnoc_types import FrictionModel
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from numbers import Real
+from warnings import warn
 
 import casadi as ca
 import numpy as np
-
 
 
 class ClsDims(Dims):
@@ -15,8 +16,22 @@ class ClsDims(Dims):
         self.n_q = 0 # Number of generalized coordinates.
         self.n_v = 0 # Number of generalized velocities, equal to n_q.
         self.n_c = 0 # Number of possible contacts.
-        self.n_t = 0 # Number of tangential directions per contact (0 if frictionless).
-        self.n_tangents = 0 # Total number of tangential multipliers, n_t*n_c.
+        # Spatial dimension of a contact, 2 for a planar and 3 for a spatial problem. Derived from
+        # the column count of J_tangent, stays 0 if only D_tangent was provided.
+        self.n_dim_contact = 0
+        # Tangential directions per contact used by the Conic friction model. This is the dimension
+        # of the tangent space, n_dim_contact-1, i.e. geometry rather than a modelling choice: 1 for
+        # a planar contact, 2 for a spatial one. The number of *cone constraints* is always n_c, one
+        # exact Coulomb cone per contact.
+        self.n_t_conic = 0
+        # Polyhedral generators (facets) per contact, the column count of D_tangent per contact.
+        # Unlike n_t_conic this *is* an approximation-fidelity choice: 2 in the plane (where the
+        # polyhedral cone is exact) and 4 or more in space.
+        self.n_facets = 0
+        # NOTE: the resolved n_t / n_tangents depend on opts.friction_model and therefore live on
+        # `dcs.ClsDcsDims`, not here. `Dims.__setattr__` writes through to the parent whenever the
+        # attribute already exists there, so declaring them here would make every DCS built from
+        # this model overwrite the dims of every other one.
 
 
 class Cls(Base):
@@ -37,12 +52,19 @@ class Cls(Base):
 
     with $i = 1\ldots n_c$. This model is discretized with the FESD-J method.
 
-   
+    Coulomb friction is added by passing a nonzero coefficient of friction `mu` together with a
+    tangent Jacobian. Which of the two friction models is used is an *option*
+    (`opts.friction_model`), not a property of the model, so both tangent Jacobians are described
+    here and the discretization picks the one it needs:
 
-    Note:
-        Friction is not yet implemented. Passing a nonzero coefficient of friction raises
-        a `NotImplementedError`.
+    * `FrictionModel.CONIC` uses `J_tangent`, whose columns span the tangent space at each contact
+      (1 column per contact in the plane, 2 in space), and imposes the exact cone
+      $\|\lambda_{\mathrm{t}}^i\|_2 \le \mu^i\lambda_{\mathrm{n}}^i$.
+    * `FrictionModel.POLYHEDRAL` uses `D_tangent`, whose columns are the generators of a polyhedral
+      approximation of that cone. In the plane the approximation is exact.
 
+    If `D_tangent` is omitted it is built from `J_tangent` as `[t_1, -t_1, t_2, -t_2, ...]` per
+    contact. Note the per-contact blocking: the columns belonging to contact $i$ are contiguous.
     """
     def __init__(self,
                  *,
@@ -55,9 +77,14 @@ class Cls(Base):
                  M: Optional[ca.SX|np.ndarray] = None, # Generalized inertia matrix, may depend on $q$.
                  inv_M: Optional[ca.SX|np.ndarray] = None, # User provided inverse of the inertia matrix.
                  J_normal: Optional[ca.SX] = None, # Normal contact Jacobian, computed from f_c if omitted.
-                 J_tangent: Optional[ca.SX] = None, # Tangent contact Jacobian, required for Conic friction.
-                 # Polyhedral tangent Jacobian, required for Polyhedral friction.
-                 # For every column $D_i$, $-D_i$ must also be a column of $D$.
+                 # Tangent basis, $n_q \times (n_t^{\mathrm{conic}} n_c)$, blocked per contact.
+                 # Required for Conic friction, and used to build D_tangent if that is omitted.
+                 # Its columns should be orthonormal within each contact block.
+                 J_tangent: Optional[ca.SX] = None,
+                 # Generators of the polyhedral friction cone, $n_q \times (n_{\mathrm{facets}} n_c)$,
+                 # blocked per contact. Required for Polyhedral friction; built from J_tangent as
+                 # [t_1, -t_1, t_2, -t_2] per contact when omitted. Within each contact block every
+                 # column must have its negation present, and all columns should be unit vectors.
                  D_tangent: Optional[ca.SX] = None,
                  **kwargs
                  ):
@@ -128,13 +155,164 @@ class Cls(Base):
         elif self.J_normal.size(1) != dims.n_q or self.J_normal.size(2) != dims.n_c:
             raise RuntimeError(f"J_normal must be a {dims.n_q}x{dims.n_c} matrix, got {self.J_normal.size(1)}x{self.J_normal.size(2)}.")
 
-        # TODO(@stefan) implement the Conic and Polyhedral friction cones. n_t and n_tangents are
-        # already laid out the way the friction variables will need them, cf. the MATLAB
-        # implementation in `+nosnoc/+model/Cls.m`.
+        if self.J_tangent is not None:
+            self.J_tangent = ca.SX(self.J_tangent)
+        if self.D_tangent is not None:
+            self.D_tangent = ca.SX(self.D_tangent)
         if self.friction_exists:
-            raise NotImplementedError("Friction is not yet implemented for the Python CLS, please use mu=0 for all contacts.")
-        dims.n_t = 0
-        dims.n_tangents = 0
+            self.__setup_friction()
+
+    def __setup_friction(self):
+        """
+        Resolve the tangent Jacobians and the friction dimensions that do not depend on options.
+
+        `n_t_conic` and `n_facets` are both derived here; which of the two the discretization uses
+        is decided later by `friction_dims`, so that one model can feed several discretizations with
+        different `opts.friction_model`.
+        """
+        dims = self.dims
+
+        if self.J_tangent is None and self.D_tangent is None:
+            raise RuntimeError(
+                "A model with friction (mu > 0) needs a tangent Jacobian: provide J_tangent "
+                "(required by FrictionModel.CONIC, and used to build D_tangent automatically) "
+                "and/or D_tangent (required by FrictionModel.POLYHEDRAL).")
+
+        if self.J_tangent is not None:
+            dims.n_t_conic = self.__tangent_cols_per_contact(self.J_tangent, "J_tangent")
+            dims.n_dim_contact = dims.n_t_conic + 1
+
+        if self.D_tangent is None:
+            # Build the polyhedral generators from the tangent basis, blocked per contact as
+            # [t_1, -t_1, t_2, -t_2, ...]. Deliberately *not* [J_tangent, -J_tangent], which puts
+            # all the positive directions first and so mis-associates facets with contacts as soon
+            # as there is more than one contact.
+            cols = []
+            for ii in range(dims.n_c):
+                for kk in range(dims.n_t_conic):
+                    t = self.J_tangent[:, ii*dims.n_t_conic + kk]
+                    cols += [t, -t]
+            self.D_tangent = ca.horzcat(*cols)
+            dims.n_facets = 2*dims.n_t_conic
+        else:
+            dims.n_facets = self.__tangent_cols_per_contact(self.D_tangent, "D_tangent")
+            if dims.n_facets % 2 != 0:
+                raise RuntimeError(
+                    f"D_tangent must have an even number of columns per contact so that the "
+                    f"polyhedral cone is symmetric, got {dims.n_facets}.")
+            self.__check_d_tangent_pairing()
+
+        self.__check_tangent_conditioning()
+
+    def __tangent_cols_per_contact(self, J, name: str) -> int:
+        """Validate the shape of a tangent Jacobian and return its column count per contact."""
+        dims = self.dims
+        if J.size(1) != dims.n_q:
+            raise RuntimeError(
+                f"{name} must have one row per generalized coordinate ({dims.n_q}), got {J.size(1)}.")
+        if J.size(2) % dims.n_c != 0:
+            raise RuntimeError(
+                f"{name} must have the same number of columns for each of the {dims.n_c} contacts, "
+                f"blocked per contact, got {J.size(2)} columns in total.")
+        return J.size(2)//dims.n_c
+
+    def __eval_at_x0(self, expr, name: str) -> Optional[np.ndarray]:
+        """
+        Evaluate a (possibly q dependent) tangent Jacobian at x0, for the numerical sanity checks.
+
+        Returns None if the expression depends on anything but the state, or is not finite there, in
+        which case the caller skips its check rather than failing on a perfectly valid model.
+        """
+        try:
+            val = np.array(ca.Function(name, [self.x], [expr])(self.x0))
+        except Exception:
+            return None
+        return val if np.all(np.isfinite(val)) else None
+
+    def __check_d_tangent_pairing(self):
+        """
+        Every generator of the polyhedral cone must have its negation among the generators of the
+        *same* contact, otherwise the friction force cannot oppose an arbitrary sliding direction.
+        This is the check that catches a D_tangent built as [J_tangent, -J_tangent], which is only
+        correct for a single contact.
+        """
+        dims = self.dims
+        D = self.__eval_at_x0(self.D_tangent, "D_tangent_at_x0")
+        if D is None:
+            return
+        scale = max(np.max(np.abs(D)), 1.0)
+        for ii in range(dims.n_c):
+            lo, hi = ii*dims.n_facets, (ii+1)*dims.n_facets
+            block = D[:, lo:hi]
+            for jj in range(dims.n_facets):
+                partner = np.min(np.linalg.norm(block + block[:, [jj]], axis=0))
+                if partner > 1e-9*scale:
+                    raise RuntimeError(
+                        f"Column {lo+jj} of D_tangent has no matching -column within the block of "
+                        f"contact {ii} (columns {lo}:{hi}). The polyhedral generators must be "
+                        f"blocked per contact and symmetric, e.g. "
+                        f"[t_1, -t_1, t_2, -t_2] for each contact in turn. Note that "
+                        f"[J_tangent, -J_tangent] has the wrong blocking for more than one contact.")
+
+    def __check_tangent_conditioning(self):
+        """
+        Warn about tangent Jacobians that are shaped right but silently change the friction law.
+
+        Both friction models write their cone bound on the *coefficients* rather than on the force,
+        so the columns carry an implicit normalization assumption: the conic bound
+        ||lambda_t|| <= mu*lambda_n only means isotropic Coulomb friction if J_tangent has
+        orthonormal columns, and the polyhedral budget sum(lambda_t) <= mu*lambda_n weights every
+        generator equally, so the columns of D_tangent must be unit vectors. Violating either gives
+        anisotropic friction with no error anywhere, so it is worth a warning.
+        """
+        dims = self.dims
+        if self.J_tangent is not None:
+            J = self.__eval_at_x0(self.J_tangent, "J_tangent_at_x0")
+            if J is not None:
+                for ii in range(dims.n_c):
+                    block = J[:, ii*dims.n_t_conic:(ii+1)*dims.n_t_conic]
+                    if np.linalg.norm(block.T@block - np.eye(dims.n_t_conic)) > 1e-6:
+                        warn(f"The columns of J_tangent for contact {ii} are not orthonormal at x0. "
+                             "The conic friction model bounds ||lambda_t||, which only equals the "
+                             "magnitude of the tangential force J_tangent@lambda_t for an "
+                             "orthonormal basis; otherwise the friction cone becomes an elliptic "
+                             "cone and friction is anisotropic.", stacklevel=4)
+        D = self.__eval_at_x0(self.D_tangent, "D_tangent_at_x0")
+        if D is not None:
+            norms = np.linalg.norm(D, axis=0)
+            if np.any(np.abs(norms - 1.0) > 1e-6):
+                warn("The columns of D_tangent are not unit vectors at x0. The polyhedral friction "
+                     "model spends a single budget mu*lambda_n over all generators, so a longer "
+                     "column reaches further than its neighbours and the friction cone is "
+                     "anisotropic. Normalize the columns of D_tangent (or of J_tangent, from which "
+                     "it is built).", stacklevel=4)
+
+    def friction_dims(self, friction_model: FrictionModel) -> Tuple[int, int]:
+        """
+        Resolve `(n_t, n_tangents)` for a friction model.
+
+        `n_t` is the number of tangential multipliers per contact and `n_tangents = n_t*n_c` the
+        total. This is deliberately a query rather than an assignment: the answer depends on options
+        the model does not own, and several discretizations may share one model.
+        """
+        dims = self.dims
+        if not self.friction_exists:
+            return 0, 0
+        if friction_model == FrictionModel.CONIC:
+            if self.J_tangent is None:
+                raise RuntimeError(
+                    "FrictionModel.CONIC needs the tangent basis J_tangent, but only D_tangent was "
+                    "provided. Either pass J_tangent or use FrictionModel.POLYHEDRAL.")
+            if dims.n_t_conic == 1:
+                raise RuntimeError(
+                    "FrictionModel.CONIC was selected for a planar contact (J_tangent has a single "
+                    "column per contact, so the tangent space is one dimensional). In the plane the "
+                    "polyhedral friction cone is exact and yields an LCP rather than an NCP, which "
+                    "behaves much better numerically. Use FrictionModel.POLYHEDRAL.")
+            n_t = dims.n_t_conic
+        else:
+            n_t = dims.n_facets
+        return n_t, n_t*dims.n_c
 
     def __broadcast_to_contacts(self, val, name: str) -> np.ndarray:
         """

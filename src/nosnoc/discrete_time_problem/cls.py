@@ -7,7 +7,8 @@ import numpy as np
 from .base import Base
 from vdx.vartypes import *
 
-from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization, RKScheme
+from ..nosnoc_types import (RKRepresentation, CrossComplementarityMode, StepEquilibrationMode,
+                            ClsDiscretization, RKScheme, FrictionModel, ConicModelSwitchHandling)
 
 
 class Cls(Base):
@@ -23,6 +24,8 @@ class Cls(Base):
     def __init__(self, dcs, opts):
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
+        # Friction dependent symbols, equations and functions, grouped by the dcs.
+        self.variant = dcs.variant
         super().__init__(dcs, opts)
 
     def __apply_time_stepping_defaults(self, opts):
@@ -113,14 +116,103 @@ class Cls(Base):
                 "y_gap", dims.n_c, lb=0.0, ub=opts.ub_y_gap, init=opts.initial_y_gap)
 
         
+            if self.model.friction_exists:
+                self._create_stage_friction_variables(ii)
+
             if opts.use_fesd and not self._is_relaxed_oc():
                 fe_range = range(start_fe, opts.N_finite_elements[ii-1]+1)
                 self.w.Lambda_normal[ii,fe_range] = Primal("Lambda_normal", dims.n_c, lb=0.0, ub=opts.ub_Lambda_normal, init=opts.initial_Lambda_normal)
                 self.w.P_vn[ii,fe_range] = Primal("P_vn", dims.n_c, lb=0.0, ub=opts.ub_P_vn, init=opts.initial_P_vn)
                 self.w.N_vn[ii,fe_range] = Primal("N_vn", dims.n_c, lb=0.0, ub=opts.ub_N_vn, init=opts.initial_N_vn)
                 self.w.Y_gap[ii,fe_range] = Primal("Y_gap", dims.n_c, lb=0.0, ub=opts.ub_Y_gap, init=opts.initial_Y_gap)
+                if self.model.friction_exists:
+                    self._create_impulse_friction_variables(ii, fe_range)
 
         self._handle_x_box_constraints()
+
+    # ------------------------------------------------------ friction variable creation
+
+    def _is_polyhedral(self):
+        return self.opts.friction_model == FrictionModel.POLYHEDRAL
+
+    def _switch_handling(self):
+        return self.opts.conic_model_switch_handling
+
+    def _create_stage_friction_variables(self, ii):
+        """
+        Friction multipliers at the RK stage points, laid out like `lambda_normal`.
+
+        The tangential force is nonnegative per generator in the polyhedral model, where it is a
+        magnitude along a fixed direction, but free in sign in the conic model, where it is a
+        coordinate in the tangent basis.
+        """
+        opts = self.opts
+        dims = self.dcs.dims
+        fe = range(1, opts.N_finite_elements[ii-1]+1)
+        stg = range(1, opts.n_s+1)
+
+        if self._is_polyhedral():
+            self.w.lambda_tangent[ii,fe,stg] = Primal(
+                "lambda_tangent", self.variant.n_tangents, lb=0.0,
+                ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+            self.w.gamma_d[ii,fe,stg] = Primal(
+                "gamma_d", dims.n_c, lb=0.0, ub=opts.ub_gamma_d, init=opts.initial_gamma_d)
+            self.w.beta_d[ii,fe,stg] = Primal(
+                "beta_d", dims.n_c, lb=0.0, ub=opts.ub_beta_d, init=opts.initial_beta_d)
+            self.w.delta_d[ii,fe,stg] = Primal(
+                "delta_d", self.variant.n_tangents, lb=0.0, ub=opts.ub_delta_d, init=opts.initial_delta_d)
+            return
+
+        self.w.lambda_tangent[ii,fe,stg] = Primal(
+            "lambda_tangent", self.variant.n_tangents, lb=-opts.ub_lambda_tangent,
+            ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+        self.w.gamma[ii,fe,stg] = Primal(
+            "gamma", dims.n_c, lb=0.0, ub=opts.ub_gamma, init=opts.initial_gamma)
+        self.w.beta[ii,fe,stg] = Primal(
+            "beta", dims.n_c, lb=0.0, ub=opts.ub_beta, init=opts.initial_beta)
+        if self._switch_handling() != ConicModelSwitchHandling.PLAIN:
+            self.w.p_vt[ii,fe,stg] = Primal(
+                "p_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_p_vt, init=opts.initial_p_vt)
+            self.w.n_vt[ii,fe,stg] = Primal(
+                "n_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_n_vt, init=opts.initial_n_vt)
+            if self._switch_handling() == ConicModelSwitchHandling.LP:
+                # alpha_vt is a step function, so it is bounded to [0,1] and complementary to both
+                # the positive and the negative part of the tangential velocity.
+                self.w.alpha_vt[ii,fe,stg] = Primal(
+                    "alpha_vt", self.variant.n_tangents, lb=0.0, ub=1.0, init=opts.initial_alpha_vt)
+
+    def _create_impulse_friction_variables(self, ii, fe_range):
+        """Friction impulses at the finite element boundaries, laid out like `Lambda_normal`."""
+        opts = self.opts
+        dims = self.dcs.dims
+
+        if self._is_polyhedral():
+            self.w.Lambda_tangent[ii,fe_range] = Primal(
+                "Lambda_tangent", self.variant.n_tangents, lb=0.0,
+                ub=opts.ub_Lambda_tangent, init=opts.initial_Lambda_tangent)
+            self.w.Gamma_d[ii,fe_range] = Primal(
+                "Gamma_d", dims.n_c, lb=0.0, ub=opts.ub_Gamma_d, init=opts.initial_Gamma_d)
+            self.w.Beta_d[ii,fe_range] = Primal(
+                "Beta_d", dims.n_c, lb=0.0, ub=opts.ub_Beta_d, init=opts.initial_Beta_d)
+            self.w.Delta_d[ii,fe_range] = Primal(
+                "Delta_d", self.variant.n_tangents, lb=0.0, ub=opts.ub_Delta_d, init=opts.initial_Delta_d)
+            return
+
+        self.w.Lambda_tangent[ii,fe_range] = Primal(
+            "Lambda_tangent", self.variant.n_tangents, lb=-opts.ub_Lambda_tangent,
+            ub=opts.ub_Lambda_tangent, init=opts.initial_Lambda_tangent)
+        self.w.Gamma[ii,fe_range] = Primal(
+            "Gamma", dims.n_c, lb=0.0, ub=opts.ub_Gamma, init=opts.initial_Gamma)
+        self.w.Beta[ii,fe_range] = Primal(
+            "Beta", dims.n_c, lb=0.0, ub=opts.ub_Beta, init=opts.initial_Beta)
+        if self._switch_handling() != ConicModelSwitchHandling.PLAIN:
+            self.w.P_vt[ii,fe_range] = Primal(
+                "P_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_P_vt, init=opts.initial_P_vt)
+            self.w.N_vt[ii,fe_range] = Primal(
+                "N_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_N_vt, init=opts.initial_N_vt)
+            if self._switch_handling() == ConicModelSwitchHandling.LP:
+                self.w.Alpha_vt[ii,fe_range] = Primal(
+                    "Alpha_vt", self.variant.n_tangents, lb=0.0, ub=1.0, init=opts.initial_Alpha_vt)
 
     def _create_xvz_cls(self, ii):
         """
@@ -158,52 +250,39 @@ class Cls(Base):
 
     def _build_z_impulse(self, ii, jj):
         """Stacked impulse algebraics for `g_impulse_fun`, matching the dcs `z_impulse` order."""
-        return ca.vertcat(
-            self.w.Lambda_normal[ii,jj],
-            self.w.Y_gap[ii,jj],
-            self.w.P_vn[ii,jj],
-            self.w.N_vn[ii,jj],
-        )
+        return ca.vertcat(*[getattr(self.w, name)[ii,jj]
+                            for name in self.variant.z_impulse_blocks])
 
     @override
     def _build_prk(self, ii, jj):
-        # The CLS RK functions take one extra parameter, h_rescale, the
-        # fixed step length in the non-FESD implicit-Euler scheme where lambda_normal is an impulse
-        # rather than a force. Only f_x uses it; f_q_rk / g_rk ignore it.
+        # The CLS RK functions take two extra parameters. h_rescale is the fixed step length in
+        # the non-FESD implicit-Euler scheme where lambda_normal is an impulse rather than a force;
+        # only f_x uses it, f_q_rk / g_rk ignore it. eps_t is the conic apex regularization, left
+        # symbolic by the dcs so that it can be changed without rebuilding the reformulation.
         return ca.vertcat(
             self.w.u[ii],
             self.w.v_global[()],
             self._get_stage_parameters(ii),
             self._h_rescale(ii),
+            self.opts.eps_t,
         )
 
     @override
     def _get_rk_stage_z(self, ii, jj, kk):
-        # The stacked algebraic order (lambda_normal, y_gap) must match the dcs `z_alg` used to
-        # build f_x_rk / f_q_rk / g_rk. The h_rescale of lambda_normal happens inside f_x (via the
-        # prk parameter), so its stacked here.
+        # The stacked algebraic order must match the dcs `z_alg` used to build f_x_rk / f_q_rk /
+        # g_rk, so it is rebuilt from the same block list rather than spelled out again here: the
+        # friction blocks come and go with opts.friction_model and opts.conic_model_switch_handling,
+        # and a mismatch would silently pair the wrong variable with the wrong equation. The
+        # h_rescale of the contact multipliers happens inside f_x (via the prk parameter), so they
+        # are stacked as they are.
+        z_alg = [getattr(self.w, name)[ii,jj,kk] for name in self.variant.z_alg_blocks]
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
-            return ca.vertcat(
-                self.w.x[ii,jj,kk],
-                self.w.z[ii,jj,kk],
-                self.w.lambda_normal[ii,jj,kk],
-                self.w.y_gap[ii,jj,kk],
-            )
+            head = [self.w.x[ii,jj,kk], self.w.z[ii,jj,kk]]
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL:
-            return ca.vertcat(
-                self.w.v[ii,jj,kk],
-                self.w.z[ii,jj,kk],
-                self.w.lambda_normal[ii,jj,kk],
-                self.w.y_gap[ii,jj,kk],
-            )
+            head = [self.w.v[ii,jj,kk], self.w.z[ii,jj,kk]]
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL_LIFT_X:
-            return ca.vertcat(
-                self.w.v[ii,jj,kk],
-                self.w.x[ii,jj,kk],
-                self.w.z[ii,jj,kk],
-                self.w.lambda_normal[ii,jj,kk],
-                self.w.y_gap[ii,jj,kk],
-            )
+            head = [self.w.v[ii,jj,kk], self.w.x[ii,jj,kk], self.w.z[ii,jj,kk]]
+        return ca.vertcat(*head, *z_alg)
 
 
     @override
@@ -238,7 +317,8 @@ class Cls(Base):
             
                 if opts.use_fesd and not self._is_relaxed_oc() and (jj != 1 or not opts.no_initial_impacts):
                     self.g.impulse[ii,jj] = Constraint(
-                        dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj), v_global, p))
+                        self.variant.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj),
+                                                   v_global, p, opts.eps_t))
                    
                     if opts.eps_cls > 0:
                         step = opts.eps_cls if opts.fixed_eps_cls else h*opts.eps_cls
@@ -251,7 +331,8 @@ class Cls(Base):
                 z_ii_jj = self._build_z(ii, jj)
                 prk_ii_jj = self._build_prk(ii, jj)
                 x_end, q_end, dynamic, algebraic = self.rk.collocation_constraints(
-                    x_lbp, z_ii_jj, prk_ii_jj, h, dcs.f_x_rk, dcs.f_q_rk, dcs.g_rk, sot=s_sot)
+                    x_lbp, z_ii_jj, prk_ii_jj, h, self.variant.f_x_rk, self.variant.f_q_rk,
+                        self.variant.g_rk, sot=s_sot)
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk] = Constraint(dynamic[kk-1])
                     self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])
@@ -301,13 +382,89 @@ class Cls(Base):
         start_fe = self._start_fe()
         for ii in range(1, opts.N_stages+1):
             for jj in range(start_fe, opts.N_finite_elements[ii-1]+1):
-                Gij = ca.vertcat(self.w.Lambda_normal[ii,jj], self.w.P_vn[ii,jj])
-                Hij = ca.vertcat(
-                    self.w.Y_gap[ii,jj] + self.w.P_vn[ii,jj] + self.w.N_vn[ii,jj],
-                    self.w.N_vn[ii,jj],
-                )
-                self.G.impulse_comp[ii,jj] = CConstraint(Gij)
-                self.H.impulse_comp[ii,jj] = CConstraint(Hij)
+                Gij = [self.w.Lambda_normal[ii,jj], self.w.P_vn[ii,jj]]
+                Hij = [self.w.Y_gap[ii,jj] + self.w.P_vn[ii,jj] + self.w.N_vn[ii,jj],
+                       self.w.N_vn[ii,jj]]
+                G_f, H_f = self._friction_impulse_pairs(ii, jj)
+                self.G.impulse_comp[ii,jj] = CConstraint(ca.vertcat(*Gij, *G_f))
+                self.H.impulse_comp[ii,jj] = CConstraint(ca.vertcat(*Hij, *H_f))
+
+    # ------------------------------------------------------ friction complementarity pairs
+
+    def _friction_impulse_pairs(self, ii, jj):
+        """
+        Friction part of the aggregated impulse complementarity, between impulse variables only.
+        """
+        if not self.model.friction_exists:
+            return [], []
+        w = self.w
+        if self._is_polyhedral():
+            return ([w.Delta_d[ii,jj], w.Gamma_d[ii,jj]],
+                    [w.Lambda_tangent[ii,jj], w.Beta_d[ii,jj]])
+        G = [w.Gamma[ii,jj]]
+        H = [w.Beta[ii,jj]]
+        sh = self._switch_handling()
+        if sh == ConicModelSwitchHandling.ABS:
+            G.append(w.P_vt[ii,jj]);   H.append(w.N_vt[ii,jj])
+        elif sh == ConicModelSwitchHandling.LP:
+            G.append(w.Alpha_vt[ii,jj]);     H.append(w.P_vt[ii,jj])
+            G.append(1 - w.Alpha_vt[ii,jj]); H.append(w.N_vt[ii,jj])
+        return G, H
+
+    def _friction_pairs_stage_impulse(self, ii, jj, stage_at, n_terms):
+        """
+        Friction pairs coupling stage quantities of finite element `jj` to its impulse quantities.
+
+        `stage_at(name)` returns the stage side expression, either a single RK stage point or a sum
+        over them, and `n_terms` is how many stage points that expression aggregates. The count is
+        needed for the `LP` step function, whose complement over a sum of `n` stages is
+        `n - sum(alpha_vt)` rather than `1 - alpha_vt`.
+        """
+        if not self.model.friction_exists:
+            return [], []
+        w = self.w
+        if self._is_polyhedral():
+            return ([stage_at("lambda_tangent"), stage_at("beta_d")],
+                    [w.Delta_d[ii,jj], w.Gamma_d[ii,jj]])
+        G = [stage_at("beta")]
+        H = [w.Gamma[ii,jj]]
+        sh = self._switch_handling()
+        if sh == ConicModelSwitchHandling.ABS:
+            # Both orientations, so that a sign change of the tangential velocity across the impact
+            # is detected regardless of which side it happens on.
+            G.append(stage_at("p_vt")); H.append(w.N_vt[ii,jj])
+            G.append(w.P_vt[ii,jj]);    H.append(stage_at("n_vt"))
+        elif sh == ConicModelSwitchHandling.LP:
+            alpha = stage_at("alpha_vt")
+            G.append(alpha);             H.append(w.P_vt[ii,jj])
+            G.append(n_terms - alpha);   H.append(w.N_vt[ii,jj])
+        return G, H
+
+    def _friction_pairs_stage_stage(self, ii, jj, lhs_at, n_lhs, rhs_at):
+        """Friction pairs between stage quantities of the same finite element."""
+        if not self.model.friction_exists:
+            return [], []
+        if self._is_polyhedral():
+            return ([lhs_at("lambda_tangent"), lhs_at("beta_d")],
+                    [rhs_at("delta_d"), rhs_at("gamma_d")])
+        G = [lhs_at("beta")]
+        H = [rhs_at("gamma")]
+        sh = self._switch_handling()
+        if sh == ConicModelSwitchHandling.ABS:
+            G.append(lhs_at("p_vt")); H.append(rhs_at("n_vt"))
+        elif sh == ConicModelSwitchHandling.LP:
+            alpha = lhs_at("alpha_vt")
+            G.append(alpha);           H.append(rhs_at("p_vt"))
+            G.append(n_lhs - alpha);   H.append(rhs_at("n_vt"))
+        return G, H
+
+    def _at_stage(self, ii, jj, kk):
+        """Accessor for a friction variable at a single RK stage point."""
+        return lambda name: getattr(self.w, name)[ii,jj,kk]
+
+    def _sum_stages(self, ii, jj):
+        """Accessor summing a friction variable over all RK stage points of a finite element."""
+        return lambda name: ca.sum2(getattr(self.w, name)[ii,jj,:].sym)
 
     def __stage_stage(self):
         opts = self.opts
@@ -317,14 +474,24 @@ class Cls(Base):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 Gij = []
                 Hij = []
-                if (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc():
+                use_impulse = (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc()
+                if use_impulse:
                     for kk in range(1, opts.n_s+1):
                         Gij.append(self.w.lambda_normal[ii,jj,kk])
                         Hij.append(self.w.Y_gap[ii,jj])
+                        G_f, H_f = self._friction_pairs_stage_impulse(
+                            ii, jj, self._at_stage(ii,jj,kk), 1)
+                        Gij += G_f; Hij += H_f
                 for kk in range(1, opts.n_s+1):
                     for rr in range(1, opts.n_s+rbp+1):
                         Gij.append(self.w.lambda_normal[ii,jj,kk])
                         Hij.append(self.w.y_gap[ii,jj,rr])
+                    for rr in range(1, opts.n_s+1):
+                        # The friction variables only live at the RK stage points, not at the right
+                        # boundary point that y_gap additionally occupies.
+                        G_f, H_f = self._friction_pairs_stage_stage(
+                            ii, jj, self._at_stage(ii,jj,kk), 1, self._at_stage(ii,jj,rr))
+                        Gij += G_f; Hij += H_f
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
 
@@ -335,14 +502,21 @@ class Cls(Base):
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 sum_lambda = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
+                sum_at = self._sum_stages(ii, jj)
                 Gij = []
                 Hij = []
                 if (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc():
                     Gij.append(sum_lambda)
                     Hij.append(self.w.Y_gap[ii,jj])
+                    G_f, H_f = self._friction_pairs_stage_impulse(ii, jj, sum_at, opts.n_s)
+                    Gij += G_f; Hij += H_f
                 for rr in range(1, opts.n_s+rbp+1):
                     Gij.append(sum_lambda)
                     Hij.append(self.w.y_gap[ii,jj,rr])
+                for rr in range(1, opts.n_s+1):
+                    G_f, H_f = self._friction_pairs_stage_stage(
+                        ii, jj, sum_at, opts.n_s, self._at_stage(ii,jj,rr))
+                    Gij += G_f; Hij += H_f
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
 
@@ -354,11 +528,19 @@ class Cls(Base):
                 use_Y = (jj != 1 or not opts.no_initial_impacts) and not self._is_relaxed_oc()
                 y_gap_lb = self.w.Y_gap[ii,jj] if use_Y else 0
                 sum_y_gap = y_gap_lb + ca.sum2(self.w.y_gap[ii,jj,:].sym)
+                sum_at = self._sum_stages(ii, jj)
                 Gij = []
                 Hij = []
                 for kk in range(1, opts.n_s+1):
                     Gij.append(self.w.lambda_normal[ii,jj,kk])
                     Hij.append(sum_y_gap)
+                    G_f, H_f = self._friction_pairs_stage_stage(
+                        ii, jj, self._at_stage(ii,jj,kk), 1, sum_at)
+                    Gij += G_f; Hij += H_f
+                    if use_Y:
+                        G_f, H_f = self._friction_pairs_stage_impulse(
+                            ii, jj, self._at_stage(ii,jj,kk), 1)
+                        Gij += G_f; Hij += H_f
                 self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
                 self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
 
@@ -371,16 +553,29 @@ class Cls(Base):
                 y_gap_lb = self.w.Y_gap[ii,jj] if use_Y else 0
                 sum_y_gap = y_gap_lb + ca.sum2(self.w.y_gap[ii,jj,:].sym)
                 sum_lambda = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
-                self.G.cross_comp[ii,jj] = CConstraint(sum_lambda)
-                self.H.cross_comp[ii,jj] = CConstraint(sum_y_gap)
+                sum_at = self._sum_stages(ii, jj)
+                Gij = [sum_lambda]
+                Hij = [sum_y_gap]
+                G_f, H_f = self._friction_pairs_stage_stage(ii, jj, sum_at, opts.n_s, sum_at)
+                Gij += G_f; Hij += H_f
+                if use_Y:
+                    G_f, H_f = self._friction_pairs_stage_impulse(ii, jj, sum_at, opts.n_s)
+                    Gij += G_f; Hij += H_f
+                self.G.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Gij))
+                self.H.cross_comp[ii,jj] = CConstraint(ca.vertcat(*Hij))
 
     def __standard(self):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
                 for kk in range(1, opts.n_s+1):
-                    self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
-                    self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
+                    at = self._at_stage(ii, jj, kk)
+                    Gij = [self.w.lambda_normal[ii,jj,kk].sym]
+                    Hij = [self.w.y_gap[ii,jj,kk].sym]
+                    G_f, H_f = self._friction_pairs_stage_stage(ii, jj, at, 1, at)
+                    Gij += G_f; Hij += H_f
+                    self.G.standard_comp[ii,jj,kk] = CConstraint(ca.vertcat(*Gij))
+                    self.H.standard_comp[ii,jj,kk] = CConstraint(ca.vertcat(*Hij))
 
 
     @override
@@ -410,6 +605,10 @@ class Cls(Base):
         """
         Switch indicator eta_n built from the gap and contact force.
         Positive if no switch happens at the boundary between FE jj-1 and jj, zero otherwise.
+
+        With friction the indicator additionally has to vanish at a stick/slip transition or a
+        reversal of the sliding direction, otherwise FESD only adapts the step size at impacts and
+        the friction switches are smeared over a finite element.
         """
         opts = self.opts
         rbp = self.rbp
@@ -425,10 +624,51 @@ class Cls(Base):
         sigma_lambda_F = ca.sum2(self.w.lambda_normal[ii,jj,:].sym)
 
         nu = sigma_c_B*sigma_c_F + sigma_lambda_B*sigma_lambda_F
+        if self.model.friction_exists:
+            # A friction switch only matters while the contact is closed, so the friction indicator
+            # is added to the gap sums rather than multiplied into them: out of contact the gap sums
+            # are large and dominate, in contact they vanish and the friction terms decide.
+            nu = nu*(sigma_c_B + sigma_c_F + self._friction_eta_term(ii, jj, use_Y))
         eta = 1
         for kk in range(nu.size()[0]):
             eta = eta*nu[kk]
         return eta
+
+    def _friction_eta_term(self, ii, jj, use_impulse):
+        """
+        Per contact friction switch indicator, an `n_c` vector, zero exactly at a friction switch.
+
+        Built from the same backward/forward sums as the normal part: `beta` (conic) or `beta_d`
+        (polyhedral) detects the stick/slip transition, and the tangential velocity split (conic) or
+        the per generator velocities (polyhedral) detect a reversal of the sliding direction. The
+        tangential quantities have one entry per generator, so they are summed over each contact
+        block to bring them back to `n_c`.
+        """
+        dims = self.dcs.dims
+
+        def sigma(name, cap=None, back=False):
+            idx = jj-1 if back else jj
+            s = ca.sum2(getattr(self.w, name)[ii,idx,:].sym)
+            include_cap = use_impulse if back else not self._is_relaxed_oc()
+            if cap is not None and include_cap:
+                s = s + getattr(self.w, cap)[ii,idx]
+            return s
+
+        def pi(name, cap=None):
+            return sigma(name, cap, back=True)*sigma(name, cap, back=False)
+
+        def per_contact(expr):
+            """Collapse an n_tangents vector to n_c by summing each contact block."""
+            n_t = self.variant.n_t
+            return ca.vertcat(*[ca.sum1(expr[kk*n_t:(kk+1)*n_t]) for kk in range(dims.n_c)])
+
+        if self._is_polyhedral():
+            return pi("beta_d", "Beta_d") + per_contact(pi("delta_d", "Delta_d"))
+
+        xi = pi("beta", "Beta")
+        if self._switch_handling() != ConicModelSwitchHandling.PLAIN:
+            xi = xi + per_contact(pi("p_vt", "P_vt")) + per_contact(pi("n_vt", "N_vt"))
+        return xi
 
 
     @override

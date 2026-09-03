@@ -201,9 +201,11 @@ class Options():
 
     # FrictionModel: Which Friction model to use for the Complementarity Lagrangian System.
     #
-    # Warning:
-    #     Friction is not yet implemented in the Python CLS. Any model with a nonzero
-    #     coefficient of friction is currently rejected by `nosnoc.model.Cls`.
+    # Note:
+    #     `POLYHEDRAL` is exact for planar contacts and yields an LCP rather than an NCP, so it is
+    #     the better choice in 2D; `CONIC` is rejected there. In 3D both are available, `CONIC`
+    #     being the exact Coulomb cone and `POLYHEDRAL` an approximation whose accuracyis set by
+    #     the number of columns of `model.D_tangent`.
     #
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
@@ -224,6 +226,27 @@ class Options():
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
     conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
 
+    # double: Regularization of the apex of the conic friction cone.
+    #
+    # The lifted cone slack is written as
+    # $\beta_i = (\mu_i\lambda_{\mathrm{n}}^i)^2 - \|\lambda_{\mathrm{t}}^i + \varepsilon_t\|^2$.
+    # At the apex of the unregularized cone the gradient of the constraint vanishes in both
+    # arguments, so LICQ fails and the MPCC solver has to regularize internally; shifting the
+    # tangential force moves that point away. Set to 0 to recover the unregularized cone.
+    #
+    # Only used by `FrictionModel.CONIC`; the polyhedral model is an LCP and has no such
+    # degeneracy.
+    #
+    # Warning:
+    #     Defaults to 0, i.e. off. For $\varepsilon_t > 0$ and a vanishing normal force the cone
+    #     constraint pins $\lambda_{\mathrm{t}} \to -\varepsilon_t$ rather than to zero, which
+    #     biases the stationarity condition while the contact is open. Measured on
+    #     `examples/cls_minimal_example/bouncing_ball_3d.py` this splits the single physical impact
+    #     impulse into several spurious ones and moves the trajectory well off the analytic
+    #     solution, whereas `eps_t = 0` reproduces it. Enable it only if the apex degeneracy is
+    #     actually costing solver iterations, and check the impulses afterwards.
+    eps_t: float = 0.0
+
     # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.
     no_initial_impacts: bool = False
 
@@ -240,11 +263,6 @@ class Options():
 
     #lift_velocity_state: bool = 0; # boolean: If true define auxliary algebraic vairable, $dot = z_v$, to avoid symbolic inversion of the inertia matrix.
 
-    # double: The constant radius of relaxation for the friction force which enforces a nonempty interior around zero velocity
-    #
-    # See Also:
-    #     More details can be found in :cite:p:`Nurkanovic2023a`
-    #eps_t: float = 1e-7
 
     # NOTIMPLEMENTED
     # ConstraintRelaxationMode: What (if any) relaxation to apply to the terminal constraints.

@@ -100,7 +100,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             self.dtp = HeavisideDTP(self.dcs, opts)
             self.dtp.populate_problem()
         elif isinstance(model, Cls):
-            self.dcs = ClsDCS(model)
+            self.dcs = ClsDCS(model, opts)
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
         else:
@@ -157,6 +157,31 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             t_step.append(t)
         return np.vstack(x_step), np.array(t_step)
 
+    def _reset_friction_guess(self):
+        """
+        Zero the friction variables of the first control stage for the impact retry.
+
+        The retry guesses a large normal impulse, so the tangential quantities from the failed
+        attempt are meaningless; starting them at zero is consistent with a guess of "impact, not
+        yet sliding". The variables that exist depend on the friction model, so they are discovered
+        from the dcs stacks rather than listed again here.
+        """
+        if not self.model.friction_exists:
+            return
+        opts = self.opts
+        variant = self.dtp.variant
+        stage_names = [n for n in variant.z_alg_blocks if n not in ("lambda_normal", "y_gap")]
+        impulse_names = [n for n in variant.z_impulse_blocks
+                         if n not in ("Lambda_normal", "Y_gap", "P_vn", "N_vn")]
+        for jj in range(1, opts.N_finite_elements[0]+1):
+            for kk in range(1, opts.n_s+1):
+                for name in stage_names:
+                    getattr(self.dtp.w, name)[1,jj,kk](init=0.0)
+        if opts.use_fesd and not self.dtp._is_relaxed_oc():
+            for jj in range(2 if opts.no_initial_impacts else 1, opts.N_finite_elements[0]+1):
+                for name in impulse_names:
+                    getattr(self.dtp.w, name)[1,jj](init=0.0)
+
     def _retry_cls_step(self):
         """
         Re-solve the current step with an initial guess that assumes an impact occurs.
@@ -188,6 +213,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
                 for kk in range(1, opts.n_s+1):
                     self.dtp.w.lambda_normal[1,jj,kk](init=0.0)
                     self.dtp.w.y_gap[1,jj,kk](init=0.0)
+        self._reset_friction_guess()
 
         # Drop the failed attempt, then re-solve.
         self.stats.pop()
