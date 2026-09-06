@@ -1,5 +1,5 @@
 from .base import Base, BaseDims
-from ..dims import Dimes
+from ..dims import Dims
 
 from typing import Optional, List
 
