@@ -154,9 +154,6 @@ class Ocp(ABC,NLP):
 
         x_0 = self.w.x[0,0,opts.n_s].sym
         z_0 = self.w.z[0,0,opts.n_s].sym
-        lam_0 = self.w.lam[0,0,opts.n_s].sym
-        theta_0 = self.w.theta[0,0,opts.n_s].sym
-        mu_0 = self.w.mu[0,0,opts.n_s].sym
 
         self.g.algebraic[0,0,opts.n_s] = Constraint(
             ca.vertcat(
