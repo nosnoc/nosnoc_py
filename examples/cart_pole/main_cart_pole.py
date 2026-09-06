@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
 
-from .pendulum_utils import plot_results
+from pendulum_utils import plot_results
 
 T_OCP = 1.0
 N_STAGES = 10
@@ -103,5 +103,6 @@ def run_example(**kwargs):
 if __name__ == "__main__":
     solver = run_example()
     plot_results(solver)
+    ns.dump_hp_functions(solver.model, solver.opts, "cartpole")
     breakpoint()
     
