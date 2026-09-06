@@ -38,7 +38,7 @@ class OcpSolver():
             self.dcs = ClsDCS(model)
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
-        if isinstance(model, DaeModel):
+        elif isinstance(model, DaeModel):
             self.dcs = Dae(model)
             self.dtp = OcpDTP(self.dcs, opts)
             self.dtp.populate_problem()
