@@ -60,6 +60,13 @@ class Dae(Base):
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
             [ca.vertcat(self.model.g_z)]
         )
+
+        self.g_path_rk = ca.Function(
+            'g_path_rk',
+            [ca.vertcat(self.model.x, self.model.z),
+             ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
+            [ca.vertcat(self.model.g_path)]
+        )
         # TODO(@anton) implement
         # self.f_lsq_x_fun = ca.Function('f_lsq_x_fun',[self.model.x,self.model.x_ref,self.model.p],[self.model.f_lsq_x])
         # self.f_lsq_u_fun = ca.Function('f_lsq_u_fun',[self.model.u,self.model.u_ref,self.model.p],[self.model.f_lsq_u])
