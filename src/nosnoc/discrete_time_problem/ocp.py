@@ -249,6 +249,12 @@ class Ocp(ABC,NLP):
                                                                                               ub=model.ubz,
                                                                                               init=model.z0)
 
+    def _get_stage_end(self,ii,jj):
+        return ca.vertcat(
+            self.w.x[ii,jj,self.opts.n_s+self.rbp],
+            self.w.z[ii,jj,self.opts.n_s+self.rbp],
+        )
+
     def _get_stage_parameters(self, ii):
         p_global = self.p.p_global[()].sym
         p_time_var = self.p.p_time_var[ii].sym
