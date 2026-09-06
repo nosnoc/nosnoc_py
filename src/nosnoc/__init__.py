@@ -20,6 +20,7 @@ from . import mpccsol
 from .ocp import OcpSolver
 from .integrator import FESDIntegratorOptions, Integrator
 from .qpcc import Qpcc, QpccDims, ConvexificationOptions, ConvexificationMode
+from .hp_utils import dump_hp_functions
 
 import warnings
 warnings.simplefilter("always")
