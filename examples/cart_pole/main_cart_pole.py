@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
 
-from pendulum_utils import plot_results
+from .pendulum_utils import plot_results
 
 T_OCP = 1.0
 N_STAGES = 10
@@ -90,14 +90,18 @@ def cartpole_model():
     )
     return model
 
-if __name__ == "__main__":
-    opts = get_default_opts()
+def run_example(**kwargs):
+    opts = get_default_opts(**kwargs)
     model = cartpole_model()
     ipopt_opts = {"ipopt.linear_solver" : "mumps"}
 
     solver = ns.OcpSolver(model,opts,ipopt_opts)
-
     solver.solve()
+
+    return solver
+
+if __name__ == "__main__":
+    solver = run_example()
     plot_results(solver)
     breakpoint()
     
