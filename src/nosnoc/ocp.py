@@ -180,14 +180,15 @@ class OcpSolver():
         return np.concatenate(t_grid_full)
 
     def get_control_grid(self):
-        if self.opts.use_fesd:
-            h = self.dtp.w.h[:,:].res
-        else:
-            h = self.dtp.p.T[()].val/(np.sum(self.opts.N_finite_elements))*(np.ones(np.sum(self.opts.N_finite_elements)))
+        opts = self.opts
 
         t_grid = [0]
-        for ii in range(1,self.opts.N_stages+1):
-            h_sum = np.sum(h) 
+        for ii in range(1,opts.N_stages+1):
+            if opts.use_fesd and not opts.equidistant_control_grid:
+                h_sum = np.sum(self.dtp.w.h[ii,:].res) 
+            else:
+                h_sum = opts.h_k[ii-1]
+
             sot = self.dtp._get_stage_sot(ii)
             h_sum *= sot
             t_grid.append(t_grid[-1]+h_sum)
