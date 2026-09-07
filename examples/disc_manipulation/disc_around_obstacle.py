@@ -199,7 +199,7 @@ def animate(solver, save_path=None, show=True):
 
     # frame delay from the (fixed) step size, like the MATLAB DelayTime = h_k(1)
     h0 = T/(N_STAGES*N_FE)
-    anim = FuncAnimation(fig, update, frames=n_frames, interval=1000*h0, blit=True)
+    anim = FuncAnimation(fig, update, frames=n_frames, interval=1000*h0, blit=False)
 
     if save_path is not None:
         anim.save(save_path, writer=PillowWriter(fps=max(1, int(1/h0))))
