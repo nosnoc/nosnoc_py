@@ -5,6 +5,7 @@ from typing import List, Tuple, Union
 import xml.etree.ElementTree as ET
 
 import casadi as ca
+import numpy as np
 
 try:
     import pinocchio as pin
@@ -37,6 +38,19 @@ class UrdfRobotModel:
         self.v = ca.SX.sym("v", self.nv)
 
         self.q_names, self.v_names = self._make_coordinate_names()
+        (
+            self.lower_position_limits,
+            self.upper_position_limits,
+            self.velocity_limits,
+            self.effort_limits,
+        ) = self._make_limit_vectors()
+        # nosnoc CLS orders its differential state as x = [q, v].
+        self.lbx = np.concatenate(
+            (self.lower_position_limits, -self.velocity_limits)
+        )
+        self.ubx = np.concatenate(
+            (self.upper_position_limits, self.velocity_limits)
+        )
 
         # Convert the numeric model to a model whose scalar type is CasADi SX.
         self.casadi_model = cpin.Model(self.pinocchio_model)
@@ -56,17 +70,36 @@ class UrdfRobotModel:
         urdf_tree = ET.parse(self.urdf_path)
         urdf_root = urdf_tree.getroot()
         self.continuous_joint_names = []
+        self.joint_types = {}
+        self._original_joint_limits = {}
 
         # Turn continuous joints into revolut joints because pinnochio 
         # Associates 2 states q for continuous joints instead of just 1
         # This causes nq != nv, undesirable behavior
         for joint_element in urdf_root.findall("joint"):
-            if joint_element.get("type") != "continuous":
+            joint_name = joint_element.get("name")
+            joint_type = joint_element.get("type")
+            if joint_name is None or joint_type is None:
+                raise ValueError("Every URDF joint must have a name and type.")
+
+            # Store the original URDF type before continuous joints are
+            # converted for Pinocchio's internal representation.
+            self.joint_types[joint_name] = joint_type
+            limit_element = joint_element.find("limit")
+            self._original_joint_limits[joint_name] = {
+                attribute: (
+                    float(limit_element.get(attribute))
+                    if limit_element is not None
+                    and limit_element.get(attribute) is not None
+                    else None
+                )
+                for attribute in ("lower", "upper", "velocity", "effort")
+            }
+
+            if joint_type != "continuous":
                 continue
 
-            joint_name = joint_element.get("name")
-            if joint_name is not None:
-                self.continuous_joint_names.append(joint_name)
+            self.continuous_joint_names.append(joint_name)
 
             # Revolut joints require at least upper and lower bounds to be valid 
             # Very large artificial position bounds preserve the unbounded meaning 
@@ -104,6 +137,38 @@ class UrdfRobotModel:
                 v_names[joint.idx_v + local_index] = joint_name + suffix
 
         return q_names, v_names
+
+    def _make_limit_vectors(self):
+        """Return limits from the original URDF, aligned with q and v."""
+        lower_position_limits = np.full(self.nq, -np.inf)
+        upper_position_limits = np.full(self.nq, np.inf)
+        velocity_limits = np.full(self.nv, np.inf)
+        effort_limits = np.full(self.nv, np.inf)
+
+        # Joint zero is Pinocchio's synthetic "universe" joint.
+        for joint_id in range(1, self.pinocchio_model.njoints):
+            joint = self.pinocchio_model.joints[joint_id]
+            joint_name = self.pinocchio_model.names[joint_id]
+            joint_type = self.joint_types[joint_name]
+            limits = self._original_joint_limits[joint_name]
+
+            if joint_type != "continuous":
+                if limits["lower"] is not None:
+                    lower_position_limits[joint.idx_q : joint.idx_q + joint.nq] = limits["lower"]
+                if limits["upper"] is not None:
+                    upper_position_limits[joint.idx_q : joint.idx_q + joint.nq] = limits["upper"]
+
+            if limits["velocity"] is not None:
+                velocity_limits[joint.idx_v : joint.idx_v + joint.nv] = abs(limits["velocity"])
+            if limits["effort"] is not None:
+                effort_limits[joint.idx_v : joint.idx_v + joint.nv] = abs(limits["effort"])
+
+        return (
+            lower_position_limits,
+            upper_position_limits,
+            velocity_limits,
+            effort_limits,
+        )
 
     def __repr__(self) -> str:
         return (

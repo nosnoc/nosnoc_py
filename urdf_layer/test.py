@@ -105,7 +105,12 @@ for index, name in enumerate(v_names):
     print(f"  v[{index}] -> {name}")
 
 
-# print joint types like revolut, prismatic ...
+print("\nJoint types:")
+urdf_root = ET.parse(urdf_path).getroot()
+for joint_element in urdf_root.findall("joint"):
+    joint_name = joint_element.get("name", "<unnamed>")
+    joint_type = joint_element.get("type", "<unknown>")
+    print(f"  {joint_name}: {joint_type}")
 
 # Convert the numeric model to a model whose scalar type is CasADi SX.
 casadi_model = cpin.Model(pinocchio_model)

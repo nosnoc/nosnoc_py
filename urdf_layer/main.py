@@ -24,6 +24,20 @@ def main() -> None:
     for index, name in enumerate(robot.v_names):
         print(f"  v[{index}] -> {name}")
 
+    print("\nJoint types:")
+    for joint_name, joint_type in robot.joint_types.items():
+        print(f"  {joint_name}: {joint_type}")
+
+    print("\nJoint limits:")
+    print(f"  lower position: {robot.lower_position_limits}")
+    print(f"  upper position: {robot.upper_position_limits}")
+    print(f"  velocity:       {robot.velocity_limits}")
+    print(f"  effort:         {robot.effort_limits}")
+
+    print("\nCLS state bounds (x = [q, v]):")
+    print(f"  lbx: {robot.lbx}")
+    print(f"  ubx: {robot.ubx}")
+
     print("\nSymbolic mass matrix M(q):")
     print(robot.M)
 
