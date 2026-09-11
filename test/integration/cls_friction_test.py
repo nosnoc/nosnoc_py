@@ -152,6 +152,58 @@ class TestSpatialFriction(unittest.TestCase):
         self.assertAlmostEqual(x_res[-1, 2], 0.0, places=5)
 
 
+def conic_fesd_j_opts(**kwargs):
+    """
+    Conic friction discretized with FESD-J, pinned here rather than taken from the example
+    defaults because the checks below read the impulse variables that only FESD-J creates.
+    """
+    return opts_3d(friction_model=ns.FrictionModel.CONIC, use_fesd=True,
+                   conic_model_switch_handling=ns.ConicModelSwitchHandling.ABS, **kwargs)
+
+
+class TestConeFormulations(unittest.TestCase):
+    """
+    The regularized cones enlarge the cone by O(eps), so for a small eps they must still reproduce
+    the analytic solution, without any friction force while the ball is in the air.
+    """
+
+    @parameterized.expand([(ns.ConicModelConeFormulation.SQUARED, 1e-3),
+                           (ns.ConicModelConeFormulation.NONSQUARED, 1e-4)])
+    def test_regularized_cone_matches_analytic(self, formulation, eps):
+        q_a, v_a, _, _ = analytic_3d(MU_3D)
+        _, x_res, integrator = solve_bouncing_ball_3d(
+            opts=conic_fesd_j_opts(conic_model_cone_formulation=formulation, eps_t=eps))
+        np.testing.assert_allclose(x_res[-1, 0:2], q_a, atol=1e-3)
+        np.testing.assert_allclose(x_res[-1, 3:5], v_a, atol=1e-3)
+        self.assertAlmostEqual(x_res[-1, 3]/x_res[-1, 4], 2.0, places=3)
+
+        Lambda_n = integrator.get("Lambda_normal").flatten()
+        self.assertEqual(int(np.sum(np.abs(Lambda_n) > 1e-3)), 1)
+
+        lam_n = integrator.get_full("lambda_normal").flatten()
+        lam_t = integrator.get_full("lambda_tangent").reshape(-1, 2)
+        open_contact = lam_n < 1e-6
+        self.assertTrue(np.any(open_contact))
+        self.assertLess(np.abs(lam_t[open_contact]).max(), 1e-6)
+
+    def test_shifted_cone_applies_friction_in_free_flight(self):
+        """
+        Pins why SQUARED_SHIFTED is not a regularization: an open contact admits only
+        lambda_t = -eps, so the ball is braked in the air and pushed off its sliding direction.
+        """
+        eps = 1e-3
+        _, x_res, integrator = solve_bouncing_ball_3d(
+            opts=conic_fesd_j_opts(
+                conic_model_cone_formulation=ns.ConicModelConeFormulation.SQUARED_SHIFTED,
+                eps_t=eps))
+        lam_n = integrator.get_full("lambda_normal").flatten()
+        lam_t = integrator.get_full("lambda_tangent").reshape(-1, 2)
+        open_contact = lam_n < 1e-6
+        self.assertTrue(np.any(open_contact))
+        np.testing.assert_allclose(lam_t[open_contact], -eps, rtol=1e-3)
+        self.assertGreater(abs(x_res[-1, 3]/x_res[-1, 4] - 2.0), 1e-2)
+
+
 class TestFrictionlessRegression(unittest.TestCase):
     """
     The friction work refactored the variable stacking and the switch indicator, both of which the

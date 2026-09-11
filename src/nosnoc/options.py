@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ClsDiscretization
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ConicModelConeFormulation, ClsDiscretization
 
 @dataclass
 class Options():
@@ -226,25 +226,24 @@ class Options():
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
     conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
 
-    # double: Regularization of the apex of the conic friction cone.
+    # ConicModelConeFormulation: How the friction cone of the Conic friction model is written as a
+    # smooth constraint, and with it the stationarity condition of the maximum dissipation principle.
+    # The default `SQUARED` with `eps_t = 0` is the unregularized squared cone.
     #
-    # The lifted cone slack is written as
-    # $\beta_i = (\mu_i\lambda_{\mathrm{n}}^i)^2 - \|\lambda_{\mathrm{t}}^i + \varepsilon_t\|^2$.
-    # At the apex of the unregularized cone the gradient of the constraint vanishes in both
-    # arguments, so LICQ fails and the MPCC solver has to regularize internally; shifting the
-    # tangential force moves that point away. Set to 0 to recover the unregularized cone.
+    # See Also:
+    #     `ConicModelConeFormulation` for the constraints and their trade-offs.
+    conic_model_cone_formulation: ConicModelConeFormulation = ConicModelConeFormulation.SQUARED
+
+    # double: Regularization $\varepsilon$ of the apex of the conic friction cone, in units of force.
     #
-    # Only used by `FrictionModel.CONIC`; the polyhedral model is an LCP and has no such
-    # degeneracy.
+    # At the apex of the unregularized squared cone, i.e. for an open contact, the gradient of the
+    # cone constraint vanishes and LICQ fails. How $\varepsilon$ enters depends on
+    # `conic_model_cone_formulation`: `SQUARED` uses $\mu^2\lambda_n(\lambda_n + \varepsilon)$ as the
+    # squared radius, `NONSQUARED` smooths the norm to $\sqrt{\|\lambda_t\|^2 + \varepsilon^2} - \varepsilon$
+    # and requires $\varepsilon > 0$. The same value is used for the contact forces and the contact
+    # impulses, so its relative size differs between the two.
     #
-    # Warning:
-    #     Defaults to 0, i.e. off. For $\varepsilon_t > 0$ and a vanishing normal force the cone
-    #     constraint pins $\lambda_{\mathrm{t}} \to -\varepsilon_t$ rather than to zero, which
-    #     biases the stationarity condition while the contact is open. Measured on
-    #     `examples/simple_friction/bouncing_ball_3d.py` this splits the single physical impact
-    #     impulse into several spurious ones and moves the trajectory well off the analytic
-    #     solution, whereas `eps_t = 0` reproduces it. Enable it only if the apex degeneracy is
-    #     actually costing solver iterations, and check the impulses afterwards.
+    # Only used by `FrictionModel.CONIC`; the polyhedral model is an LCP and has no such degeneracy.
     eps_t: float = 0.0
 
     # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.

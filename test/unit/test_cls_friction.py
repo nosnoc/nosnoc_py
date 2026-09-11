@@ -254,11 +254,103 @@ class TestProblemStructure(unittest.TestCase):
         self.assertEqual(dcs.dims.n_tangents, 0)
         self.assertEqual(dcs.z_alg_blocks, ["lambda_normal", "y_gap"])
 
+    @parameterized.expand([(f,) for f in ns.ConicModelConeFormulation])
+    def test_builds_for_every_cone_formulation(self, formulation):
+        dcs, dtp = build_problem(spatial_model(), friction_model=ns.FrictionModel.CONIC,
+                                 conic_model_cone_formulation=formulation, eps_t=1e-3)
+        self.assertEqual(dcs.cone_formulation, formulation)
+        self.assertEqual(dtp.G.sym.shape, dtp.H.sym.shape)
+
     def test_frictionless_problem_has_no_friction_variables(self):
         _, dtp = build_problem(planar_model(mu=0.0))
         for name in ("lambda_tangent", "gamma", "beta", "gamma_d", "beta_d", "delta_d",
                      "p_vt", "n_vt", "alpha_vt"):
             self.assertNotIn(name, dtp.w.variables)
+
+
+class TestConeFormulation(unittest.TestCase):
+    """The conic friction cone constraints selected by `conic_model_cone_formulation`."""
+
+    MU = 0.3
+
+    @staticmethod
+    def cone(formulation, lambda_normal, lambda_tangent, eps, mu=MU):
+        return ns.dcs.Cls._cone_constraint(formulation, mu, lambda_normal,
+                                           ca.DM(lambda_tangent), eps)
+
+    @parameterized.expand([(f,) for f in ns.ConicModelConeFormulation])
+    def test_gradient_matches_the_constraint(self, formulation):
+        """The stationarity condition uses the returned gradient, so it must be the real one."""
+        lam_n = ca.SX.sym("lambda_n")
+        lam_t = ca.SX.sym("lambda_t", 2)
+        eps = 1e-2
+        cone, grad = ns.dcs.Cls._cone_constraint(formulation, self.MU, lam_n, lam_t, eps)
+        f = ca.Function("f", [lam_n, lam_t], [ca.jacobian(cone, lam_t).T, grad])
+        rng = np.random.default_rng(0)
+        for _ in range(20):
+            jac, grad_val = f(rng.uniform(0, 2), rng.uniform(-1, 1, 2))
+            np.testing.assert_allclose(np.array(jac), np.array(grad_val), atol=1e-12)
+
+    def test_squared_and_nonsquared_describe_the_same_set(self):
+        """Squaring the non-squared constraint gives the squared one with eps_sq = 2*eps/mu."""
+        eps = 1e-2
+        F = ns.ConicModelConeFormulation
+        rng = np.random.default_rng(1)
+        for _ in range(200):
+            lam_n, lam_t = rng.uniform(0, 1), rng.uniform(-0.4, 0.4, 2)
+            g_nonsq, _ = self.cone(F.NONSQUARED, lam_n, lam_t, eps)
+            g_sq, _ = self.cone(F.SQUARED, lam_n, lam_t, 2*eps/self.MU)
+            if abs(float(g_nonsq)) > 1e-9:
+                self.assertEqual(np.sign(float(g_nonsq)), np.sign(float(g_sq)))
+
+    @parameterized.expand([(ns.ConicModelConeFormulation.SQUARED, 0.3**2*1e-2),
+                           (ns.ConicModelConeFormulation.NONSQUARED, 0.3)])
+    def test_regularized_apex_admits_only_zero_friction(self, formulation, d_cone_d_lambda_n):
+        """
+        An open contact must still admit exactly lambda_t = 0, and the regularization must give the
+        constraint a nonzero gradient there, which is the point of it.
+        """
+        eps = 1e-2
+        g_apex, _ = self.cone(formulation, 0.0, [0.0, 0.0], eps)
+        self.assertAlmostEqual(float(g_apex), 0.0, places=14)
+        g_off, _ = self.cone(formulation, 0.0, [1e-3, 0.0], eps)
+        self.assertLess(float(g_off), 0.0)
+
+        lam_n = ca.SX.sym("lambda_n")
+        cone, _ = ns.dcs.Cls._cone_constraint(formulation, self.MU, lam_n, ca.DM([0.0, 0.0]), eps)
+        slope = ca.Function("slope", [lam_n], [ca.jacobian(cone, lam_n)])(0.0)
+        self.assertAlmostEqual(float(slope), d_cone_d_lambda_n, places=12)
+
+    def test_shifted_cone_forces_friction_at_an_open_contact(self):
+        """The shifted cone is a translation: an open contact admits only lambda_t = -eps."""
+        eps = 1e-2
+        F = ns.ConicModelConeFormulation
+        g_zero, _ = self.cone(F.SQUARED_SHIFTED, 0.0, [0.0, 0.0], eps)
+        self.assertLess(float(g_zero), 0.0)
+        g_shifted, grad = self.cone(F.SQUARED_SHIFTED, 0.0, [-eps, -eps], eps)
+        self.assertAlmostEqual(float(g_shifted), 0.0, places=14)
+        np.testing.assert_allclose(np.array(grad), 0.0)
+
+    def test_default_is_the_unregularized_squared_cone(self):
+        opts = ns.Options(T=1.0)
+        self.assertEqual(opts.conic_model_cone_formulation, ns.ConicModelConeFormulation.SQUARED)
+        self.assertEqual(opts.eps_t, 0.0)
+        g, _ = self.cone(opts.conic_model_cone_formulation, 0.7, [0.1, -0.2], opts.eps_t)
+        self.assertAlmostEqual(float(g), (self.MU*0.7)**2 - 0.05, places=14)
+
+    def test_nonsquared_requires_positive_eps(self):
+        with self.assertRaisesRegex(RuntimeError, "needs eps_t > 0"):
+            build_problem(spatial_model(), friction_model=ns.FrictionModel.CONIC,
+                          conic_model_cone_formulation=ns.ConicModelConeFormulation.NONSQUARED)
+
+    def test_negative_eps_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "must be nonnegative"):
+            build_problem(spatial_model(), friction_model=ns.FrictionModel.CONIC, eps_t=-1e-3)
+
+    def test_eps_is_ignored_by_the_polyhedral_model(self):
+        """Validation only applies where eps_t is used."""
+        build_problem(spatial_model(), friction_model=ns.FrictionModel.POLYHEDRAL, eps_t=-1.0,
+                      conic_model_cone_formulation=ns.ConicModelConeFormulation.NONSQUARED)
 
 
 if __name__ == "__main__":

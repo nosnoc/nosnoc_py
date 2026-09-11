@@ -6,7 +6,7 @@
 # from .nosnoc_opts import NosnocOpts
 from .nosnoc_types import (RKScheme, StepEquilibrationMode, CrossComplementarityMode,
                            RKRepresentation, DcsMode, ConstraintRelaxationMode, ClsDiscretization,
-                           FrictionModel, ConicModelSwitchHandling)
+                           FrictionModel, ConicModelSwitchHandling, ConicModelConeFormulation)
 # from .helpers import NosnocSimLooper
 # from .utils import casadi_length, casadi_vertcat_list, print_casadi_vector, flatten_layer, make_object_json_dumpable
 from .plot_utils import plot_timings, latexify_plot, plot_sparsity

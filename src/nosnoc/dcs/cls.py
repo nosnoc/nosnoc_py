@@ -2,7 +2,7 @@ from typing import override
 
 from ..model import Cls as ClsModel, ClsDims
 from ..dims import Dims
-from ..nosnoc_types import FrictionModel, ConicModelSwitchHandling
+from ..nosnoc_types import FrictionModel, ConicModelSwitchHandling, ConicModelConeFormulation
 from .base import Base
 
 import casadi as ca
@@ -77,6 +77,39 @@ class Cls(Base):
         self.model.friction_dims(friction_model)
         return friction_model
 
+    def _check_cone_regularization(self):
+        """Reject apex regularizations for which the selected cone formulation is not defined."""
+        eps_t = self.opts.eps_t
+        if eps_t < 0:
+            raise RuntimeError(f"eps_t = {eps_t} must be nonnegative.")
+        if self.cone_formulation == ConicModelConeFormulation.NONSQUARED and eps_t == 0:
+            raise RuntimeError(
+                "ConicModelConeFormulation.NONSQUARED needs eps_t > 0: with eps_t = 0 the norm "
+                "||lambda_t|| is not differentiable at lambda_t = 0, which every open contact attains.")
+
+    @staticmethod
+    def _cone_constraint(formulation, mu, lambda_normal, lambda_tangent, eps):
+        r"""
+        Friction cone constraint $g \ge 0$ of a single contact and its gradient $\nabla_{\lambda_t} g$.
+
+        The gradient enters the stationarity condition of the maximum dissipation principle, so it
+        is returned together with the constraint to keep the two consistent. Evaluates both on
+        symbols and on numbers.
+        """
+        if formulation == ConicModelConeFormulation.SQUARED:
+            cone = mu**2*lambda_normal*(lambda_normal + eps) - ca.sumsqr(lambda_tangent)
+            grad = -2*lambda_tangent
+        elif formulation == ConicModelConeFormulation.NONSQUARED:
+            smoothed_norm = ca.sqrt(ca.sumsqr(lambda_tangent) + eps**2)
+            cone = mu*lambda_normal + eps - smoothed_norm
+            grad = -lambda_tangent/smoothed_norm
+        elif formulation == ConicModelConeFormulation.SQUARED_SHIFTED:
+            cone = (mu*lambda_normal)**2 - ca.sumsqr(lambda_tangent + eps)
+            grad = -2*(lambda_tangent + eps)
+        else:
+            raise NotImplementedError(f"Unknown cone formulation {formulation}.")
+        return cone, grad
+
     # ------------------------------------------------------------------ variable generation
 
     @override
@@ -102,6 +135,9 @@ class Cls(Base):
 
         self.friction_model = self._selected_friction_model()
         self.switch_handling = self.opts.conic_model_switch_handling
+        self.cone_formulation = self.opts.conic_model_cone_formulation
+        if self.friction_model == FrictionModel.CONIC:
+            self._check_cone_regularization()
         self._build_friction_variables()
 
         self.z_all = ca.vertcat(self.z_alg, self.model.z)
@@ -214,25 +250,26 @@ class Cls(Base):
                          - (model.mu[ii]*lambda_normal[ii] - ca.sum1(lambda_tangent[lo:hi])))
                 g.append(aux["delta"][lo:hi] - (v_t + aux["gamma"][ii]))
             else:
-                # Stationarity of the maximum dissipation principle for the squared cone
-                # constraint, and the lifted cone slack. The eps_t shift opens up the apex of the
-                # cone, where the gradient of the unregularized constraint vanishes and LICQ fails.
+                # Stationarity of the maximum dissipation principle, v_t = gamma*grad g, for the
+                # cone constraint g >= 0 selected by opts.conic_model_cone_formulation, and the
+                # lifted cone slack beta = g.
                 #
                 # The velocity term is scaled by the cone radius mu*lambda_n. Wherever the contact
                 # carries force this is an identity: dividing by mu*lambda_n > 0 recovers the
-                # textbook condition v_t + 2*gamma*lambda_t = 0 with gamma rescaled. It matters
-                # when the contact is *open*: there the cone collapses to {0}, so lambda_t = 0 and
-                # the unscaled equation would demand v_t = 0, which a body flying with tangential
+                # textbook condition with gamma rescaled. It matters when the contact is *open*:
+                # there every formulation admits only lambda_t = 0, where grad g vanishes, so the
+                # unscaled equation would demand v_t = 0, which a body flying with tangential
                 # motion cannot satisfy. The relaxed MPCC escapes that only by driving gamma to
                 # infinity (we measured ~1e8), which wrecks the conditioning of the whole KKT
                 # system and stalls the homotopy. With the scaling both sides vanish for an open
-                # contact, gamma stays bounded at ~|v_t|/2, and the friction subproblem is as well
-                # scaled as the polyhedral one. This is what the (declared but never used) MATLAB
-                # option `kappa_friction_reg` was meant to address.
+                # contact, which leaves gamma undetermined there but finite. This is what the
+                # (declared but never used) MATLAB option `kappa_friction_reg` was meant to address.
+                lambda_t = lambda_tangent[lo:hi]
+                cone, grad_cone = self._cone_constraint(
+                    self.cone_formulation, model.mu[ii], lambda_normal[ii], lambda_t, self.eps_t)
                 cone_radius = model.mu[ii]*lambda_normal[ii]
-                g.append(-cone_radius*v_t - 2*aux["gamma"][ii]*lambda_tangent[lo:hi])
-                g.append(aux["beta"][ii] - ((model.mu[ii]*lambda_normal[ii])**2
-                                            - ca.sumsqr(lambda_tangent[lo:hi] + self.eps_t)))
+                g.append(-cone_radius*v_t + aux["gamma"][ii]*grad_cone)
+                g.append(aux["beta"][ii] - cone)
                 if switch_handling != ConicModelSwitchHandling.PLAIN:
                     # Split the tangential velocity so that FESD can isolate its sign changes.
                     g.append(v_t - (aux["p_vt"][lo:hi] - aux["n_vt"][lo:hi]))

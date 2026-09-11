@@ -114,6 +114,38 @@ class ConicModelSwitchHandling(Enum):
     """Positive/negative parts plus a step function alpha_vt for the tangential velocity."""
 
 
+class ConicModelConeFormulation(Enum):
+    r"""
+    How the friction cone of the Conic friction model is written as a smooth constraint
+    $g(\lambda_n, \lambda_t) \ge 0$, and how `Options.eps_t` regularizes its apex.
+
+    The maximum dissipation principle is stated with the gradient of that constraint,
+    $\mu\lambda_n v_t = \gamma\nabla_{\lambda_t} g$, so choosing a formulation changes the
+    stationarity condition and the meaning of $\gamma$ as well.
+
+    The default is `ConicModelConeFormulation.SQUARED` with `Options.eps_t = 0`, which is the
+    unregularized squared cone. The gradient at the apex is $(0, 0)$, so LICQ does not hold there. The other formulations are regularized with
+    
+    """
+    SQUARED = auto()
+    r"""
+    $\|\lambda_t\|^2 \le \mu^2\lambda_n(\lambda_n + \varepsilon)$.
+
+    Polynomial, and with $\varepsilon = 0$ exactly the unregularized squared cone. The gradient at
+    the apex is $(\mu^2\varepsilon, 0)$, so LICQ holds there only for $\varepsilon > 0$ and is weak for
+    small $\varepsilon$. 
+    """
+    NONSQUARED = auto()
+    r"""
+    $\sqrt{\|\lambda_t\|^2 + \varepsilon^2} - \varepsilon \le \mu\lambda_n$, requires $\varepsilon > 0$.
+
+    """
+    SQUARED_SHIFTED = auto()
+    r"""
+    $\|\lambda_t + \varepsilon\|^2 \le \mu^2\lambda_n^2$, with $\varepsilon$ added to every component.
+    """
+
+
 class ClsDiscretization(Enum):
     """
     Which discretization to use for the impact of a Complementarity Lagrangian System.
