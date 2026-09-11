@@ -13,14 +13,14 @@ import numpy as np
 
 import nosnoc as ns
 
-from examples.cls_minimal_example.bouncing_ball_2d import (
+from examples.simple_friction.bouncing_ball_2d import (
     analytic_solution as analytic_2d,
     get_default_options as opts_2d,
     solve_bouncing_ball_2d,
     MU as MU_2D,
     X0 as X0_2D,
 )
-from examples.cls_minimal_example.bouncing_ball_3d import (
+from examples.simple_friction.bouncing_ball_3d import (
     analytic_solution as analytic_3d,
     get_default_options as opts_3d,
     solve_bouncing_ball_3d,

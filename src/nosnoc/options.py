@@ -241,7 +241,7 @@ class Options():
     #     Defaults to 0, i.e. off. For $\varepsilon_t > 0$ and a vanishing normal force the cone
     #     constraint pins $\lambda_{\mathrm{t}} \to -\varepsilon_t$ rather than to zero, which
     #     biases the stationarity condition while the contact is open. Measured on
-    #     `examples/cls_minimal_example/bouncing_ball_3d.py` this splits the single physical impact
+    #     `examples/simple_friction/bouncing_ball_3d.py` this splits the single physical impact
     #     impulse into several spurious ones and moves the trajectory well off the analytic
     #     solution, whereas `eps_t = 0` reproduces it. Enable it only if the apex degeneracy is
     #     actually costing solver iterations, and check the impulses afterwards.

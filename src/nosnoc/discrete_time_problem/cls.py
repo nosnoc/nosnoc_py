@@ -24,8 +24,6 @@ class Cls(Base):
     def __init__(self, dcs, opts):
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
-        # Friction dependent symbols, equations and functions, grouped by the dcs.
-        self.variant = dcs.variant
         super().__init__(dcs, opts)
 
     def __apply_time_stepping_defaults(self, opts):
@@ -153,18 +151,18 @@ class Cls(Base):
 
         if self._is_polyhedral():
             self.w.lambda_tangent[ii,fe,stg] = Primal(
-                "lambda_tangent", self.variant.n_tangents, lb=0.0,
+                "lambda_tangent", self.dcs.dims.n_tangents, lb=0.0,
                 ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
             self.w.gamma_d[ii,fe,stg] = Primal(
                 "gamma_d", dims.n_c, lb=0.0, ub=opts.ub_gamma_d, init=opts.initial_gamma_d)
             self.w.beta_d[ii,fe,stg] = Primal(
                 "beta_d", dims.n_c, lb=0.0, ub=opts.ub_beta_d, init=opts.initial_beta_d)
             self.w.delta_d[ii,fe,stg] = Primal(
-                "delta_d", self.variant.n_tangents, lb=0.0, ub=opts.ub_delta_d, init=opts.initial_delta_d)
+                "delta_d", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_delta_d, init=opts.initial_delta_d)
             return
 
         self.w.lambda_tangent[ii,fe,stg] = Primal(
-            "lambda_tangent", self.variant.n_tangents, lb=-opts.ub_lambda_tangent,
+            "lambda_tangent", self.dcs.dims.n_tangents, lb=-opts.ub_lambda_tangent,
             ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
         self.w.gamma[ii,fe,stg] = Primal(
             "gamma", dims.n_c, lb=0.0, ub=opts.ub_gamma, init=opts.initial_gamma)
@@ -172,14 +170,14 @@ class Cls(Base):
             "beta", dims.n_c, lb=0.0, ub=opts.ub_beta, init=opts.initial_beta)
         if self._switch_handling() != ConicModelSwitchHandling.PLAIN:
             self.w.p_vt[ii,fe,stg] = Primal(
-                "p_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_p_vt, init=opts.initial_p_vt)
+                "p_vt", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_p_vt, init=opts.initial_p_vt)
             self.w.n_vt[ii,fe,stg] = Primal(
-                "n_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_n_vt, init=opts.initial_n_vt)
+                "n_vt", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_n_vt, init=opts.initial_n_vt)
             if self._switch_handling() == ConicModelSwitchHandling.LP:
                 # alpha_vt is a step function, so it is bounded to [0,1] and complementary to both
                 # the positive and the negative part of the tangential velocity.
                 self.w.alpha_vt[ii,fe,stg] = Primal(
-                    "alpha_vt", self.variant.n_tangents, lb=0.0, ub=1.0, init=opts.initial_alpha_vt)
+                    "alpha_vt", self.dcs.dims.n_tangents, lb=0.0, ub=1.0, init=opts.initial_alpha_vt)
 
     def _create_impulse_friction_variables(self, ii, fe_range):
         """Friction impulses at the finite element boundaries, laid out like `Lambda_normal`."""
@@ -188,18 +186,18 @@ class Cls(Base):
 
         if self._is_polyhedral():
             self.w.Lambda_tangent[ii,fe_range] = Primal(
-                "Lambda_tangent", self.variant.n_tangents, lb=0.0,
+                "Lambda_tangent", self.dcs.dims.n_tangents, lb=0.0,
                 ub=opts.ub_Lambda_tangent, init=opts.initial_Lambda_tangent)
             self.w.Gamma_d[ii,fe_range] = Primal(
                 "Gamma_d", dims.n_c, lb=0.0, ub=opts.ub_Gamma_d, init=opts.initial_Gamma_d)
             self.w.Beta_d[ii,fe_range] = Primal(
                 "Beta_d", dims.n_c, lb=0.0, ub=opts.ub_Beta_d, init=opts.initial_Beta_d)
             self.w.Delta_d[ii,fe_range] = Primal(
-                "Delta_d", self.variant.n_tangents, lb=0.0, ub=opts.ub_Delta_d, init=opts.initial_Delta_d)
+                "Delta_d", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_Delta_d, init=opts.initial_Delta_d)
             return
 
         self.w.Lambda_tangent[ii,fe_range] = Primal(
-            "Lambda_tangent", self.variant.n_tangents, lb=-opts.ub_Lambda_tangent,
+            "Lambda_tangent", self.dcs.dims.n_tangents, lb=-opts.ub_Lambda_tangent,
             ub=opts.ub_Lambda_tangent, init=opts.initial_Lambda_tangent)
         self.w.Gamma[ii,fe_range] = Primal(
             "Gamma", dims.n_c, lb=0.0, ub=opts.ub_Gamma, init=opts.initial_Gamma)
@@ -207,12 +205,12 @@ class Cls(Base):
             "Beta", dims.n_c, lb=0.0, ub=opts.ub_Beta, init=opts.initial_Beta)
         if self._switch_handling() != ConicModelSwitchHandling.PLAIN:
             self.w.P_vt[ii,fe_range] = Primal(
-                "P_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_P_vt, init=opts.initial_P_vt)
+                "P_vt", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_P_vt, init=opts.initial_P_vt)
             self.w.N_vt[ii,fe_range] = Primal(
-                "N_vt", self.variant.n_tangents, lb=0.0, ub=opts.ub_N_vt, init=opts.initial_N_vt)
+                "N_vt", self.dcs.dims.n_tangents, lb=0.0, ub=opts.ub_N_vt, init=opts.initial_N_vt)
             if self._switch_handling() == ConicModelSwitchHandling.LP:
                 self.w.Alpha_vt[ii,fe_range] = Primal(
-                    "Alpha_vt", self.variant.n_tangents, lb=0.0, ub=1.0, init=opts.initial_Alpha_vt)
+                    "Alpha_vt", self.dcs.dims.n_tangents, lb=0.0, ub=1.0, init=opts.initial_Alpha_vt)
 
     def _create_xvz_cls(self, ii):
         """
@@ -251,7 +249,7 @@ class Cls(Base):
     def _build_z_impulse(self, ii, jj):
         """Stacked impulse algebraics for `g_impulse_fun`, matching the dcs `z_impulse` order."""
         return ca.vertcat(*[getattr(self.w, name)[ii,jj]
-                            for name in self.variant.z_impulse_blocks])
+                            for name in self.dcs.z_impulse_blocks])
 
     @override
     def _build_prk(self, ii, jj):
@@ -275,7 +273,7 @@ class Cls(Base):
         # and a mismatch would silently pair the wrong variable with the wrong equation. The
         # h_rescale of the contact multipliers happens inside f_x (via the prk parameter), so they
         # are stacked as they are.
-        z_alg = [getattr(self.w, name)[ii,jj,kk] for name in self.variant.z_alg_blocks]
+        z_alg = [getattr(self.w, name)[ii,jj,kk] for name in self.dcs.z_alg_blocks]
         if self.opts.rk_representation == RKRepresentation.INTEGRAL:
             head = [self.w.x[ii,jj,kk], self.w.z[ii,jj,kk]]
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL:
@@ -317,7 +315,7 @@ class Cls(Base):
             
                 if opts.use_fesd and not self._is_relaxed_oc() and (jj != 1 or not opts.no_initial_impacts):
                     self.g.impulse[ii,jj] = Constraint(
-                        self.variant.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj),
+                        self.dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj),
                                                    v_global, p, opts.eps_t))
                    
                     if opts.eps_cls > 0:
@@ -331,8 +329,8 @@ class Cls(Base):
                 z_ii_jj = self._build_z(ii, jj)
                 prk_ii_jj = self._build_prk(ii, jj)
                 x_end, q_end, dynamic, algebraic = self.rk.collocation_constraints(
-                    x_lbp, z_ii_jj, prk_ii_jj, h, self.variant.f_x_rk, self.variant.f_q_rk,
-                        self.variant.g_rk, sot=s_sot)
+                    x_lbp, z_ii_jj, prk_ii_jj, h, self.dcs.f_x_rk, self.dcs.f_q_rk,
+                        self.dcs.g_rk, sot=s_sot)
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk] = Constraint(dynamic[kk-1])
                     self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])
@@ -659,7 +657,7 @@ class Cls(Base):
 
         def per_contact(expr):
             """Collapse an n_tangents vector to n_c by summing each contact block."""
-            n_t = self.variant.n_t
+            n_t = self.dcs.dims.n_t
             return ca.vertcat(*[ca.sum1(expr[kk*n_t:(kk+1)*n_t]) for kk in range(dims.n_c)])
 
         if self._is_polyhedral():

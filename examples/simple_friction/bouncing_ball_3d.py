@@ -13,8 +13,6 @@ tangent space is a plane, and the two friction models genuinely differ:
   1/sqrt(2) ~ 71% as strong along the diagonals. The ball is therefore under-braked and its
   velocity drifts towards the diagonal where friction is weakest.
 
-Pass a `D_tangent` with more generators to shrink that gap; the maximum error of an n-gon
-inscribed in the disc is 1 - cos(pi/n), i.e. 29% for 4 generators, 7.6% for 8 and 1.9% for 16.
 
 The conic model is compared against the analytic solution, which the polyhedral model is not
 expected to match for this deliberately diagonal initial velocity.

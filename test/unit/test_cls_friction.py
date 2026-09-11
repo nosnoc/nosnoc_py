@@ -217,10 +217,10 @@ class TestProblemStructure(unittest.TestCase):
         drift apart the wrong variable is fed to the wrong equation without any error.
         """
         dcs, dtp = build_problem(spatial_model(), friction_model=ns.FrictionModel.CONIC)
-        self.assertEqual(dtp._build_z_impulse(1, 2).shape[0], dtp.variant.z_impulse.shape[0])
+        self.assertEqual(dtp._build_z_impulse(1, 2).shape[0], dcs.z_impulse.shape[0])
         stage = dtp._get_rk_stage_z(1, 1, 1)
         self.assertEqual(stage.shape[0],
-                         dcs.dims.n_x + dcs.dims.n_z + dtp.variant.z_alg.shape[0])
+                         dcs.dims.n_x + dcs.dims.n_z + dcs.z_alg.shape[0])
 
     def test_model_dims_not_mutated_by_dcs(self):
         """
@@ -229,10 +229,8 @@ class TestProblemStructure(unittest.TestCase):
         other; this pins that they stay independent.
         """
         model = spatial_model()
-        dcs_conic, dtp_conic = build_problem(model, friction_model=ns.FrictionModel.CONIC)
-        dcs_poly, dtp_poly = build_problem(model, friction_model=ns.FrictionModel.POLYHEDRAL)
-        self.assertEqual(dtp_conic.variant.n_t, 2)
-        self.assertEqual(dtp_poly.variant.n_t, 4)
+        dcs_conic, _ = build_problem(model, friction_model=ns.FrictionModel.CONIC)
+        dcs_poly, _ = build_problem(model, friction_model=ns.FrictionModel.POLYHEDRAL)
         # building the second must not have rewritten the first through the Dims parent chain
         self.assertEqual(dcs_conic.dims.n_t, 2)
         self.assertEqual(dcs_poly.dims.n_t, 4)
@@ -242,12 +240,8 @@ class TestProblemStructure(unittest.TestCase):
     @parameterized.expand([(ns.FrictionModel.CONIC, 2), (ns.FrictionModel.POLYHEDRAL, 4)])
     def test_dcs_builds_the_selected_variant(self, friction_model, n_t):
         dcs, _ = build_problem(spatial_model(), friction_model=friction_model)
-        self.assertEqual(dcs.variant.n_t, n_t)
         self.assertEqual(dcs.dims.n_t, n_t)
         self.assertEqual(dcs.friction_model, friction_model)
-        # the flat aliases point at the selected variant
-        self.assertIs(dcs.g_alg, dcs.variant.g_alg)
-        self.assertIs(dcs.f_x_rk, dcs.variant.f_x_rk)
 
     def test_planar_conic_fails_at_dcs_construction(self):
         """The unusable combination is reported when the dcs is built, not as a later shape error."""
@@ -257,8 +251,8 @@ class TestProblemStructure(unittest.TestCase):
     def test_frictionless_dcs_has_an_empty_friction_variant(self):
         dcs, _ = build_problem(planar_model(mu=0.0))
         self.assertIsNone(dcs.friction_model)
-        self.assertEqual(dcs.variant.n_tangents, 0)
-        self.assertEqual(dcs.variant.z_alg_blocks, ["lambda_normal", "y_gap"])
+        self.assertEqual(dcs.dims.n_tangents, 0)
+        self.assertEqual(dcs.z_alg_blocks, ["lambda_normal", "y_gap"])
 
     def test_frictionless_problem_has_no_friction_variables(self):
         _, dtp = build_problem(planar_model(mu=0.0))

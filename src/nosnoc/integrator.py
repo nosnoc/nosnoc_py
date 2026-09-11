@@ -169,9 +169,8 @@ class FESDIntegratorPlugin(IntegratorPlugin):
         if not self.model.friction_exists:
             return
         opts = self.opts
-        variant = self.dtp.variant
-        stage_names = [n for n in variant.z_alg_blocks if n not in ("lambda_normal", "y_gap")]
-        impulse_names = [n for n in variant.z_impulse_blocks
+        stage_names = [n for n in self.dcs.z_alg_blocks if n not in ("lambda_normal", "y_gap")]
+        impulse_names = [n for n in self.dcs.z_impulse_blocks
                          if n not in ("Lambda_normal", "Y_gap", "P_vn", "N_vn")]
         for jj in range(1, opts.N_finite_elements[0]+1):
             for kk in range(1, opts.n_s+1):
