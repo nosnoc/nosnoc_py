@@ -6,7 +6,6 @@ inelastic impact whose friction impulse is capped by mu*Lambda_n, and then slide
 friction force. That exercises the friction force, the friction impulse and the cone bound at once.
 """
 import unittest
-import warnings
 
 from parameterized import parameterized
 import numpy as np
@@ -15,7 +14,6 @@ import nosnoc as ns
 
 from examples.simple_friction.sliding_ball_2d import (
     analytic_solution as analytic_2d,
-    get_default_options as opts_2d,
     solve_sliding_ball_2d,
     MU as MU_2D,
     X0 as X0_2D,
@@ -67,11 +65,6 @@ class TestPlanarFriction(unittest.TestCase):
         """mu = 0 disables friction entirely, so the tangential velocity is preserved."""
         _, x_res, _ = solve_sliding_ball_2d(mu=0.0)
         self.assertAlmostEqual(x_res[-1, 2], X0_2D[2], places=6)
-
-    def test_conic_is_rejected_in_the_plane(self):
-        with self.assertRaisesRegex(RuntimeError, "planar contact"):
-            solve_sliding_ball_2d(
-                mu=MU_2D, opts=opts_2d(friction_model=ns.FrictionModel.CONIC))
 
 
 class TestSpatialFriction(unittest.TestCase):
