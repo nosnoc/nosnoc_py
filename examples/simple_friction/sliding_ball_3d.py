@@ -1,5 +1,5 @@
 """
-Spatial bouncing ball with Coulomb friction, comparing the two friction models.
+Spatial sliding ball with Coulomb friction, comparing the two friction models.
 
 A ball is dropped onto a plane with a horizontal velocity that is not aligned with either tangent
 axis. The impact is inelastic, so the ball lands and slides until friction stops it. In 3D the
@@ -16,6 +16,8 @@ tangent space is a plane, and the two friction models genuinely differ:
 
 The conic model is compared against the analytic solution, which the polyhedral model is not
 expected to match for this deliberately diagonal initial velocity.
+
+Corresponds to `bouncing_ball_3d_sim.m` in the MATLAB nosnoc `cls_minimal_examples`.
 """
 import numpy as np
 import casadi as ca
@@ -32,9 +34,9 @@ N_SIM = 30
 N_FE = 2
 
 
-def get_bouncing_ball_3d_model(mu=MU, x0=X0, n_facets=None):
+def get_sliding_ball_3d_model(mu=MU, x0=X0, n_facets=None):
     """
-    Build the spatial bouncing ball with friction as a `nosnoc.model.Cls`.
+    Build the spatial sliding ball with friction as a `nosnoc.model.Cls`.
 
     `n_facets` optionally requests a finer polyhedral cone: the generators are then spread evenly
     over the tangent plane instead of using the default four built from `J_tangent`.
@@ -62,7 +64,7 @@ def get_bouncing_ball_3d_model(mu=MU, x0=X0, n_facets=None):
         mu=mu,
         J_tangent=J_tangent,
         D_tangent=D_tangent,
-        name="bouncing_ball_3d",
+        name="sliding_ball_3d",
     )
 
 
@@ -72,10 +74,10 @@ def get_default_options(friction_model=nosnoc.FrictionModel.CONIC, **kwargs):
         "N_finite_elements": N_FE,
         "n_s": 2,
         "rk_scheme": nosnoc.RKScheme.RADAU_IIA,
-        "use_fesd": False,
+        "use_fesd": True,
         "friction_model": friction_model,
-        #"conic_model_switch_handling": nosnoc.ConicModelSwitchHandling.ABS,
-        "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_STAGE,
+        "conic_model_switch_handling": nosnoc.ConicModelSwitchHandling.ABS,
+        "cross_comp_mode": nosnoc.CrossComplementarityMode.FE_FE,
         "no_initial_impacts": True,
         "step_equilibration": nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
         "initial_Lambda_normal": 0.0,
@@ -138,9 +140,9 @@ def analytic_speed(t, mu=MU, x0=X0):
     return np.where(t <= t_fall, speed0, sliding)
 
 
-def solve_bouncing_ball_3d(friction_model=nosnoc.FrictionModel.CONIC, mu=MU, x0=X0,
+def solve_sliding_ball_3d(friction_model=nosnoc.FrictionModel.CONIC, mu=MU, x0=X0,
                            n_facets=None, opts=None, integrator_opts=None):
-    model = get_bouncing_ball_3d_model(mu=mu, x0=x0, n_facets=n_facets)
+    model = get_sliding_ball_3d_model(mu=mu, x0=x0, n_facets=n_facets)
     if opts is None:
         opts = get_default_options(friction_model=friction_model)
     if integrator_opts is None:
@@ -163,7 +165,7 @@ def example(mu=MU, plot=True):
             ("polyhedral (4 facets)", dict(friction_model=nosnoc.FrictionModel.POLYHEDRAL)),
             ("polyhedral (16 facets)",
              dict(friction_model=nosnoc.FrictionModel.POLYHEDRAL, n_facets=16))]:
-        t_grid, x_res, _ = solve_bouncing_ball_3d(mu=mu, **kwargs)
+        t_grid, x_res, _ = solve_sliding_ball_3d(mu=mu, **kwargs)
         results[label] = (t_grid, x_res)
         speed = np.linalg.norm(x_res[-1, 3:5])
         print(f"  {label:24s} q_t = ({x_res[-1,0]:.4f}, {x_res[-1,1]:.4f}), "

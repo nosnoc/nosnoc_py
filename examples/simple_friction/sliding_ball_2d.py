@@ -1,5 +1,5 @@
 """
-Planar bouncing ball with Coulomb friction, the minimal example for CLS friction.
+Planar sliding ball with Coulomb friction, the minimal example for CLS friction.
 
 A ball is dropped onto the ground with a horizontal velocity. The impact is inelastic (e = 0), so
 the ball lands and then slides until friction has brought it to a stop. Two things happen at the
@@ -18,6 +18,8 @@ while keeping the friction subproblem an LCP instead of an NCP. `FrictionModel.C
 for planar contacts for exactly this reason.
 
 The analytic solution is used to verify the discretization.
+
+Corresponds to `bouncing_ball_2d_sim.m` in the MATLAB nosnoc `cls_minimal_examples`.
 """
 import numpy as np
 import casadi as ca
@@ -34,8 +36,8 @@ N_SIM = 40
 N_FE = 3
 
 
-def get_bouncing_ball_2d_model(mu=MU, x0=X0):
-    """Build the planar bouncing ball with friction as a `nosnoc.model.Cls`."""
+def get_sliding_ball_2d_model(mu=MU, x0=X0):
+    """Build the planar sliding ball with friction as a `nosnoc.model.Cls`."""
     q = ca.SX.sym("q", 2)
     v = ca.SX.sym("v", 2)
     return nosnoc.model.Cls(
@@ -49,7 +51,7 @@ def get_bouncing_ball_2d_model(mu=MU, x0=X0):
         # Tangent basis: one unit direction per contact, since the contact is planar. D_tangent is
         # built from this automatically as [t, -t].
         J_tangent=ca.DM([[1.0], [0.0]]),
-        name="bouncing_ball_2d",
+        name="sliding_ball_2d",
     )
 
 
@@ -116,8 +118,8 @@ def analytic_solution(mu=MU, x0=X0, t_sim=T_SIM, n_points=2000):
     return t, qx, qy, vx, vy, Lambda_n, mu*Lambda_n
 
 
-def solve_bouncing_ball_2d(mu=MU, opts=None, integrator_opts=None, x0=X0):
-    model = get_bouncing_ball_2d_model(mu=mu, x0=x0)
+def solve_sliding_ball_2d(mu=MU, opts=None, integrator_opts=None, x0=X0):
+    model = get_sliding_ball_2d_model(mu=mu, x0=x0)
     if opts is None:
         opts = get_default_options()
     if integrator_opts is None:
@@ -148,7 +150,7 @@ def plot_results(mu, t_grid, x_res):
 
 
 def example(mu=MU, plot=True):
-    t_grid, x_res, integrator = solve_bouncing_ball_2d(mu=mu)
+    t_grid, x_res, integrator = solve_sliding_ball_2d(mu=mu)
     t_a, qx_a, qy_a, vx_a, _, Lambda_n, Lambda_t = analytic_solution(mu)
 
     print(f"coefficient of friction mu = {mu}")
