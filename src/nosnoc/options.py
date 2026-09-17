@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ClsDiscretization
+from .nosnoc_types import RKScheme, StepEquilibrationMode, CrossComplementarityMode, RKRepresentation, DcsMode, HomotopyUpdateRule, InitializationStrategy, SpeedOfTimeVariableMode, ConstraintRelaxationMode, FrictionModel, ConicModelSwitchHandling, ConicModelConeFormulation, ClsDiscretization
 
 @dataclass
 class Options():
@@ -201,9 +201,11 @@ class Options():
 
     # FrictionModel: Which Friction model to use for the Complementarity Lagrangian System.
     #
-    # Warning:
-    #     Friction is not yet implemented in the Python CLS. Any model with a nonzero
-    #     coefficient of friction is currently rejected by `nosnoc.model.Cls`.
+    # Note:
+    #     `POLYHEDRAL` is exact for planar contacts and yields an LCP rather than an NCP, so it is
+    #     the better choice in 2D; `CONIC` is rejected there. In 3D both are available, `CONIC`
+    #     being the exact Coulomb cone and `POLYHEDRAL` an approximation whose accuracyis set by
+    #     the number of columns of `model.D_tangent`.
     #
     # See Also:
     #     `FrictionModel` for more details as to the differences between the friction models.
@@ -224,6 +226,26 @@ class Options():
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
     conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
 
+    # ConicModelConeFormulation: How the friction cone of the Conic friction model is written as a
+    # smooth constraint, and with it the stationarity condition of the maximum dissipation principle.
+    # The default `SQUARED` with `eps_t = 0` is the unregularized squared cone.
+    #
+    # See Also:
+    #     `ConicModelConeFormulation` for the constraints and their trade-offs.
+    conic_model_cone_formulation: ConicModelConeFormulation = ConicModelConeFormulation.SQUARED
+
+    # double: Regularization $\varepsilon$ of the apex of the conic friction cone, in units of force.
+    #
+    # At the apex of the unregularized squared cone, i.e. for an open contact, the gradient of the
+    # cone constraint vanishes and LICQ fails. How $\varepsilon$ enters depends on
+    # `conic_model_cone_formulation`: `SQUARED` uses $\mu^2\lambda_n(\lambda_n + \varepsilon)$ as the
+    # squared radius, `NONSQUARED` smooths the norm to $\sqrt{\|\lambda_t\|^2 + \varepsilon^2} - \varepsilon$
+    # and requires $\varepsilon > 0$. The same value is used for the contact forces and the contact
+    # impulses, so its relative size differs between the two.
+    #
+    # Only used by `FrictionModel.CONIC`; the polyhedral model is an LCP and has no such degeneracy.
+    eps_t: float = 0.0
+
     # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.
     no_initial_impacts: bool = False
 
@@ -240,11 +262,6 @@ class Options():
 
     #lift_velocity_state: bool = 0; # boolean: If true define auxliary algebraic vairable, $dot = z_v$, to avoid symbolic inversion of the inertia matrix.
 
-    # double: The constant radius of relaxation for the friction force which enforces a nonempty interior around zero velocity
-    #
-    # See Also:
-    #     More details can be found in :cite:p:`Nurkanovic2023a`
-    #eps_t: float = 1e-7
 
     # NOTIMPLEMENTED
     # ConstraintRelaxationMode: What (if any) relaxation to apply to the terminal constraints.
