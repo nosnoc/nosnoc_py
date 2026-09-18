@@ -13,7 +13,7 @@ class ClsDims(Dims):
     def __init__(self, parent: BaseDims):
         super().__init__(parent)
         self.n_q = 0 # Number of generalized coordinates.
-        self.n_v = 0 # Number of generalized velocities, equal to n_q.
+        self.n_v = 0 # Number of generalized velocities.
         self.n_c = 0 # Number of possible contacts.
         self.n_t = 0 # Number of tangential directions per contact (0 if frictionless).
         self.n_tangents = 0 # Total number of tangential multipliers, n_t*n_c.
@@ -22,9 +22,6 @@ class ClsDims(Dims):
 class Cls(Base):
     r"""
     A system of rigid bodies with contacts and friction, i.e., a Complementarity Lagrangian System:
-
-   
-
         
           $ q_dot = M(q) v_dot = f_v(q,v) + sum (J_n}^i lambda_n^i + J_t^i lambda_t^i) 
           
@@ -37,8 +34,6 @@ class Cls(Base):
 
     with $i = 1\ldots n_c$. This model is discretized with the FESD-J method.
 
-   
-
     Note:
         Friction is not yet implemented. Passing a nonzero coefficient of friction raises
         a `NotImplementedError`.
@@ -48,6 +43,7 @@ class Cls(Base):
                  *,
                  q: Optional[ca.SX] = None, # Generalized coordinates, defaults to the first half of x.
                  v: Optional[ca.SX] = None, # Generalized velocities, defaults to the second half of x.
+                 N: Optional[ca.SX|ca.DM|np.ndarray] = None, # Kinematic map, may depend on $q$.
                  f_v: ca.SX, # Generalized force, $M(q)\dot{v} = f_v(x)\in\mathbb{R}^{n_q}$.
                  f_c: ca.SX, # Contact gap functions $f_c(q)\in\mathbb{R}^{n_c}$.
                  mu: Optional[float|List[float]|np.ndarray] = None, # Coefficient(s) of friction.
@@ -65,6 +61,7 @@ class Cls(Base):
         self.dims = ClsDims(self.dims)
         self.q = q
         self.v = v
+        self.N = N
         self.f_v = f_v
         self.f_c = f_c
         self.mu = mu
@@ -80,21 +77,61 @@ class Cls(Base):
 
     def __backfill(self):
         dims = self.dims
-
     
-        if dims.n_x % 2 != 0:
-            raise RuntimeError(f"The state x of a Cls model must be (q,v) and therefore have an even number of entries, got {dims.n_x}.")
-        dims.n_q = dims.n_x//2
-        dims.n_v = dims.n_x//2
+        if self.q is None and self.v is None:
+            # Legacy nq == nv behavior
+            if dims.n_x % 2 != 0:
+                raise RuntimeError(
+                    "q and v must be supplied explicitly when nq != nv."
+                )
 
-        if self.q is None:
+            dims.n_q = dims.n_x // 2
+            dims.n_v = dims.n_x // 2
             self.q = self.x[0:dims.n_q]
-        if self.v is None:
             self.v = self.x[dims.n_q:]
+        elif self.q is None:
+            dims.n_v = self.v.size(1)
+            dims.n_q = dims.n_x - dims.n_v
+            self.q = self.x[0:dims.n_q]
+        elif self.v is None:
+            dims.n_q = self.q.size(1)
+            dims.n_v = dims.n_x - dims.n_q
+            self.v = self.x[dims.n_q:]
+        else:
+            dims.n_q = self.q.size(1)
+            dims.n_v = self.v.size(1)
 
-        if self.f_v.size(1) != dims.n_v:
-            raise RuntimeError(f"f_v has incorrect dimension, it must have the same dimension as v ({dims.n_v}), got {self.f_v.size(1)}.")
+            if dims.n_x != dims.n_q + dims.n_v:
+                raise RuntimeError(
+                    f"x must have nq + nv entries, got {dims.n_x}, "
+                    f"expected {dims.n_q + dims.n_v}."
+                )
 
+        # Validate the new Matrix transform N(q) for q_dot
+        if self.N is None:
+            if dims.n_q != dims.n_v:
+                raise RuntimeError(
+                    "N(q) must be provided when nq != nv."
+                )
+            # If N not provided, assume identity mapping between q_dot and v.
+            self.N = np.eye(dims.n_q)
+
+        # elif isinstance(self.N, np.ndarray):
+        #     self.N = ca.DM(self.N)
+
+        elif self.N.shape != (dims.n_q, dims.n_v):
+            raise RuntimeError(
+                f"N(q) must have shape ({dims.n_q}, {dims.n_v}), "
+                f"got ({self.N.size(1)}, {self.N.size(2)})."
+            )
+
+        if self.f_v.size(1) != dims.n_v or self.f_v.size(2) != 1:
+            raise RuntimeError(
+                f"f_v has incorrect dimension, it must have the same dimension as v ({dims.n_v}), "
+                f"got {self.f_v.size(1)}x{self.f_v.size(2)}.")
+
+        if self.f_c.size(2) != 1:
+            raise RuntimeError("f_c must be a column vector.")
         dims.n_c = self.f_c.size(1)
 
        
@@ -113,20 +150,27 @@ class Cls(Base):
             raise RuntimeError("The coefficient of restitution e should be in [0,1].")
 
         if self.M is None:
-            self.M = np.eye(dims.n_q)
-        elif np.any(np.array(self.M.shape) != dims.n_q):
-            raise RuntimeError(f"Inertia matrix M must be {dims.n_q}x{dims.n_q}, got {self.M.shape[0]}x{self.M.shape[1]}.")
+            self.M = np.eye(dims.n_v)
+        elif np.any(np.array(self.M.shape) != dims.n_v):
+            raise RuntimeError(
+                f"Inertia matrix M must be {dims.n_v}x{dims.n_v},"
+                f"got {self.M.shape[0]}x{self.M.shape[1]}."
+            )
         if self.inv_M is None:
             if isinstance(self.M, np.ndarray):
                 self.inv_M = np.linalg.inv(self.M)
             else:
                 self.inv_M = ca.inv(self.M)
-
-        
+        elif np.any(np.array(self.inv_M.shape) != dims.n_v):
+            raise RuntimeError(f"Inertia matrix inverse inv_M must be {dims.n_v}x{dims.n_v},"
+                                f"got {self.inv_M.shape[0]}x{self.inv_M.shape[1]}.")
+                        
         if self.J_normal is None:
             self.J_normal = ca.jacobian(self.f_c, self.q).T
         elif self.J_normal.size(1) != dims.n_q or self.J_normal.size(2) != dims.n_c:
             raise RuntimeError(f"J_normal must be a {dims.n_q}x{dims.n_c} matrix, got {self.J_normal.size(1)}x{self.J_normal.size(2)}.")
+
+        self.J_velocity = self.N.T @ self.J_normal
 
         # TODO(@stefan) implement the Conic and Polyhedral friction cones. n_t and n_tangents are
         # already laid out the way the friction variables will need them, cf. the MATLAB
