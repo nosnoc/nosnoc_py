@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from casadi import SX, horzcat, vertcat, cos, sin, inv
 import nosnoc as ns
 
-from pendulum_utils import plot_results
+from .pendulum_utils import plot_results
 
 T_OCP = 1.0
 N_STAGES = 10
