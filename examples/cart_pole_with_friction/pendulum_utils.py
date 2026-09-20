@@ -12,6 +12,7 @@ def plot_results(solver):
     u_traj = solver.get("u")
     t_grid = solver.get_time_grid()
     control_grid = solver.get_control_grid()
+    _plot_results(x_traj, u_traj, t_grid, control_grid)
 
 
 def _plot_results(x_traj, u_traj, t_grid, control_grid):
