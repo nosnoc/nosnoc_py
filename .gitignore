@@ -6,8 +6,13 @@ env
 *.egg-info
 
 *.pdf
+*.png
+*.jpg
 *.gif
 *.pkl
+*.pickle
+*.json
+*.c
 
 private*
 external

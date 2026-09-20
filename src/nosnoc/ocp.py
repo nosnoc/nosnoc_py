@@ -2,12 +2,15 @@ import numpy as np
 
 from .model import Pss
 from .model import Cls
+from .model import Dae as DaeModel
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
 from .dcs import Cls as ClsDCS
+from .dcs import Dae as Dae
 from .discrete_time_problem import Stewart as StewartDTP
 from .discrete_time_problem import Heaviside as HeavisideDTP
 from .discrete_time_problem import Cls as ClsDTP
+from .discrete_time_problem import Ocp as OcpDTP
 from .nosnoc_types import DcsMode
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 from .mpccsol.plugins.ccopt import CCOptOptions
@@ -35,8 +38,12 @@ class OcpSolver():
             self.dcs = ClsDCS(model)
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
+        elif isinstance(model, DaeModel):
+            self.dcs = Dae(model)
+            self.dtp = OcpDTP(self.dcs, opts)
+            self.dtp.populate_problem()
         else:
-            raise NotImplementedError("Only Pss and Cls are implemented")
+            raise NotImplementedError("Only Pss, Cls, and Dae are implemented")
 
     def solve(self):
         self.set_param("rho_h",(), self.opts.rho_h)
@@ -44,8 +51,10 @@ class OcpSolver():
             plugin = "reg_homotopy"
         elif isinstance(self.solver_opts, CCOptOptions):
             plugin = "ccopt"
+        elif isinstance(self.solver_opts, dict) and isinstance(self.model, DaeModel):
+            plugin = "ipopt"
         else:
-            raise NotImplementedError("Only reg_homotopy is implemented")
+            raise NotImplementedError("Unimplemented solver options for the given OCP")
 
         return self.dtp.solve(casadi_opts=self.solver_opts, plugin=plugin)
 
@@ -171,17 +180,15 @@ class OcpSolver():
         return np.concatenate(t_grid_full)
 
     def get_control_grid(self):
-        if self.opts.use_fesd:
-            h = self.dtp.w.h[:,:].res
-        else:
-            h = self.dtp.p.T[()].val/(np.sum(self.opts.N_finite_elements))*(np.ones(np.sum(self.opts.N_finite_elements)))
+        opts = self.opts
 
-            if self.opts.use_speed_of_time_variables:
-                sot = self.get("sot")
-                h = sot*h
         t_grid = [0]
-        for ii in range(1,self.opts.N_stages+1):
-            h_sum = np.sum(self.dtp.w.h[ii,:].res) 
+        for ii in range(1,opts.N_stages+1):
+            if opts.use_fesd and not opts.equidistant_control_grid:
+                h_sum = np.sum(self.dtp.w.h[ii,:].res) 
+            else:
+                h_sum = opts.h_k[ii-1]
+
             sot = self.dtp._get_stage_sot(ii)
             h_sum *= sot
             t_grid.append(t_grid[-1]+h_sum)
