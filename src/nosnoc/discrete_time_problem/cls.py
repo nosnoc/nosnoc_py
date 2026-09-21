@@ -242,7 +242,7 @@ class Cls(Base):
                    
                     if opts.eps_cls > 0:
                         step = opts.eps_cls if opts.fixed_eps_cls else h*opts.eps_cls
-                        x_eps = ca.vertcat(q_lbp + step*v_lbp, v_lbp)
+                        x_eps = ca.vertcat(q_lbp + step*(dcs.N_fun(x_lbp)@v_lbp), v_lbp)
                         self.g.f_c_eps[ii,jj] = Constraint(dcs.f_c_fun(x_eps), lb=0.0, ub=np.inf)
                 else:
                     self.g.v_continuity[ii,jj] = Constraint(v_lbp - v_prev)

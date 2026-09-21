@@ -23,12 +23,11 @@ class Cls(Base):
     r"""
     A system of rigid bodies with contacts and friction, i.e., a Complementarity Lagrangian System:
         
-          $ q_dot = M(q) v_dot = f_v(q,v) + sum (J_n}^i lambda_n^i + J_t^i lambda_t^i) 
-          
-          $
-                          
-           0 &\le \lambda_{\mathrm{n}}^i \perp f_c^i(q) \ge 0 \\
-           0 &= J_{\mathrm{n}}^i(q(t_s))^\top(v(t_s^+) + e^i v(t_s^-))
+          \begin{align*}
+            q_dot = N(q) v \\
+            M(q) v_dot = f_v(q,v) + sum ( J_n^i lambda_n^i + J_t^i lambda_t^i) \\
+            0 &\le \lambda_{\mathrm{n}}^i \perp f_c^i(q) \ge 0 \\
+            0 &= J_{\mathrm{n}}^i(q(t_s))^\top(v(t_s^+) + e^i v(t_s^-))
                 \quad\mathrm{if}\ f_c^i(q(t_s)) = 0\ \mathrm{and}\ J_{\mathrm{n}}^i(q(t_s))^\top v(t_s^-) < 0
         \end{align*}
 
@@ -122,7 +121,7 @@ class Cls(Base):
         elif self.N.shape != (dims.n_q, dims.n_v):
             raise RuntimeError(
                 f"N(q) must have shape ({dims.n_q}, {dims.n_v}), "
-                f"got ({self.N.size(1)}, {self.N.size(2)})."
+                f"got ({self.N.shape[0]}, {self.N.shape[1]})."
             )
 
         if self.f_v.size(1) != dims.n_v or self.f_v.size(2) != 1:
