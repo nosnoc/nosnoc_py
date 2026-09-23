@@ -15,35 +15,12 @@ class ClsDims(Dims):
         self.n_q = 0 # Number of generalized coordinates.
         self.n_v = 0 # Number of generalized velocities, equal to n_q.
         self.n_c = 0 # Number of possible contacts.
-        self.n_t = 0 # Number of tangential directions per contact (0 if frictionless).
+        self.n_t = 0 # Number of tangential directions per contact, depends on the contact model.
         self.n_tangents = 0 # Total number of tangential multipliers, n_t*n_c.
 
 
 class Cls(Base):
-    r"""
-    A system of rigid bodies with contacts and friction, i.e., a Complementarity Lagrangian System:
-
-   
-
-        
-          $ q_dot = M(q) v_dot = f_v(q,v) + sum (J_n}^i lambda_n^i + J_t^i lambda_t^i) 
-          
-          $
-                          
-           0 &\le \lambda_{\mathrm{n}}^i \perp f_c^i(q) \ge 0 \\
-           0 &= J_{\mathrm{n}}^i(q(t_s))^\top(v(t_s^+) + e^i v(t_s^-))
-                \quad\mathrm{if}\ f_c^i(q(t_s)) = 0\ \mathrm{and}\ J_{\mathrm{n}}^i(q(t_s))^\top v(t_s^-) < 0
-        \end{align*}
-
-    with $i = 1\ldots n_c$. This model is discretized with the FESD-J method.
-
-   
-
-    Note:
-        Friction is not yet implemented. Passing a nonzero coefficient of friction raises
-        a `NotImplementedError`.
-
-    """
+    
     def __init__(self,
                  *,
                  q: Optional[ca.SX] = None, # Generalized coordinates, defaults to the first half of x.
@@ -55,10 +32,8 @@ class Cls(Base):
                  M: Optional[ca.SX|np.ndarray] = None, # Generalized inertia matrix, may depend on $q$.
                  inv_M: Optional[ca.SX|np.ndarray] = None, # User provided inverse of the inertia matrix.
                  J_normal: Optional[ca.SX] = None, # Normal contact Jacobian, computed from f_c if omitted.
-                 J_tangent: Optional[ca.SX] = None, # Tangent contact Jacobian, required for Conic friction.
-                 # Polyhedral tangent Jacobian, required for Polyhedral friction.
-                 # For every column $D_i$, $-D_i$ must also be a column of $D$.
-                 D_tangent: Optional[ca.SX] = None,
+                 J_tangent: Optional[ca.SX] = None, # J_tangent should be of dimension n_q x (n_t*n_c)
+                 D_tangent: Optional[ca.SX] = None, # D_tangent should be of dimension n_q x (n_ts*n_c) 
                  **kwargs
                  ):
         super().__init__(**kwargs)
@@ -128,13 +103,23 @@ class Cls(Base):
         elif self.J_normal.size(1) != dims.n_q or self.J_normal.size(2) != dims.n_c:
             raise RuntimeError(f"J_normal must be a {dims.n_q}x{dims.n_c} matrix, got {self.J_normal.size(1)}x{self.J_normal.size(2)}.")
 
-        # TODO(@stefan) implement the Conic and Polyhedral friction cones. n_t and n_tangents are
-        # already laid out the way the friction variables will need them, cf. the MATLAB
-        # implementation in `+nosnoc/+model/Cls.m`.
+        
         if self.friction_exists:
-            raise NotImplementedError("Friction is not yet implemented for the Python CLS, please use mu=0 for all contacts.")
-        dims.n_t = 0
-        dims.n_tangents = 0
+            if self.J_tangent is None and self.D_tangent is None:
+                raise RuntimeError("Please provide either J_tangent or D_tangent for friction modeling.")
+            if self.J_tangent is not None and self.D_tangent is not None:
+                raise RuntimeError("Please provide either J_tangent or D_tangent for friction modeling, not both.")
+            if self.J_tangent is not None:
+                dims.n_t = self.J_tangent.size(2) // dims.n_c # 1 in 2D, 2 in 3D
+                dims_n_tangents = self.J_tangent.size(2)
+                if dims.n_q != self.J_tangent.size(1) or dims.n_c * dims.n_t != self.J_tangent.size(2):
+                    raise RuntimeError(f"J_tangent must be a {dims.n_q}x{dims.n_c * dims.n_t} matrix, got {self.J_tangent.size(1)}x{self.J_tangent.size(2)}.")
+            if self.D_tangent is not None:
+                dims.n_t = self.D_tangent.size(2) // dims.n_c # 2 in 2D, in 3D it depends on the polyhedral approximation of the friction cone
+                dims.n_tangents = self.D_tangent.size(2)
+                
+            
+        
 
     def __broadcast_to_contacts(self, val, name: str) -> np.ndarray:
         """
