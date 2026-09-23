@@ -12,7 +12,8 @@ class ClsDcsDims(Dims):
         super().__init__(parent)
         self.n_lambda_normal = 0
         self.n_y_gap = 0
-        
+        self.n_t = 0 # number of tangential directions per contact 
+        self.n_tangents = 0 
 
 
 class Cls(Base):
@@ -30,7 +31,8 @@ class Cls(Base):
     Note:
         Friction is not yet implemented.
     """
-    def __init__(self, model: ClsModel):
+    def __init__(self, model: ClsModel, opts):
+        self.opts = opts
         self.dims = ClsDcsDims(model.dims)
         super().__init__(model)
 
@@ -39,24 +41,28 @@ class Cls(Base):
         """Generate the required variables for the dcs"""
         dims = self.dims
         dims.n_lambda_normal = dims.n_c
-        
         dims.n_y_gap = dims.n_c
 
         self.lambda_normal = ca.SX.sym("lambda_normal", dims.n_c)
         self.y_gap = ca.SX.sym("y_gap", dims.n_c)
+        
 
         self.Lambda_normal = ca.SX.sym("Lambda_normal", dims.n_c)
         self.Y_gap = ca.SX.sym("Y_gap", dims.n_c)
 
+        self.gamma = ca.SX.sym("gamma", dims.n_c) 
+        self.beta = ca.SX.sym("beta", dims.n_c)
+        self.lambda_tangent = ca.SX.sym("lambda_tangent", dims.n_tangents)
+       
         # Positive and negative parts of the restitution law residual. They are used to encode the absolute value
         # in the aggregated impulse complementarity, cf. Eq. (A.2) of the FESD-J paper.
         self.P_vn = ca.SX.sym("P_vn", dims.n_c)
         self.N_vn = ca.SX.sym("N_vn", dims.n_c)
 
-        self.z_alg = ca.vertcat(self.lambda_normal, self.y_gap)
+        self.z_alg = ca.vertcat(self.lambda_normal, self.y_gap, self.lambda_tangent, self.gamma, self.beta)
         self.z_impulse = ca.vertcat(self.Lambda_normal, self.Y_gap, self.P_vn, self.N_vn)
         # Algebraics that appear in the right hand side of the CLS ODE.
-        self.z_alg_f_x = self.lambda_normal
+        self.z_alg_f_x = ca.vertcat(self.lambda_normal, self.lambda_tangent)
 
         self.z_all = ca.vertcat(self.z_alg, self.model.z)
 
@@ -65,9 +71,16 @@ class Cls(Base):
         """Generate the required equations and functions for the dcs"""
         model = self.model
         dims = self.dims
+        opts = self.opts
+
+       
         J_n = model.J_normal
 
-        self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal))
+        
+        J_t = model.J_tangent  # TODO : implement model dependent J_t we need to distinguish between Conic and Polyhedral friction model
+        
+
+        self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal + J_t@self.lambda_tangent))
 
         self.g_alg = self.y_gap - model.f_c
 
