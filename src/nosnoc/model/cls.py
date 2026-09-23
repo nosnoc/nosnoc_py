@@ -15,8 +15,6 @@ class ClsDims(Dims):
         self.n_q = 0 # Number of generalized coordinates.
         self.n_v = 0 # Number of generalized velocities, equal to n_q.
         self.n_c = 0 # Number of possible contacts.
-        self.n_t = 0 # Number of tangential directions per contact, depends on the contact model.
-        self.n_tangents = 0 # Total number of tangential multipliers, n_t*n_c.
 
 
 class Cls(Base):
@@ -107,18 +105,6 @@ class Cls(Base):
         if self.friction_exists:
             if self.J_tangent is None and self.D_tangent is None:
                 raise RuntimeError("Please provide either J_tangent or D_tangent for friction modeling.")
-            if self.J_tangent is not None and self.D_tangent is not None:
-                raise RuntimeError("Please provide either J_tangent or D_tangent for friction modeling, not both.")
-            if self.J_tangent is not None:
-                dims.n_t = self.J_tangent.size(2) // dims.n_c # 1 in 2D, 2 in 3D
-                dims_n_tangents = self.J_tangent.size(2)
-                if dims.n_q != self.J_tangent.size(1) or dims.n_c * dims.n_t != self.J_tangent.size(2):
-                    raise RuntimeError(f"J_tangent must be a {dims.n_q}x{dims.n_c * dims.n_t} matrix, got {self.J_tangent.size(1)}x{self.J_tangent.size(2)}.")
-            if self.D_tangent is not None:
-                dims.n_t = self.D_tangent.size(2) // dims.n_c # 2 in 2D, in 3D it depends on the polyhedral approximation of the friction cone
-                dims.n_tangents = self.D_tangent.size(2)
-                
-            
         
 
     def __broadcast_to_contacts(self, val, name: str) -> np.ndarray:

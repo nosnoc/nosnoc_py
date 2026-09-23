@@ -38,6 +38,7 @@ class Cls(Base):
         """Generate the required variables for the dcs"""
         dims = self.dims
         dims.n_lambda_normal = dims.n_c
+        
         dims.n_y_gap = dims.n_c
 
         self.lambda_normal = ca.SX.sym("lambda_normal", dims.n_c)
