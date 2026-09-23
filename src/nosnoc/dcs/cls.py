@@ -12,6 +12,7 @@ class ClsDcsDims(Dims):
         super().__init__(parent)
         self.n_lambda_normal = 0
         self.n_y_gap = 0
+        
 
 
 class Cls(Base):

@@ -20,7 +20,7 @@ w     = 1/ca.sqrt(1 + s_x**2)
 f_c       = w*(q[1] - s) - R
 J_normal  = ca.vertcat(-w*s_x, w,     0)
 J_tangent = ca.vertcat( w,     w*s_x, R)
-D_tangent = ca.vertcat(-w*s_x, w,     0)
+
 
 model = nosnoc.model.Cls(
     x=x_sym, x0=X0,

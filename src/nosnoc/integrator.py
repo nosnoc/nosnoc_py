@@ -100,7 +100,7 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             self.dtp = HeavisideDTP(self.dcs, opts)
             self.dtp.populate_problem()
         elif isinstance(model, Cls):
-            self.dcs = ClsDCS(model)
+            self.dcs = ClsDCS(model, opts) #since opts carry the friction model, dcs needs them
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
         else:

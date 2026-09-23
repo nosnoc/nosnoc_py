@@ -67,7 +67,6 @@ class Cls(Base):
                 "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
     def _is_relaxed_oc(self):
-        """True if the relaxed orthogonal-collocation formulation PATEL is selected."""
         return self.opts.cls_discretization == ClsDiscretization.RELAXED_OC
 
     def _h_rescale(self, ii):
