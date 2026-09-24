@@ -66,6 +66,10 @@ class Cls(Base):
                 f"of restitution e = {model.e} cannot be represented. Use use_fesd = True "
                 "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
+    def __check_friction_model_supported(self, model, opts):
+        #check if the friction model is supported by the cls discretization
+        return 
+
     def _is_relaxed_oc(self):
         return self.opts.cls_discretization == ClsDiscretization.RELAXED_OC
 

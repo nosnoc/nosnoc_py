@@ -82,7 +82,7 @@ class Cls(Base):
 
        
         J_n = model.J_normal
-        J_t = self.J_tangent
+        J_t = self.J_t
         
         self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal + J_t@self.lambda_tangent))
 
@@ -125,7 +125,7 @@ class Cls(Base):
         # Cls.m, the division lives inside f_x only; contact force is not rescaled in the quadrature and algebraic equations.
         self.h_rescale = ca.SX.sym("h_rescale")
         f_x_rk_expr = ca.vertcat(
-            model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale)))
+            model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale) + J_t@(self.lambda_tangent/self.h_rescale)))
         p_rk = ca.vertcat(model.u, model.v_global, model.p, self.h_rescale)
 
         self.f_x_rk = ca.Function(
@@ -157,11 +157,12 @@ class Cls(Base):
             dims.n_beta = 0
             return
         
-        if self.opts.friction_model == FrictionModel.CONIC:
+        if self.opts.friction_model == FrictionModel.CONIC and model.J_tangent is not None:
             self.J_t = model.J_tangent
-            
-        if self.opts.friction_model == FrictionModel.POLYHEDRAL:
+        elif self.opts.friction_model == FrictionModel.POLYHEDRAL and model.D_tangent is not None:
             self.J_t = model.D_tangent
+        else:
+            raise ValueError(f"Please provide the appropriate Jacobian for the selected friction model {self.opts.friction_model}.")
 
         dims.n_t = self.J_t.size2() // dims.n_c
         dims.n_tangents = self.J_t.size2()
