@@ -128,6 +128,7 @@ class Cls(Base):
         self.invM_fun = ca.Function('invM_fun', [model.x], [model.inv_M])
         self.f_c_fun = ca.Function('f_c_fun', [model.x], [model.f_c])
         self.J_normal_fun = ca.Function('J_normal_fun', [model.x], [J_n])
+        self.J_tangent_fun = ca.Function('J_tangent_fun', [model.x], [J_t])
 
         self.g_path_fun = ca.Function('g_path', [model.x, model.z, model.u, model.v_global, model.p], [model.g_path])
         self.G_path_fun = ca.Function('G_path', [model.x, model.z, model.u, model.v_global, model.p], [model.G_path])

@@ -129,6 +129,8 @@ class Cls(Base):
                 "gamma", dims.n_gamma, lb=0.0, ub=opts.ub_gamma, init=opts.initial_gamma)
             self.w.beta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
                 "beta", dims.n_beta, lb=0.0, ub=opts.ub_beta, init=opts.initial_beta)
+            self.w.delta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                "delta", dims.n_delta, lb=0.0, ub=opts.ub_delta, init=opts.initial_delta)
 
             if opts.use_fesd and not self._is_relaxed_oc():
                 fe_range = range(start_fe, opts.N_finite_elements[ii-1]+1)
@@ -208,6 +210,7 @@ class Cls(Base):
                 self.w.lambda_tangent[ii,jj,kk],
                 self.w.gamma[ii,jj,kk],
                 self.w.beta[ii,jj,kk],
+                self.w.delta[ii,jj,kk],
             )
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL:
             return ca.vertcat(
@@ -218,6 +221,7 @@ class Cls(Base):
                 self.w.lambda_tangent[ii,jj,kk],
                 self.w.gamma[ii,jj,kk],
                 self.w.beta[ii,jj,kk],
+                self.w.delta[ii,jj,kk],
             )
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL_LIFT_X:
             return ca.vertcat(
@@ -229,6 +233,7 @@ class Cls(Base):
                 self.w.lambda_tangent[ii,jj,kk],
                 self.w.gamma[ii,jj,kk],
                 self.w.beta[ii,jj,kk],
+                self.w.delta[ii,jj,kk],
             )
 
 
@@ -409,6 +414,9 @@ class Cls(Base):
                     self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
                     self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.beta[ii,jj,kk].sym)
                     self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.gamma[ii,jj,kk].sym)
+                    if self.opts.friction_model == FrictionModel.POLYHEDRAL:
+                        self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.lambda_tangent[ii,jj,kk].sym) #im unsure if this should be named differently for bookkeeping
+                        self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.delta[ii,jj,kk].sym)
 
 
     @override
