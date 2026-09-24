@@ -162,7 +162,7 @@ class Cls(Base):
         elif self.opts.friction_model == FrictionModel.POLYHEDRAL and model.D_tangent is not None:
             self.J_t = model.D_tangent
         else:
-            raise ValueError(f"Please provide the appropriate Jacobian for the selected friction model {self.opts.friction_model}.")
+            raise RuntimeError(f"Please provide the appropriate Jacobian for the selected friction model {self.opts.friction_model}.")
 
         dims.n_t = self.J_t.size2() // dims.n_c
         dims.n_tangents = self.J_t.size2()

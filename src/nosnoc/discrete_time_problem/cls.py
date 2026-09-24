@@ -7,7 +7,7 @@ import numpy as np
 from .base import Base
 from vdx.vartypes import *
 
-from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization, RKScheme
+from ..nosnoc_types import RKRepresentation, CrossComplementarityMode, StepEquilibrationMode, ClsDiscretization, RKScheme, FrictionModel
 
 
 class Cls(Base):
@@ -23,6 +23,7 @@ class Cls(Base):
     def __init__(self, dcs, opts):
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
+        self.__check_friction_model_supported(opts)
         super().__init__(dcs, opts)
 
     def __apply_time_stepping_defaults(self, opts):
@@ -66,9 +67,13 @@ class Cls(Base):
                 f"of restitution e = {model.e} cannot be represented. Use use_fesd = True "
                 "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
-    def __check_friction_model_supported(self, model, opts):
-        #check if the friction model is supported by the cls discretization
-        return 
+    def __check_friction_model_supported(self, opts):
+        if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.CONIC:
+            raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+            
+        if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.POLYHEDRAL:
+            raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+            
 
     def _is_relaxed_oc(self):
         return self.opts.cls_discretization == ClsDiscretization.RELAXED_OC
