@@ -23,7 +23,7 @@ class Cls(Base):
     def __init__(self, dcs, opts):
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
-        self.__check_friction_model_supported(opts)
+        self.__check_friction_model_supported(dcs.model, opts)
         super().__init__(dcs, opts)
 
     def __apply_time_stepping_defaults(self, opts):
@@ -67,12 +67,16 @@ class Cls(Base):
                 f"of restitution e = {model.e} cannot be represented. Use use_fesd = True "
                 "together with cls_discretization = ClsDiscretization.FESD_J, or set e = 0.")
 
-    def __check_friction_model_supported(self, opts):
-        if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.CONIC:
-            raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
-            
-        if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.POLYHEDRAL:
-            raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+    def __check_friction_model_supported(self, model, opts):
+        if not model.friction_exists: 
+            return
+
+        else:
+            if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.CONIC:
+                raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+                
+            if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.POLYHEDRAL:
+                raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
             
 
     def _is_relaxed_oc(self):
@@ -119,8 +123,13 @@ class Cls(Base):
                 "lambda_normal", dims.n_c, lb=0.0, ub=opts.ub_lambda_normal, init=opts.initial_lambda_normal)
             self.w.y_gap[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(
                 "y_gap", dims.n_c, lb=0.0, ub=opts.ub_y_gap, init=opts.initial_y_gap)
+            self.w.lambda_tangent[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                "lambda_tangent", dims.n_tangents, lb=0.0, ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+            self.w.gamma[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                "gamma", dims.n_gamma, lb=0.0, ub=opts.ub_gamma, init=opts.initial_gamma)
+            self.w.beta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                "beta", dims.n_beta, lb=0.0, ub=opts.ub_beta, init=opts.initial_beta)
 
-        
             if opts.use_fesd and not self._is_relaxed_oc():
                 fe_range = range(start_fe, opts.N_finite_elements[ii-1]+1)
                 self.w.Lambda_normal[ii,fe_range] = Primal("Lambda_normal", dims.n_c, lb=0.0, ub=opts.ub_Lambda_normal, init=opts.initial_Lambda_normal)
@@ -196,6 +205,9 @@ class Cls(Base):
                 self.w.z[ii,jj,kk],
                 self.w.lambda_normal[ii,jj,kk],
                 self.w.y_gap[ii,jj,kk],
+                self.w.lambda_tangent[ii,jj,kk],
+                self.w.gamma[ii,jj,kk],
+                self.w.beta[ii,jj,kk],
             )
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL:
             return ca.vertcat(
@@ -203,6 +215,9 @@ class Cls(Base):
                 self.w.z[ii,jj,kk],
                 self.w.lambda_normal[ii,jj,kk],
                 self.w.y_gap[ii,jj,kk],
+                self.w.lambda_tangent[ii,jj,kk],
+                self.w.gamma[ii,jj,kk],
+                self.w.beta[ii,jj,kk],
             )
         elif self.opts.rk_representation == RKRepresentation.DIFFERENTIAL_LIFT_X:
             return ca.vertcat(
@@ -211,6 +226,9 @@ class Cls(Base):
                 self.w.z[ii,jj,kk],
                 self.w.lambda_normal[ii,jj,kk],
                 self.w.y_gap[ii,jj,kk],
+                self.w.lambda_tangent[ii,jj,kk],
+                self.w.gamma[ii,jj,kk],
+                self.w.beta[ii,jj,kk],
             )
 
 
@@ -389,6 +407,8 @@ class Cls(Base):
                 for kk in range(1, opts.n_s+1):
                     self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
                     self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
+                    self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.beta[ii,jj,kk].sym)
+                    self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.gamma[ii,jj,kk].sym)
 
 
     @override
