@@ -2,6 +2,7 @@ from typing import Optional, List, override
 from ..model import Cls as ClsModel, ClsDims
 from ..dims import Dims
 from .base import Base
+from ..nosnoc_types import ClsDiscretization, FrictionModel
 
 import casadi as ca
 import numpy as np
@@ -14,6 +15,8 @@ class ClsDcsDims(Dims):
         self.n_y_gap = 0
         self.n_t = 0 # number of tangential directions per contact 
         self.n_tangents = 0 
+        self.n_gamma = 0
+        self.n_beta = 0
 
 
 class Cls(Base):
@@ -50,9 +53,13 @@ class Cls(Base):
         self.Lambda_normal = ca.SX.sym("Lambda_normal", dims.n_c)
         self.Y_gap = ca.SX.sym("Y_gap", dims.n_c)
 
-        self.gamma = ca.SX.sym("gamma", dims.n_c) 
-        self.beta = ca.SX.sym("beta", dims.n_c)
+
+        #for lambda tangent dimension and gamma,beta the friction model is needed 
+        self.__resolve_tangents()
         self.lambda_tangent = ca.SX.sym("lambda_tangent", dims.n_tangents)
+
+        self.gamma = ca.SX.sym("gamma", dims.n_gamma) 
+        self.beta = ca.SX.sym("beta", dims.n_beta)
        
         # Positive and negative parts of the restitution law residual. They are used to encode the absolute value
         # in the aggregated impulse complementarity, cf. Eq. (A.2) of the FESD-J paper.
@@ -75,11 +82,8 @@ class Cls(Base):
 
        
         J_n = model.J_normal
-
+        J_t = self.J_tangent
         
-        J_t = model.J_tangent  # TODO : implement model dependent J_t we need to distinguish between Conic and Polyhedral friction model
-        
-
         self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal + J_t@self.lambda_tangent))
 
         self.g_alg = self.y_gap - model.f_c
@@ -139,3 +143,27 @@ class Cls(Base):
             [ca.vertcat(model.x, model.z, self.z_alg), p_rk],
             [ca.vertcat(model.g_z, self.g_alg)]
         )
+
+    def __resolve_tangents(self):
+        "sets the tangent Jacobian J_t and the dimensions of tangential contact forces"
+        model = self.model
+        dims = self.dims
+        opts = self.opts
+        if not model.friction_exists:
+            self.J_t = ca.SX(dims.n_q, 0) 
+            dims.n_t = 0
+            dims.n_tangents = 0
+            dims.n_gamma = 0
+            dims.n_beta = 0
+            return
+        
+        if self.opts.friction_model == FrictionModel.CONIC:
+            self.J_t = model.J_tangent
+            
+        if self.opts.friction_model == FrictionModel.POLYHEDRAL:
+            self.J_t = model.D_tangent
+
+        dims.n_t = self.J_t.size2() // dims.n_c
+        dims.n_tangents = self.J_t.size2()
+        dims.n_gamma = dims.n_c
+        dims.n_beta = dims.n_c
