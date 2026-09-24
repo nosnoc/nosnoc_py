@@ -86,7 +86,21 @@ class Cls(Base):
         
         self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal + J_t@self.lambda_tangent))
 
-        self.g_alg = self.y_gap - model.f_c
+        g_alg = [self.y_gap - model.f_c]
+        for ii in range(dims.n_c):
+            lo, hi = ii*dims.n_t, (ii+1)*dims.n_t
+            v_t = self.J_t[:, lo:hi].T@model.v                      
+            g_alg.append(v_t + 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
+            g_alg.append(self.beta[ii] - (model.mu[ii]**2 * ca.norm_2(self.lambda_normal[ii]) - ca.norm_2(self.lambda_tangent[lo:hi])))
+
+        if model.friction_exists and self.opts.friction_model == FrictionModel.POLYHEDRAL:
+            pass
+
+        self.g_alg = ca.vertcat(*g_alg)
+
+        
+
+        
 
         v_post_impact = ca.SX.sym("v_post_impact", dims.n_q)
         v_pre_impact = ca.SX.sym("v_pre_impact", dims.n_q)
