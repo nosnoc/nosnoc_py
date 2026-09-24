@@ -89,19 +89,14 @@ class Cls(Base):
         g_alg = [self.y_gap - model.f_c]
         if model.friction_exists and self.opts.friction_model == FrictionModel.CONIC:
             for ii in range(dims.n_c):
-                lo, hi = ii*dims.n_t, (ii+1)*dims.n_t
-                v_t = self.J_t[:, lo:hi].T@model.v                      
-                g_alg.append(v_t + 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
+                lo, hi = ii*dims.n_t, (ii+1)*dims.n_t                  
+                g_alg.append(self.J_t[:, lo:hi].T@model.v    - 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
                 g_alg.append(self.beta[ii] - (model.mu[ii]**2 * ca.sumsqr(self.lambda_normal[ii]) - ca.sumsqr(self.lambda_tangent[lo:hi])))
 
         if model.friction_exists and self.opts.friction_model == FrictionModel.POLYHEDRAL:
             pass
 
         self.g_alg = ca.vertcat(*g_alg)
-
-        
-
-        
 
         v_post_impact = ca.SX.sym("v_post_impact", dims.n_q)
         v_pre_impact = ca.SX.sym("v_pre_impact", dims.n_q)
