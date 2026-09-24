@@ -73,11 +73,12 @@ class Options():
     initial_N_vn: float           = 1 # double: Initial value for negative normal velocity slack in FESD-J reformulation impulse calculation.
     initial_Y_gap: float          = 1 # double: Initial value for gap function in FESD-J reformulation impulse calculation.
     initial_Lambda_tangent: float = 1 # double: Initial value for $\Lambda_t$ in FESD-J reformulation impulse calculation.
-    initial_Gamma_d: float        = 1 # double: Initial value for $\Gamma_d$ in FESD-J reformulation impulse calculation.
-    initial_Beta_d: float         = 1 # double: Initial value for $\Beta_d$ in FESD-J reformulation impulse calculation.
-    initial_Delta_d: float        = 1 # double: Initial value for $\Delta_d$ in FESD-J reformulation impulse calculation.
+    initial_Gamma: float        = 1 # double: Initial value for $\Gamma_d$ in FESD-J reformulation impulse calculation.
+    initial_Beta: float         = 1 # double: Initial value for $\Beta_d$ in FESD-J reformulation impulse calculation.
+    
     initial_Gamma: float          = 1 # double: Initial value for $\Gamma$ in FESD-J reformulation impulse calculation.
     initial_Beta: float           = 1 # double: Initial value for $\Beta$ in FESD-J reformulation impulse calculation.
+    initial_Delta: float        = 1 # double: Initial value for $\Delta_d$ in FESD-J reformulation impulse calculation.
     initial_P_vt: float           = 1 # double: Initial value for positive tangential velocity slack in FESD-J reformulation impulse calculation.
     initial_N_vt: float           = 1 # double: Initial value for negative tangential velocity slack in FESD-J reformulation impulse calculation.
     initial_Alpha_vt: float       = 1 # double: Initial value fo tangential velocity step function in FESD-J reformulation impulse calculation.
@@ -87,9 +88,8 @@ class Options():
     initial_n_vn: float           = 1 # double: Initial value for negative normal velocity slack in FESD-J reformulation.
     initial_y_gap: float          = 1 # double: Initial value for gap function in FESD-J reformulation.
     initial_lambda_tangent: float = 1 # double: Initial value for $\lambda_t$ in FESD-J reformulation.
-    initial_gamma_d: float        = 1 # double: Initial value for $\gamma_d$ in FESD-J reformulation.
-    initial_beta_d: float         = 1 # double: Initial value for $\beta_d$ in FESD-J reformulation.
-    initial_delta_d: float        = 1 # double: Initial value for $\delta_d$ in FESD-J reformulation.
+    initial_beta: float         = 1 # double: Initial value for $\beta_d$ in FESD-J reformulation.
+    initial_delta: float        = 1 # double: Initial value for $\delta_d$ in FESD-J reformulation.
     initial_gamma: float          = 1 # double: Initial value for $\gamma$ in FESD-J reformulation.
     initial_beta: float           = 1 # double: Initial value for $\beta$ in FESD-J reformulation.
     initial_p_vt: float           = 1 # double: Initial value for positive tangential velocity slack in FESD-J reformulation.
@@ -107,9 +107,8 @@ class Options():
     ub_N_vn: float           = np.inf # double: Max value for negative normal velocity slack in FESD-J reformulation impulse calculation.
     ub_Y_gap: float          = np.inf # double: Max value for gap function in FESD-J reformulation impulse calculation.
     ub_Lambda_tangent: float = np.inf # double: Max value for $\Lambda_t$ in FESD-J reformulation impulse calculation.
-    ub_Gamma_d: float        = np.inf # double: Max value for $\Gamma_d$ in FESD-J reformulation impulse calculation.
-    ub_Beta_d: float         = np.inf # double: Max value for $\Beta_d$ in FESD-J reformulation impulse calculation.
-    ub_Delta_d: float        = np.inf # double: Max value for $\Delta_d$ in FESD-J reformulation impulse calculation.
+    ub_Beta: float         = np.inf # double: Max value for $\Beta_d$ in FESD-J reformulation impulse calculation.
+    ub_Delta: float        = np.inf # double: Max value for $\Delta_d$ in FESD-J reformulation impulse calculation.
     ub_Gamma: float          = np.inf # double: Max value for $\Gamma$ in FESD-J reformulation impulse calculation.
     ub_Beta: float           = np.inf # double: Max value for $\Beta$ in FESD-J reformulation impulse calculation.
     ub_P_vt: float           = np.inf # double: Max value for positive tangential velocity slack in FESD-J reformulation impulse calculation.
@@ -121,9 +120,8 @@ class Options():
     ub_n_vn: float           = np.inf # double: Max value for negative normal velocity slack in FESD-J reformulation.
     ub_y_gap: float          = np.inf # double: Max value for gap function in FESD-J reformulation.
     ub_lambda_tangent: float = np.inf # double: Max value for $\lambda_t$ in FESD-J reformulation.
-    ub_gamma_d: float        = np.inf # double: Max value for $\gamma_d$ in FESD-J reformulation.
-    ub_beta_d: float         = np.inf # double: Max value for $\beta_d$ in FESD-J reformulation.
-    ub_delta_d: float        = np.inf # double: Max value for $\delta_d$ in FESD-J reformulation.
+    ub_beta: float         = np.inf # double: Max value for $\beta_d$ in FESD-J reformulation.
+    ub_delta: float        = np.inf # double: Max value for $\delta_d$ in FESD-J reformulation.
     ub_gamma: float          = np.inf # double: Max value for $\gamma$ in FESD-J reformulation.
     ub_beta: float           = np.inf # double: Max value for $\beta$ in FESD-J reformulation.
     ub_p_vt: float           = np.inf # double: Max value for positive tangential velocity slack in FESD-J reformulation.
