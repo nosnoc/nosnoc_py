@@ -17,6 +17,7 @@ class ClsDcsDims(Dims):
         self.n_tangents = 0 
         self.n_gamma = 0
         self.n_beta = 0
+        self.n_delta = 0
 
 
 class Cls(Base):
@@ -60,13 +61,14 @@ class Cls(Base):
 
         self.gamma = ca.SX.sym("gamma", dims.n_gamma) 
         self.beta = ca.SX.sym("beta", dims.n_beta)
+        self.delta = ca.SX.sym("delta", dims.n_delta)
        
         # Positive and negative parts of the restitution law residual. They are used to encode the absolute value
         # in the aggregated impulse complementarity, cf. Eq. (A.2) of the FESD-J paper.
         self.P_vn = ca.SX.sym("P_vn", dims.n_c)
         self.N_vn = ca.SX.sym("N_vn", dims.n_c)
 
-        self.z_alg = ca.vertcat(self.lambda_normal, self.y_gap, self.lambda_tangent, self.gamma, self.beta)
+        self.z_alg = ca.vertcat(self.lambda_normal, self.y_gap, self.lambda_tangent, self.gamma, self.beta, self.delta)
         self.z_impulse = ca.vertcat(self.Lambda_normal, self.Y_gap, self.P_vn, self.N_vn)
         # Algebraics that appear in the right hand side of the CLS ODE.
         self.z_alg_f_x = ca.vertcat(self.lambda_normal, self.lambda_tangent)
@@ -90,11 +92,15 @@ class Cls(Base):
         if model.friction_exists and self.opts.friction_model == FrictionModel.CONIC:
             for ii in range(dims.n_c):
                 lo, hi = ii*dims.n_t, (ii+1)*dims.n_t                  
-                g_alg.append(self.J_t[:, lo:hi].T@model.v    - 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
+                g_alg.append(self.J_t[:, lo:hi].T@model.v - 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
                 g_alg.append(self.beta[ii] - (model.mu[ii]**2 * ca.sumsqr(self.lambda_normal[ii]) - ca.sumsqr(self.lambda_tangent[lo:hi])))
 
         if model.friction_exists and self.opts.friction_model == FrictionModel.POLYHEDRAL:
-            pass
+            for ii in range(dims.n_c):
+                lo, hi = ii*dims.n_t, (ii+1)*dims.n_t      
+                g_alg.append(self.delta[lo:hi] - (self.J_t[:, lo:hi].T@model.v + self.gamma[ii]))
+                g_alg.append(self.beta[ii] - (model.mu[ii]*self.lambda_normal[ii] - ca.sum1(self.lambda_tangent[lo:hi])))
+            
 
         self.g_alg = ca.vertcat(*g_alg)
 
@@ -165,12 +171,14 @@ class Cls(Base):
             dims.n_tangents = 0
             dims.n_gamma = 0
             dims.n_beta = 0
+            dims.n_delta = 0
             return
         
         if self.opts.friction_model == FrictionModel.CONIC and model.J_tangent is not None:
             self.J_t = model.J_tangent
         elif self.opts.friction_model == FrictionModel.POLYHEDRAL and model.D_tangent is not None:
             self.J_t = model.D_tangent
+            dims.n_delta = self.J_t.size2()
         else:
             raise RuntimeError(f"Please provide the appropriate Jacobian for the selected friction model {self.opts.friction_model}.")
 
