@@ -72,11 +72,11 @@ class Cls(Base):
             return
 
         else:
-            if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.CONIC:
-                raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+            if not opts.n_s == 1 and opts.friction_model == FrictionModel.CONIC:
+                raise RuntimeError("switch detection for tangential friction is only supported for implicit Euler time stepping (n_s = 1)")
                 
-            if opts.rk_scheme == RKScheme.RADAU_IIA and opts.friction_model == FrictionModel.POLYHEDRAL:
-                raise RuntimeError("switch detection for tangential friction is not supported yet with Radau IIA.")
+            if not opts.n_s == 1 and opts.friction_model == FrictionModel.POLYHEDRAL:
+                raise RuntimeError("switch detection for tangential friction is only supported for implicit Euler time stepping (n_s = 1)")
             
 
     def _is_relaxed_oc(self):
@@ -123,8 +123,17 @@ class Cls(Base):
                 "lambda_normal", dims.n_c, lb=0.0, ub=opts.ub_lambda_normal, init=opts.initial_lambda_normal)
             self.w.y_gap[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)] = Primal(
                 "y_gap", dims.n_c, lb=0.0, ub=opts.ub_y_gap, init=opts.initial_y_gap)
-            self.w.lambda_tangent[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
-                "lambda_tangent", dims.n_tangents, lb=0.0, ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+
+            # im unsure if this is optimal
+            if FrictionModel.CONIC == self.opts.friction_model:
+                self.w.lambda_tangent[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                    "lambda_tangent", dims.n_tangents, lb=-opts.ub_lambda_tangent, ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+
+            if FrictionModel.POLYHEDRAL == self.opts.friction_model:
+                            self.w.lambda_tangent[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
+                                "lambda_tangent", dims.n_tangents, lb=0, ub=opts.ub_lambda_tangent, init=opts.initial_lambda_tangent)
+
+            
             self.w.gamma[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
                 "gamma", dims.n_gamma, lb=0.0, ub=opts.ub_gamma, init=opts.initial_gamma)
             self.w.beta[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
