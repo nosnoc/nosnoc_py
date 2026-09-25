@@ -56,6 +56,7 @@ def get_options():
         rk_scheme=nosnoc.RKScheme.RADAU_IIA,
         use_fesd=False,
         friction_model=nosnoc.FrictionModel.CONIC,
+        eps_t= 1e-6, # regularization parameter for friction
         T=T_SIM/N_SIM,                   
     )
 

@@ -93,13 +93,13 @@ class Cls(Base):
             for ii in range(dims.n_c):
                 lo, hi = ii*dims.n_t, (ii+1)*dims.n_t                  
                 g_alg.append(-self.J_t[:, lo:hi].T@model.v - 2 * self.gamma[ii] * self.lambda_tangent[lo:hi]) 
-                g_alg.append(self.beta[ii] - (model.mu[ii]**2 * ca.sumsqr(self.lambda_normal[ii]) - ca.sumsqr(self.lambda_tangent[lo:hi])))
+                g_alg.append(self.beta[ii] - (model.mu[ii]**2 * ca.sumsqr(self.lambda_normal[ii]) - ca.sumsqr(self.lambda_tangent[lo:hi] + opts.eps_t)))
 
         if model.friction_exists and self.opts.friction_model == FrictionModel.POLYHEDRAL:
             for ii in range(dims.n_c):
                 lo, hi = ii*dims.n_t, (ii+1)*dims.n_t      
                 g_alg.append(self.delta[lo:hi] - (self.J_t[:, lo:hi].T@model.v + self.gamma[ii]))
-                g_alg.append(self.beta[ii] - (model.mu[ii]*self.lambda_normal[ii] - ca.sum1(self.lambda_tangent[lo:hi])))
+                g_alg.append(self.beta[ii] - (model.mu[ii]*self.lambda_normal[ii] + opts.eps_t - ca.sum1(self.lambda_tangent[lo:hi])))
             
 
         self.g_alg = ca.vertcat(*g_alg)

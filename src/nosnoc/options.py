@@ -216,11 +216,17 @@ class Options():
 
     friction_model: FrictionModel = FrictionModel.CONIC
 
+    # double: Constant of relaxation for the friction cone, avoiding LICQ violation
+        #
+        # See Also:
+        #     More details can be found in :cite:p:`Nurkanovic2023a`
+    eps_t: float = 1e-7
+
     # ConicModelSwitchHandling: Which velocity switch handling mode to use when using the Conic friction model
     #
     # See Also:
     #     `ConicModelSwitchHandling` for more details as to the differences between the switch handling modes.
-    conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
+    #conic_model_switch_handling: ConicModelSwitchHandling = ConicModelSwitchHandling.ABS
 
     # boolean: If true we disallow impulsive contacts at the beginning of the first control stage.
     no_initial_impacts: bool = False
@@ -238,11 +244,7 @@ class Options():
 
     #lift_velocity_state: bool = 0; # boolean: If true define auxliary algebraic vairable, $dot = z_v$, to avoid symbolic inversion of the inertia matrix.
 
-    # double: The constant radius of relaxation for the friction force which enforces a nonempty interior around zero velocity
-    #
-    # See Also:
-    #     More details can be found in :cite:p:`Nurkanovic2023a`
-    #eps_t: float = 1e-7
+    
 
     # NOTIMPLEMENTED
     # ConstraintRelaxationMode: What (if any) relaxation to apply to the terminal constraints.
