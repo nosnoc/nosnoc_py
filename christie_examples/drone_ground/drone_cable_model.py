@@ -105,12 +105,11 @@ class DroneCableOCPConfig:
     homotopy_update_slope: float = 0.2
     N_homotopy: int = 12
     complementarity_tol: float = 1e-6
-    print_level: int = 0
+    print_level: int = 3
 
 def build_drone_cable_model(cfg: DroneCableConfig, ocp_cfg: DroneCableOCPConfig, x_ref_T_val: np.ndarray):
     """
-    Build Planar "drone tethered to the ground by a cable" as a `nosnoc.model.Cls`,
-    wired up for the reference-tracking OCP.
+    Build Planar "drone tethered to the ground by a cable" as a `nosnoc.model.Cls`
     
     Physics:
         state   x = (q, v),  q = (p_x, p_z, pitch),  v = (v_x, v_z, v_pitch)   [n_q = n_v = 3]
@@ -160,15 +159,14 @@ def build_drone_cable_model(cfg: DroneCableConfig, ocp_cfg: DroneCableOCPConfig,
     x_ref = ca.SX.sym("x_ref", nx)
 
     # NOTE: the cost only tracks the position/pitch reference `q` (Q, Q_terminal are 3x3);
-    # velocity is not penalized directly, only regularized indirectly
-    # through the control-effort term below.
+    # velocity is not penalized directly, only regularized indirectly through the control-effort term below.
     u_hover = 0.5 * cfg.mass * cfg.gravity * ca.DM.ones(nu)  # hover thrust, split across rotors
     f_q = (q - x_ref).T @ ocp_cfg.Q @ (q - x_ref) + (u - u_hover).T @ ocp_cfg.R @ (u - u_hover)
     # Terminal reference is a numeric constant, see the module docstring.
     f_q_T = (q - ca.DM(x_ref_T_val)).T @ ocp_cfg.Q_terminal @ (q - ca.DM(x_ref_T_val))
 
     # ------------------------------------------------------------------ bounds / initial state
-    lbu = np.zeros(nu)
+    lbu = np.full(nu, -ocp_cfg.max_thrust)
     ubu = np.full(nu, ocp_cfg.max_thrust)
     x0 = np.concatenate([ocp_cfg.x_init, ocp_cfg.v_init])
 

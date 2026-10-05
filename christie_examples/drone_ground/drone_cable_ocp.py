@@ -1,12 +1,6 @@
 """
 Build and solve the tethered-drone reference-tracking OCP with `nosnoc`.
 
-This replaces the original hand-rolled pipeline (`ocpDG.py`'s `solve_open_loop_ocp` +
-`_solve_with_complementarity_continuation`, built on a manually assembled IPOPT NLP with a
-hand-written complementarity-slackness continuation loop) with `nosnoc.OcpSolver`, which builds
-the same kind of direct-transcription MPCC from the `Cls` model and solves it with `nosnoc`'s own
-homotopy continuation (`RegHomotopyOptions`).
-
 Run this file directly to solve the OCP and print a summary of the result.
 """
 import os
@@ -25,15 +19,16 @@ from drone_cable_model import build_drone_cable_model, build_reference_trajector
 
 def get_nosnoc_options(ocp_cfg: DroneCableOCPConfig):
     return nosnoc.Options(
-        N_stages=ocp_cfg.N_stages,
-        N_finite_elements=ocp_cfg.N_finite_elements,
-        n_s=ocp_cfg.n_s,
+        T=ocp_cfg.N_stages * ocp_cfg.sampling_time,     # total time horizon (could give h instead)
+        N_stages=ocp_cfg.N_stages,                      # Nb of control intervals
+        N_finite_elements=ocp_cfg.N_finite_elements,    # substeps per control interval for contact resolution
+        n_s=ocp_cfg.n_s,                                # Runge-Kutta stages within each finite element
         rk_scheme=nosnoc.RKScheme.RADAU_IIA,
-        T=ocp_cfg.N_stages * ocp_cfg.sampling_time,
-        use_fesd=True,
+        # FESD is the adaptive step-size machinery
+        use_fesd=True,                                  # Finite elements length become decision variables 
+        step_equilibration=nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,                       
         cls_discretization=nosnoc.ClsDiscretization.FESD_J,
-        cross_comp_mode=nosnoc.CrossComplementarityMode.FE_STAGE,
-        step_equilibration=nosnoc.StepEquilibrationMode.HEURISTIC_MEAN,
+        cross_comp_mode=nosnoc.CrossComplementarityMode.FE_STAGE,   # Should try FE_FE because lighter, but less precise
         # The drone starts exactly on the ground (p_z = 0), so the initial state already sits at
         # the ground contact boundary. There is no impact "before time zero" to resolve there.
         no_initial_impacts=True,
@@ -65,14 +60,14 @@ def solve_drone_cable_ocp(cfg: DroneCableConfig = None, ocp_cfg: DroneCableOCPCo
 
     # Reference trajectory: one row per grid point (N_stages + 1 rows). Stage k (1..N_stages) is
     # tracked against row k (row 0 is the fixed initial state), and the terminal cost tracks the
-    # very last row. Built before the model so its last row can be baked into `f_q_T` as a
-    # numeric constant, see the "Note on the terminal reference" in `drone_cable_model.py`.
+    # very last row.
     x_ref_full = build_reference_trajectory(
         ocp_cfg.N_stages, cfg.nx,
         ellipse_center_z=ocp_cfg.ellipse_center_z, ellipse_a=ocp_cfg.ellipse_a,
         ellipse_b=ocp_cfg.ellipse_b, climb_frac=ocp_cfg.climb_frac, land_frac=ocp_cfg.land_frac,
     )
 
+    # returns a nosnoc.model.Cls
     model = build_drone_cable_model(cfg, ocp_cfg, x_ref_T_val=x_ref_full[-1, :])
 
     opts = get_nosnoc_options(ocp_cfg)
