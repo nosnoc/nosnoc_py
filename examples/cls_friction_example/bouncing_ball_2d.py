@@ -11,7 +11,7 @@ X0 = np.array([0.0, 1.0, 4.0, 0.0])
 
 
 T_SIM = 3.0
-N_SIM = 40
+N_SIM = 500
 N_FE = 2
 
 
@@ -76,6 +76,8 @@ def solve_bouncing_ball(x0=X0, opts=None, integrator_opts=None):
         integrator_opts = get_default_integrator_options()
     integrator = nosnoc.Integrator(model, opts, integrator_opts)
     t_grid, x_res, _, _ = integrator.simulate(x0)
+    h = opts.h_k[0] / opts.N_finite_elements[0]
+    print(f"finite element length h = {h:.5f} s")
     return t_grid, x_res, integrator
 
 
@@ -102,6 +104,7 @@ def plot_results(t_grid, x_res):
 
 def example(plot=True):
     t_grid, x_res, integrator = solve_bouncing_ball()
+ 
     if plot:
         plot_results(t_grid, x_res)
     return t_grid, x_res, integrator
