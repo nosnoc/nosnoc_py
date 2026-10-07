@@ -421,12 +421,14 @@ class Cls(Base):
                 for kk in range(1, opts.n_s+1):
                     self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
                     self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
-                    self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.beta[ii,jj,kk].sym)
-                    self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.gamma[ii,jj,kk].sym)
-                    if self.opts.friction_model == FrictionModel.POLYHEDRAL:
-                        self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.lambda_tangent[ii,jj,kk].sym) #im unsure if this should be named differently for bookkeeping
-                        self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(self.w.delta[ii,jj,kk].sym)
-
+                    if self.model.friction_exists:
+                        G_t = [self.w.beta[ii,jj,kk].sym]
+                        H_t = [self.w.gamma[ii,jj,kk].sym]
+                        if opts.friction_model == FrictionModel.POLYHEDRAL:
+                            G_t.append(self.w.lambda_tangent[ii,jj,kk].sym)
+                            H_t.append(self.w.delta[ii,jj,kk].sym)
+                        self.G.standard_comp_tangent[ii,jj,kk] = CConstraint(ca.vertcat(*G_t))
+                        self.H.standard_comp_tangent[ii,jj,kk] = CConstraint(ca.vertcat(*H_t))
 
     @override
     def _generate_step_equilibration_constraints(self):
