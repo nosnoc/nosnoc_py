@@ -1,7 +1,7 @@
 import numpy as np
 import casadi as ca
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, PillowWriter
 
 import nosnoc
 
@@ -13,7 +13,7 @@ MU = 0.4
 
 X0 = np.array([0.0, 0.5, 0.0, 1.0, 0.0, 0.0])  
 
-T_SIM = 100                           
+T_SIM = 10                           
 H_STEP = 0.01                           
 N_FE = 2                                 
 N_SIM = max(1, round(T_SIM/(H_STEP*N_FE))) 
@@ -134,7 +134,7 @@ def animate(t, x, save_path=None):
     anim = FuncAnimation(fig, update, frames=len(t), interval=1000*T_SIM/len(t),
                          blit=False, repeat=False)
     if save_path is not None:
-        anim.save(save_path, writer="pillow", fps=30)
+        anim.save(save_path, writer=PillowWriter(fps=30), dpi=150)
         print(f"animation written to {save_path}")
     return anim
 
@@ -149,21 +149,15 @@ def main():
 
     fig, axes = plt.subplots(4, 1, figsize=(7, 10))
     xs = np.linspace(x[0, :].min() - R, x[0, :].max() + R, 400)
-    axes[0].plot(xs, A*np.sin(K*xs), "k-", lw=1, label="floor")
-    axes[0].plot(x[0, :], x[1, :], label="disc centre")
-    axes[0].set_xlabel("x"); axes[0].set_ylabel("y"); axes[0].axis("equal")
-    axes[1].plot(t, v_t); axes[1].axhline(0.0, color="k", lw=0.5)
-    axes[1].set_ylabel("tangential contact velocity")
-    axes[2].plot(t, f_c); axes[2].axhline(0.0, color="k", lw=0.5)
-    axes[2].set_ylabel("gap f_c")
-    axes[3].plot(t, e); axes[3].set_ylabel("energy"); axes[3].set_xlabel("t")
+   
+    axes[0].plot(t, e); axes[3].set_ylabel("energy"); axes[3].set_xlabel("t")
     for ax in axes:
         ax.grid(True)
     axes[0].legend()
     plt.tight_layout()
 
     
-    _anim = animate(t, x)
+    _anim = animate(t, x, "disc_on_wavy_floor.gif")
     plt.show()
 
 
