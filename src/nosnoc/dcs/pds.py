@@ -13,8 +13,9 @@ class Pds(Base):
     Projected Dynamical System reformulation into a DCS
     """
     def __init__(self, model: PdsModel):
-        self.dims= Dims(model.dims)
+        self.dims = model.dims
         super().__init__(model)
+        
 
     @override
     def _generate_variables(self):

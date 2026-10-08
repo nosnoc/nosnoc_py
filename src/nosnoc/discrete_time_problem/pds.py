@@ -136,12 +136,12 @@ class Pds(Base):
 
 
     @override
-    def _generate_step_equilibration_constraints(self):
-        raise NotImplementedError("Step equilibration not yet implemented")
+    def _generate_step_equilibration_constraints(self): #TODO @Stefan: implement FESD
+        return
 
     @override
     def _get_eta(self, ii, jj):
-        raise NotImplementedError("Step equilibration not yet implemented")
+        return
 
     @override
     def _warmstart_shift(self):
