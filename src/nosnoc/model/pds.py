@@ -26,15 +26,17 @@ class Pds(Base):
   
     def __init__(self,
                  *,
-                 f_c: ca.SX, 
-                 J_normal: Optional[ca.SX] = None,
+                 f: ca.SX, #velocity of the system without constraints in x,u
+                 f_c: ca.SX, #f_c is the gap function in x
+                 J_n: Optional[ca.SX] = None,
                  **kwargs
                  ):
         super().__init__(**kwargs)
         self.dims = PdsDims(self.dims)
-        self.f_c = f_c #f_c is a function in x‚
+        self.f = f
+        self.f_c = f_c 
         self.friction_exists = False
-        self.J_normal = J_normal
+        self.J_n = J_n
         
         self.__backfill()
 
@@ -43,8 +45,8 @@ class Pds(Base):
 
         dims.n_c = self.f_c.size(1)
 
-        if self.J_normal == None:
-            self.J_normal = ca.jacobian(self.f_c, self.x).T
+        if self.J_n == None:
+            self.J_n = ca.jacobian(self.f_c, self.x).T
     
 
     
