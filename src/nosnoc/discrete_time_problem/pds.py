@@ -16,7 +16,6 @@ class Pds(Base):
     """
 
     def __init__(self, dcs, opts):
-        self.__apply_time_stepping_defaults(opts)
         super().__init__(dcs, opts)
 
 
@@ -81,6 +80,7 @@ class Pds(Base):
     def _generate_direct_transcription_constraints(self):
         opts, dcs = self.opts, self.dcs
         x_prev = self.w.x[0,0,opts.n_s].sym
+        
         for ii in range(1, opts.N_stages+1):
             s_sot = self._get_stage_sot(ii)
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
@@ -88,14 +88,19 @@ class Pds(Base):
                 x_end, q_end, dynamic, algebraic = self.rk.collocation_constraints(
                     x_prev, self._build_z(ii, jj), self._build_prk(ii, jj), h,
                     dcs.f_x_rk, dcs.f_q_rk, dcs.g_rk, sot=s_sot)
+                
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk]  = Constraint(dynamic[kk-1])     
                     self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])   
+
                     self._rk_stage_path_constraints(ii, jj, kk)
+
                 self.f += q_end                                                
                 x_ii_jj_end = self._get_x_end(ii, jj)
+
                 if not self.rk.is_right_boundary_explicit():
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
+                    
                 self._fe_path_constraints(ii, jj)
                 x_prev = x_ii_jj_end                                         
             self._numerical_time_constraints(ii)
