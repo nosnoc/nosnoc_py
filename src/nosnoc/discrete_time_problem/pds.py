@@ -77,33 +77,30 @@ class Pds(Base):
                 self.w.y_gap[ii,jj,kk],
             )
 
-
     @override
     def _generate_direct_transcription_constraints(self):
-        opts = self.opts
-        dcs = self.dcs
-        model = self.model
-        dims = self.dcs.dims
-        rbp = self.rbp
-
-        x_0 = self.w.x[0,0,opts.n_s].sym
-        z_0 = self.w.z[0,0,opts.n_s].sym
-        
-        
-
+        opts, dcs = self.opts, self.dcs
+        x_prev = self.w.x[0,0,opts.n_s].sym
         for ii in range(1, opts.N_stages+1):
-            for jj in range(1, opts.N_fe+1):
+            s_sot = self._get_stage_sot(ii)
+            for jj in range(1, opts.N_finite_elements[ii-1]+1):
+                h = self._get_fe_h(ii, jj)
+                x_end, q_end, dynamic, algebraic = self.rk.collocation_constraints(
+                    x_prev, self._build_z(ii, jj), self._build_prk(ii, jj), h,
+                    dcs.f_x_rk, dcs.f_q_rk, dcs.g_rk, sot=s_sot)
                 for kk in range(1, opts.n_s+1):
-                      self.g.path[ii,jj,kk] = Constraint(
-                                self.dcs.g_alg(self.x, self.z, self.lambda_n, self.v_global, self.p),
-                                lb=self.model.lbg_path,
-                                ub=self.model.ubg_path, #
-                            )
-
-
+                    self.g.dynamic[ii,jj,kk]  = Constraint(dynamic[kk-1])     
+                    self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])   
+                    self._rk_stage_path_constraints(ii, jj, kk)
+                self.f += q_end                                                
+                x_ii_jj_end = self._get_x_end(ii, jj)
+                if not self.rk.is_right_boundary_explicit():
+                    self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
+                self._fe_path_constraints(ii, jj)
+                x_prev = x_ii_jj_end                                         
+            self._numerical_time_constraints(ii)
+            self._stage_path_constraints(ii)
         self._terminal_constraint()
-        self._terminal_objective()
-        self._terminal_numerical_time_constraints()
 
 
     @override
