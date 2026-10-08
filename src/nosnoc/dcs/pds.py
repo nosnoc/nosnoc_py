@@ -35,6 +35,9 @@ class Pds(Base):
 
         self.f_x = model.f + model.J_n @ self.lambda_n
 
+        self.g_alg = self.y_gap - model.f_c #slack s.t. complementarity is between two plain NLP variables
+
+
         
         self.f_x_fun = ca.Function('f_x', [model.x, model.z, model.u, model.v_global, model.p], [self.f_x, model.f_q])
         self.f_q_fun = ca.Function('f_q', [model.x, model.z, model.u, model.v_global, model.p], [model.f_q])
@@ -51,19 +54,19 @@ class Pds(Base):
        
         self.f_x_rk = ca.Function(
             'f_x_rk',
-            [ca.vertcat(self.model.x, self.model.z, self.lambda_n),
+            [ca.vertcat(self.model.x, self.model.z, self.lambda_n, self.y_gap),
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
             [self.f_x]
         )
         self.f_q_rk = ca.Function(
             'f_q_rk',
-            [ca.vertcat(self.model.x, self.model.z, self.lambda_n),
+            [ca.vertcat(self.model.x, self.model.z, self.lambda_n, self.y_gap),
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
             [self.model.f_q]
         )
         self.g_rk = ca.Function(
             'g_rk',
-            [ca.vertcat(self.model.x, self.model.z, self.alpha, self.lambda_n, self.lambda_p),
+            [ca.vertcat(self.model.x, self.model.z, self.lambda_n, self.y_gap),
              ca.vertcat(self.model.u, self.model.v_global, self.model.p)],
             [ca.vertcat(self.model.g_z, self.g_alg)]
         )
