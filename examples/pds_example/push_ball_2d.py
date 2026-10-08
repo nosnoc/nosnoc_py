@@ -50,7 +50,7 @@ def solve_ocp(opts=None):
     if opts is None:
         opts = get_default_options()
 
-    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions() #you can of course adjust the settings of the reg homotopy
+    solver_opts = nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     model = push_balls_model()
     solver = nosnoc.OcpSolver(model, opts, solver_opts)
 
@@ -123,7 +123,8 @@ def animate(solver):
         trail2.set_data(x_res[:k+1, 2], x_res[:k+1, 3])
         return ball1, ball2, trail1, trail2
 
-    
+    # keep a reference to the animation, otherwise it is garbage collected before plt.show()
+    return FuncAnimation(fig, update, frames=x_res.shape[0], interval=1000*T/N_STAGES, blit=True)
 
 
 def example(plot=True):
