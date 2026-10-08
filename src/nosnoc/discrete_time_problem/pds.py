@@ -27,7 +27,7 @@ class Pds(Base):
         model = self.model
         dims = self.dcs.dims
         rbp = self.rbp
-        start_fe = self._start_fe()
+        
 
         self._create_global_variables()
         self._create_initial_variables()
@@ -129,9 +129,24 @@ class Pds(Base):
     def __standard(self):
         opts = self.opts
         for ii in range(1, opts.N_stages+1):
-            for jj in range(1, opts.N_finite_elements + 1):
+            for jj in range(1, opts.N_finite_elements[ii-1] + 1):
                 for kk in range(1, opts.n_s+1):
                     self.G.standard_comp[ii,jj,kk] = CConstraint(self.w.lambda_normal[ii,jj,kk].sym)
                     self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
+
+
+        @override
+        def _generate_step_equilibration_constraints(self):
+            raise NotImplementedError("Step equilibration not yet implemented")
+    
+        @override
+        def _get_eta(self, ii, jj):
+            raise NotImplementedError("Step equilibration not yet implemented")
+    
+        @override
+        def _warmstart_shift(self):
+            """Warmstart the current problem by shifting one control interval"""
+            raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
+
 
 
