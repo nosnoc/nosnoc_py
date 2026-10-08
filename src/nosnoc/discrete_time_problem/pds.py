@@ -135,18 +135,18 @@ class Pds(Base):
                     self.H.standard_comp[ii,jj,kk] = CConstraint(self.w.y_gap[ii,jj,kk].sym)
 
 
-        @override
-        def _generate_step_equilibration_constraints(self):
-            raise NotImplementedError("Step equilibration not yet implemented")
-    
-        @override
-        def _get_eta(self, ii, jj):
-            raise NotImplementedError("Step equilibration not yet implemented")
-    
-        @override
-        def _warmstart_shift(self):
-            """Warmstart the current problem by shifting one control interval"""
-            raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
+    @override
+    def _generate_step_equilibration_constraints(self):
+        raise NotImplementedError("Step equilibration not yet implemented")
+
+    @override
+    def _get_eta(self, ii, jj):
+        raise NotImplementedError("Step equilibration not yet implemented")
+
+    @override
+    def _warmstart_shift(self):
+        """Warmstart the current problem by shifting one control interval"""
+        raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
 
 
 
