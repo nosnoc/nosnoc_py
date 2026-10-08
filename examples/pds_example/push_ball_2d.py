@@ -122,8 +122,7 @@ def animate(solver):
         trail1.set_data(x_res[:k+1, 0], x_res[:k+1, 1])
         trail2.set_data(x_res[:k+1, 2], x_res[:k+1, 3])
         return ball1, ball2, trail1, trail2
-
-    # keep a reference to the animation, otherwise it is garbage collected before plt.show()
+    
     return FuncAnimation(fig, update, frames=x_res.shape[0], interval=1000*T/N_STAGES, blit=True)
 
 
