@@ -20,8 +20,7 @@ class Pds(Base):
     def _generate_variables(self):
         
         dims = self.dims
-        dims.n_lambda_normal = dims.n_c
-        dims.n_y_gap = dims.n_c
+       
 
         self.lambda_n = ca.SX.sym("lambda_normal", dims.n_c)
         self.y_gap = ca.SX.sym("y_gap", dims.n_c)
@@ -42,7 +41,7 @@ class Pds(Base):
         self.f_x_fun = ca.Function('f_x', [model.x, model.z, model.u, model.v_global, model.p], [self.f_x, model.f_q])
         self.f_q_fun = ca.Function('f_q', [model.x, model.z, model.u, model.v_global, model.p], [model.f_q])
         self.g_z_fun = ca.Function('g_z', [model.x, model.z, model.u, model.v_global, model.p], [model.g_z])
-        self.g_alg_fun = ca.Function('g_alg', [model.x, model.z, self.z_alg, model.v_global, model.p], [self.g_alg])
+        self.g_alg_fun = ca.Function('g_alg', [model.x, model.z, self.lambda_n, model.v_global, model.p], [self.g_alg])
 
 
         self.g_path_fun = ca.Function('g_path', [model.x, model.z, model.u, model.v_global, model.p], [model.g_path])
