@@ -41,11 +41,11 @@ class Pds(Base):
         self.__backfill()
 
     def __backfill(self):
-        dims = PdsDims()
+        dims = self.dims
 
         dims.n_c = self.f_c.size(1)
 
-        if self.J_n == None:
+        if self.J_n is None:
             self.J_n = ca.jacobian(self.f_c, self.x).T
     
 

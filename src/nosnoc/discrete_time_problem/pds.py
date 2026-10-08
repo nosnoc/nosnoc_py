@@ -37,7 +37,7 @@ class Pds(Base):
 
         for ii in range(1, opts.N_stages+1):
             self._create_h(ii)
-            self._create_xvz_cls(ii)
+            self._create_xvz(ii)
 
             
             self.w.lambda_normal[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)] = Primal(
