@@ -1,6 +1,3 @@
-
-#Minimal Pds OCP: ball 1 (velocity controlled) pushes ball 2 to a target position.
-
 import numpy as np
 import casadi as ca
 import matplotlib.pyplot as plt
