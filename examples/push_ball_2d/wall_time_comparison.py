@@ -4,8 +4,8 @@ Run from the repository root:  python -m examples.cls_minimal_example.push_ball_
 """
 import matplotlib.pyplot as plt
 
-from examples.pds_example import push_ball_2d as pds
-from examples.cls_minimal_example import push_ball_2d as cls
+from examples.push_ball_2d import push_ball_pds as pds
+from examples.push_ball_2d import push_ball_cls as cls
 
 for name, example in [("Pds", pds), ("Cls", cls)]:
     stats = example.solve_ocp().dtp.solver.stats
