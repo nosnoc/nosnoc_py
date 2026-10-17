@@ -7,7 +7,11 @@ import nosnoc
 import push_ball_pds as pds
 
 N_FE = 2
-C_DAMP = 1.0 
+C_DAMP = 50
+# False: the Pds controls (velocities of ball 1) are applied directly as forces on ball 1.
+# True: they are converted to accelerations by finite differences, so that ball 1 reaches the
+# Pds velocity at the end of every control interval when it moves freely.
+ACCELERATION_CONTROLS = False
 
 
 def damped_model():
@@ -24,15 +28,20 @@ def damped_model():
     )
 
 
-def simulate(u_pds):
+def velocity_to_acceleration(u_pds):
+    """Finite differences a_k = (u_k - u_{k-1})/h of the Pds velocities, with u_{-1} = 0 (ball 1 at rest)."""
+    return np.diff(u_pds, axis=0, prepend=np.zeros((1, u_pds.shape[1])))/(pds.T/pds.N_STAGES)
 
+
+def simulate(u_cls):
+    """Apply the controls u_cls (forces on ball 1) to the Cls model, one integrator step per control interval."""
     model = damped_model()
     opts = nosnoc.Options(N_finite_elements=N_FE, n_s=1, rk_scheme=nosnoc.RKScheme.RADAU_IIA,
                           T=pds.T/pds.N_STAGES)
     int_opts = nosnoc.FESDIntegratorOptions(
         N_sim=pds.N_STAGES, T_sim=pds.T,
         solver_opts=nosnoc.mpccsol.plugins.reg_homotopy.RegHomotopyOptions(print_level=0))
-    t, x, _, _ = nosnoc.Integrator(model, opts, int_opts).simulate(model.x0, u=u_pds)
+    t, x, _, _ = nosnoc.Integrator(model, opts, int_opts).simulate(model.x0, u=u_cls)
     return t, x
 
 
@@ -58,6 +67,37 @@ def plot_controls(u_pds):
     ax.stairs(u_pds[:, 1], t_grid, label="$u_y$")
     ax.set_title("Pds controls (velocity of ball 1)")
     ax.set_xlabel("$t$")
+    ax.legend()
+    ax.grid()
+    return fig
+
+
+def plot_speed_pds(x_pds):
+    """Speed |v| of both balls in the Pds OCP solution.
+
+    Pds has no velocity state, the velocity is the position difference over every control interval.
+    """
+    t_grid = np.linspace(0, pds.T, pds.N_STAGES+1)
+    v_pds = np.diff(x_pds, axis=0)/(pds.T/pds.N_STAGES)
+    fig, ax = plt.subplots()
+    ax.stairs(np.linalg.norm(v_pds[:, 0:2], axis=1), t_grid, color="C0", label="ball 1")
+    ax.stairs(np.linalg.norm(v_pds[:, 2:4], axis=1), t_grid, color="C3", label="ball 2")
+    ax.set_title("speed, Pds OCP solution")
+    ax.set_xlabel("$t$")
+    ax.set_ylabel(r"$\|v\|$")
+    ax.legend()
+    ax.grid()
+    return fig
+
+
+def plot_speed_cls(t_cls, x_cls):
+    """Speed |v| of both balls in the Cls simulation, velocity jumps show as vertical steps."""
+    fig, ax = plt.subplots()
+    ax.plot(t_cls, np.linalg.norm(x_cls[:, 4:6], axis=1), color="C0", label="ball 1")
+    ax.plot(t_cls, np.linalg.norm(x_cls[:, 6:8], axis=1), color="C3", label="ball 2")
+    ax.set_title("speed, Cls simulation of the Pds controls")
+    ax.set_xlabel("$t$")
+    ax.set_ylabel(r"$\|v\|$")
     ax.legend()
     ax.grid()
     return fig
@@ -91,16 +131,22 @@ def animate(x_cls):
     return FuncAnimation(fig, update, frames=len(x_frames), interval=1000*pds.T/pds.N_STAGES, blit=True)
 
 
-def example(plot=True):
+def example(plot=True, acceleration_controls=ACCELERATION_CONTROLS):
     solver = pds.solve_ocp()
     x_pds = solver.get("x")
     u_pds = np.reshape(solver.get("u"), (pds.N_STAGES, -1))  # (N_sim, n_u), as simulate expects
 
-    t_cls, x_cls = simulate(u_pds)
+    u_cls = velocity_to_acceleration(u_pds) if acceleration_controls else u_pds
+    t_cls, x_cls = simulate(u_cls)
     if plot:
         plot_paths(x_pds, x_cls)
         plot_controls(u_pds)
+        plot_speed_pds(x_pds)
+        plot_speed_cls(t_cls, x_cls)
         anim = animate(x_cls)
+        plt.gca().set_title("Cls simulation of the Pds controls")
+        anim_pds = pds.animate(solver)  # the first order Pds OCP solution, for comparison
+        plt.gca().set_title("Pds OCP solution")
         plt.show()
     return t_cls, x_cls
 
