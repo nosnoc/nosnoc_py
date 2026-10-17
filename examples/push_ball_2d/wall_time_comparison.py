@@ -1,7 +1,3 @@
-"""Wall time per homotopy step of the 2d push ball OCP, Pds vs. Cls model.
-
-Run from the repository root:  python -m examples.cls_minimal_example.push_ball_2d_wall_time
-"""
 import matplotlib.pyplot as plt
 
 from examples.push_ball_2d import push_ball_pds as pds
