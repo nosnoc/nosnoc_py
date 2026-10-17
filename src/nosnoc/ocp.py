@@ -2,12 +2,15 @@ import numpy as np
 
 from .model import Pss
 from .model import Cls
+from .model import Pds
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
 from .dcs import Cls as ClsDCS
+from .dcs import Pds as PdsDCS
 from .discrete_time_problem import Stewart as StewartDTP
 from .discrete_time_problem import Heaviside as HeavisideDTP
 from .discrete_time_problem import Cls as ClsDTP
+from .discrete_time_problem import Pds as PdsDTP
 from .nosnoc_types import DcsMode
 from .mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 from .mpccsol.plugins.ccopt import CCOptOptions
@@ -35,8 +38,12 @@ class OcpSolver():
             self.dcs = ClsDCS(model)
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
+        elif isinstance(model, Pds):
+            self.dcs = PdsDCS(model)
+            self.dtp = PdsDTP(self.dcs, opts)
+            self.dtp.populate_problem()
         else:
-            raise NotImplementedError("Only Pss and Cls are implemented")
+            raise NotImplementedError("Only Pss, Cls and Pds are implemented")
 
     def solve(self):
         self.set_param("rho_h",(), self.opts.rho_h)
