@@ -65,7 +65,7 @@ class Cls(Base):
         dims = self.dims
         J_n = model.J_normal
 
-        self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal))
+        self.f_x = ca.vertcat(model.v, model.inv_M@(model.f_v + J_n@self.lambda_normal), model.f_w)
 
         self.g_alg = self.y_gap - model.f_c
 
@@ -87,12 +87,13 @@ class Cls(Base):
         self.f_q_fun = ca.Function('f_q', [model.x, model.z, model.u, model.v_global, model.p], [model.f_q])
         self.g_z_fun = ca.Function('g_z', [model.x, model.z, model.u, model.v_global, model.p], [model.g_z])
         self.g_alg_fun = ca.Function('g_alg', [model.x, model.z, self.z_alg, model.v_global, model.p], [self.g_alg])
-        self.g_impulse_fun = ca.Function('g_impulse', [model.q, v_post_impact, v_pre_impact, self.z_impulse, model.v_global, model.p], [self.g_impulse])
+        self.g_impulse_fun = ca.Function('g_impulse', [model.q, v_post_impact, v_pre_impact, self.z_impulse, model.z, model.v_global, model.p], [self.g_impulse])
 
         self.M_fun = ca.Function('M_fun', [model.x], [model.M])
         self.invM_fun = ca.Function('invM_fun', [model.x], [model.inv_M])
-        self.f_c_fun = ca.Function('f_c_fun', [model.x], [model.f_c])
-        self.J_normal_fun = ca.Function('J_normal_fun', [model.x], [J_n])
+        self.f_c_fun = ca.Function('f_c_fun', [model.x, model.z], [model.f_c])
+        self.J_normal_fun = ca.Function('J_normal_fun', [model.x, model.z], [J_n])
+        self.gap_depends_on_z = model.z.numel() > 0 and ca.depends_on(ca.vertcat(model.f_c, ca.vec(J_n)), model.z)
 
         self.g_path_fun = ca.Function('g_path', [model.x, model.z, model.u, model.v_global, model.p], [model.g_path])
         self.G_path_fun = ca.Function('G_path', [model.x, model.z, model.u, model.v_global, model.p], [model.G_path])
@@ -106,7 +107,7 @@ class Cls(Base):
         # Cls.m, the division lives inside f_x only; contact force is not rescaled in the quadrature and algebraic equations.
         self.h_rescale = ca.SX.sym("h_rescale")
         f_x_rk_expr = ca.vertcat(
-            model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale)))
+            model.v, model.inv_M@(model.f_v + J_n@(self.lambda_normal/self.h_rescale)), model.f_w)
         p_rk = ca.vertcat(model.u, model.v_global, model.p, self.h_rescale)
 
         self.f_x_rk = ca.Function(

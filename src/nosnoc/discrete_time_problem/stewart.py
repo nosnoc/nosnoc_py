@@ -89,7 +89,7 @@ class Stewart(Base):
         theta_0 = self.w.theta[0,0,opts.n_s].sym
         mu_0 = self.w.mu[0,0,opts.n_s].sym
 
-        self.g.algebraic[0,0,opts.n_s] = Constraint(
+        self.g.algebraic[0,0,opts.n_s] = self._algebraic_constraint(
             ca.vertcat(
                 dcs.g_z_fun(x_0, z_0, self.w.u[1], self.w.v_global[()], self._get_stage_parameters(1)),
                 dcs.g_alg_fun(x_0, z_0, lam_0, theta_0, mu_0, self.w.u[1], self.w.v_global[()], self._get_stage_parameters(1))
@@ -117,7 +117,7 @@ class Stewart(Base):
                 )
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk] = Constraint(dynamic[kk-1])
-                    self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])
+                    self.g.algebraic[ii,jj,kk] = self._algebraic_constraint(algebraic[kk-1])
                     self._rk_stage_path_constraints(ii,jj,kk)
 
                 # TODO(@anton) implement euler cost integration
@@ -127,7 +127,7 @@ class Stewart(Base):
                 # Handle rbp
                 if not self.rk.is_right_boundary_explicit():
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
-                    self.g.algebraic[ii,jj,opts.n_s+rbp] = Constraint(
+                    self.g.algebraic[ii,jj,opts.n_s+rbp] = self._algebraic_constraint(
                         dcs.g_rk_stationarity(
                             self._get_stage_end(ii, jj),
                             prk_ii_jj

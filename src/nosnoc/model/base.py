@@ -37,6 +37,8 @@ class Base(ABC):
     :param lbz:  numpy.ndarray: $\underline{z} \in \mathbb{R}^{n_z}$, user algebraic lower bound.
     :param ubz:  numpy.ndarray: $\bar{z} \in \mathbb{R}^{n_z}$, user algebraic upper bound.
     :param g_z:  casadi.SX: Constraint expression used to define the behavior of user algebraics.
+    :param lbg_z:  numpy.ndarray: Lower bound on g_z, defaults to 0.
+    :param ubg_z:  numpy.ndarray: Upper bound on g_z, defaults to 0.
 
     :param u:  casadi.SX: Controls $u \in \mathbb{R}^{n_u}$.
     :param lbu:  numpy.ndarray: $\underline{u} \in \mathbb{R}^{n_u}$, controls lower bound.
@@ -96,6 +98,8 @@ class Base(ABC):
             lbz: Optional[np.ndarray|Real] = None,
             ubz: Optional[np.ndarray|Real] = None,
             g_z: Optional[ca.SX] = None,
+            lbg_z: Optional[np.ndarray|Real] = None,
+            ubg_z: Optional[np.ndarray|Real] = None,
             u: Optional[ca.SX] = None,
             lbu: Optional[np.ndarray|Real] = None,
             ubu: Optional[np.ndarray|Real] = None,
@@ -134,7 +138,8 @@ class Base(ABC):
         self.z = z; self.lbz = lbz; self.ubz = ubz; self.z0 = z0
         self._populate_vectors("z", [("lbz", -np.inf), ("ubz", np.inf), ("z0", 0.0)])
         self.dims.n_z = self.z.size(1)
-        self.g_z = g_z; self._populate_scalar("g_z", [])
+        self.g_z = g_z; self.lbg_z = lbg_z; self.ubg_z = ubg_z
+        self._populate_vectors("g_z", [("lbg_z", 0.0), ("ubg_z", 0.0)])
         self.u = u; self.lbu = lbu; self.ubu = ubu; self.u0 = u0
         self._populate_vectors("u", [("lbu", -np.inf), ("ubu", np.inf), ("u0", 0.0)])
         self.dims.n_u = self.u.size(1)

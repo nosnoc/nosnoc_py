@@ -46,6 +46,8 @@ class Pds(Base):
         dims.n_c = self.f_c.size(1)
 
         if self.J_n is None:
+            if self.z.numel() > 0 and ca.depends_on(self.f_c, self.z):
+                raise RuntimeError("f_c depends on the algebraics z, please provide J_n.")
             self.J_n = ca.jacobian(self.f_c, self.x).T
     
 

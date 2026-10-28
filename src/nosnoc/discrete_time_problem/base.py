@@ -34,6 +34,13 @@ class Base(ABC,MPCC):
         self._generate_complementarity_constraints()
         self._generate_step_equilibration_constraints()
 
+    def _algebraic_constraint(self, g):
+        """Constraint on [g_z; g_dcs], where g_z is bounded by lbg_z/ubg_z and g_dcs is an equality."""
+        n_dcs = g.size1() - self.model.g_z.size1()
+        return Constraint(g,
+                          lb=np.concatenate([self.model.lbg_z, np.zeros(n_dcs)]),
+                          ub=np.concatenate([self.model.ubg_z, np.zeros(n_dcs)]))
+
     def _create_parameters(self):
         self.p.rho_h[()] = Parameter("rho_h", 1, val=self.opts.rho_h)
         self.p.rho_terminal[()] = Parameter("rho_terminal", 1, val=self.opts.rho_terminal)

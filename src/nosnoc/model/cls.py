@@ -14,6 +14,7 @@ class ClsDims(Dims):
         super().__init__(parent)
         self.n_q = 0 # Number of generalized coordinates.
         self.n_v = 0 # Number of generalized velocities, equal to n_q.
+        self.n_w = 0 # Number of additional first order states.
         self.n_c = 0 # Number of possible contacts.
         self.n_t = 0 # Number of tangential directions per contact (0 if frictionless).
         self.n_tangents = 0 # Total number of tangential multipliers, n_t*n_c.
@@ -47,7 +48,8 @@ class Cls(Base):
     def __init__(self,
                  *,
                  q: Optional[ca.SX] = None, # Generalized coordinates, defaults to the first half of x.
-                 v: Optional[ca.SX] = None, # Generalized velocities, defaults to the second half of x.
+                 v: Optional[ca.SX] = None, # Generalized velocities, defaults to x[n_q:2*n_q].
+                 f_w: Optional[ca.SX] = None, # Dynamics $\dot{w} = f_w$ of additional first order states, x = (q, v, w).
                  f_v: ca.SX, # Generalized force, $M(q)\dot{v} = f_v(x)\in\mathbb{R}^{n_q}$.
                  f_c: ca.SX, # Contact gap functions $f_c(q)\in\mathbb{R}^{n_c}$.
                  mu: Optional[float|List[float]|np.ndarray] = None, # Coefficient(s) of friction.
@@ -65,6 +67,7 @@ class Cls(Base):
         self.dims = ClsDims(self.dims)
         self.q = q
         self.v = v
+        self.f_w = f_w
         self.f_v = f_v
         self.f_c = f_c
         self.mu = mu
@@ -82,15 +85,19 @@ class Cls(Base):
         dims = self.dims
 
     
-        if dims.n_x % 2 != 0:
-            raise RuntimeError(f"The state x of a Cls model must be (q,v) and therefore have an even number of entries, got {dims.n_x}.")
-        dims.n_q = dims.n_x//2
-        dims.n_v = dims.n_x//2
+        if self.f_w is None:
+            self.f_w = ca.SX(0, 1)
+        dims.n_w = self.f_w.size(1)
+        if (dims.n_x - dims.n_w) % 2 != 0:
+            raise RuntimeError(f"The state x of a Cls model must be (q,v,w) with n_q = n_v, got n_x = {dims.n_x} and n_w = {dims.n_w}.")
+        dims.n_q = (dims.n_x - dims.n_w)//2
+        dims.n_v = dims.n_q
 
         if self.q is None:
             self.q = self.x[0:dims.n_q]
         if self.v is None:
-            self.v = self.x[dims.n_q:]
+            self.v = self.x[dims.n_q:2*dims.n_q]
+        self.w = self.x[2*dims.n_q:]
 
         if self.f_v.size(1) != dims.n_v:
             raise RuntimeError(f"f_v has incorrect dimension, it must have the same dimension as v ({dims.n_v}), got {self.f_v.size(1)}.")
@@ -124,6 +131,8 @@ class Cls(Base):
 
         
         if self.J_normal is None:
+            if self.z.numel() > 0 and ca.depends_on(self.f_c, self.z):
+                raise RuntimeError("f_c depends on the algebraics z, please provide J_normal.")
             self.J_normal = ca.jacobian(self.f_c, self.q).T
         elif self.J_normal.size(1) != dims.n_q or self.J_normal.size(2) != dims.n_c:
             raise RuntimeError(f"J_normal must be a {dims.n_q}x{dims.n_c} matrix, got {self.J_normal.size(1)}x{self.J_normal.size(2)}.")

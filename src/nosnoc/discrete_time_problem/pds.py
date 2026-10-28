@@ -91,7 +91,7 @@ class Pds(Base):
                 
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk]  = Constraint(dynamic[kk-1])     
-                    self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])   
+                    self.g.algebraic[ii,jj,kk] = self._algebraic_constraint(algebraic[kk-1])
 
                     self._rk_stage_path_constraints(ii, jj, kk)
 
@@ -106,6 +106,8 @@ class Pds(Base):
             self._numerical_time_constraints(ii)
             self._stage_path_constraints(ii)
         self._terminal_constraint()
+        self._terminal_objective()
+        self._terminal_numerical_time_constraints()
 
 
     @override

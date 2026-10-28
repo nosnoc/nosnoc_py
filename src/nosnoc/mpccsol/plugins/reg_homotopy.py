@@ -143,6 +143,7 @@ class RegHomotopySolver(MpccsolPlugin):
         stats = self.nlp.solve()
         t_wall_end = time.time()
         self.stats["t_wall"].append(t_wall_end - t_wall_start)
+        self.stats["sigma"].append(self._sigma_curr())
         self.stats["nlp_stats"].append(stats)
         comp_res = self.comp_res_fun(self.nlp.w.res, self.nlp.p.val).full()[0,0]
         self.stats["comp_res"].append(comp_res)
@@ -174,6 +175,7 @@ class RegHomotopySolver(MpccsolPlugin):
         self.stats = {
             "nlp_stats" : [],
             "t_wall" : [],
+            "sigma" : [],
             "comp_res" : [self.comp_res_fun(self.nlp.w.init, self.nlp.p.val).full()[0,0]],
             "converged" : False
         }

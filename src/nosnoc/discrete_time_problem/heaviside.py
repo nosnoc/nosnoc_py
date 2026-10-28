@@ -110,7 +110,7 @@ class Heaviside(Base):
         rbp = self.rbp
 
         z_rk_0 = self._get_initial_z()
-        self.g.algebraic[0,0,opts.n_s] = Constraint(
+        self.g.algebraic[0,0,opts.n_s] = self._algebraic_constraint(
             self.dcs.g_rk(z_rk_0,self._get_stage_parameters(1))
         )
 
@@ -136,7 +136,7 @@ class Heaviside(Base):
                 )
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk] = Constraint(dynamic[kk-1])
-                    self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])
+                    self.g.algebraic[ii,jj,kk] = self._algebraic_constraint(algebraic[kk-1])
                     self._rk_stage_path_constraints(ii,jj,kk)
 
                 # TODO(@anton) implement euler cost integration

@@ -23,7 +23,14 @@ class Cls(Base):
     def __init__(self, dcs, opts):
         self.__apply_time_stepping_defaults(opts)
         self.__check_restitution_supported(dcs.model, opts)
+        self.__check_eps_cls_supported(dcs, opts)
         super().__init__(dcs, opts)
+
+    def __check_eps_cls_supported(self, dcs, opts):
+        uses_eps = opts.use_fesd and opts.cls_discretization != ClsDiscretization.RELAXED_OC and opts.eps_cls > 0
+        if dcs.gap_depends_on_z and uses_eps:
+            raise RuntimeError("f_c(q + eps_cls*v) requires algebraics that do not exist if f_c or J_normal depend on z, "
+                               "please set eps_cls = 0.")
 
     def __apply_time_stepping_defaults(self, opts):
         """
@@ -216,10 +223,11 @@ class Cls(Base):
 
         x_0 = self.w.x[0,0,opts.n_s].sym
         z_0 = self.w.z[0,0,opts.n_s].sym
-        self.g.algebraic[0,0,opts.n_s] = Constraint(
+        self.g.algebraic[0,0,opts.n_s] = self._algebraic_constraint(
             dcs.g_z_fun(x_0, z_0, self.w.u[1], self.w.v_global[()], self._get_stage_parameters(1)))
 
         x_prev = x_0  # last point of previous FE, needed for continuity conditions
+        z_prev = z_0  # algebraics at x_prev, used for z dependent gap functions in the impulse equations
         for ii in range(1, opts.N_stages+1):
             s_sot = self._get_stage_sot(ii)
             for jj in range(1, opts.N_finite_elements[ii-1]+1):
@@ -229,21 +237,24 @@ class Cls(Base):
                 p = self._get_stage_parameters(ii)
                 
                 q_prev = x_prev[0:dims.n_q]
-                v_prev = x_prev[dims.n_q:]
+                v_prev = x_prev[dims.n_q:2*dims.n_q]
                 x_lbp = self.w.x[ii,jj,0].sym
                 q_lbp = x_lbp[0:dims.n_q]
-                v_lbp = x_lbp[dims.n_q:]
+                v_lbp = x_lbp[dims.n_q:2*dims.n_q]
+                w_lbp = x_lbp[2*dims.n_q:]
                 self.g.q_continuity[ii,jj] = Constraint(q_prev - q_lbp)
+                if dims.n_w > 0:
+                    self.g.w_continuity[ii,jj] = Constraint(x_prev[2*dims.n_q:] - w_lbp)
 
             
                 if opts.use_fesd and not self._is_relaxed_oc() and (jj != 1 or not opts.no_initial_impacts):
                     self.g.impulse[ii,jj] = Constraint(
-                        dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj), v_global, p))
-                   
+                        dcs.g_impulse_fun(q_lbp, v_lbp, v_prev, self._build_z_impulse(ii,jj), z_prev, v_global, p))
+
                     if opts.eps_cls > 0:
                         step = opts.eps_cls if opts.fixed_eps_cls else h*opts.eps_cls
-                        x_eps = ca.vertcat(q_lbp + step*v_lbp, v_lbp)
-                        self.g.f_c_eps[ii,jj] = Constraint(dcs.f_c_fun(x_eps), lb=0.0, ub=np.inf)
+                        x_eps = ca.vertcat(q_lbp + step*v_lbp, v_lbp, w_lbp)
+                        self.g.f_c_eps[ii,jj] = Constraint(dcs.f_c_fun(x_eps, z_prev), lb=0.0, ub=np.inf)
                 else:
                     self.g.v_continuity[ii,jj] = Constraint(v_lbp - v_prev)
 
@@ -254,20 +265,22 @@ class Cls(Base):
                     x_lbp, z_ii_jj, prk_ii_jj, h, dcs.f_x_rk, dcs.f_q_rk, dcs.g_rk, sot=s_sot)
                 for kk in range(1, opts.n_s+1):
                     self.g.dynamic[ii,jj,kk] = Constraint(dynamic[kk-1])
-                    self.g.algebraic[ii,jj,kk] = Constraint(algebraic[kk-1])
+                    self.g.algebraic[ii,jj,kk] = self._algebraic_constraint(algebraic[kk-1])
                     self._rk_stage_path_constraints(ii, jj, kk)
                 self.f += q_end
 
                 x_ii_jj_end = self._get_x_end(ii, jj)
+                z_ii_jj_end = self.w.z[ii,jj,opts.n_s+rbp].sym
                 if not self.rk.is_right_boundary_explicit():
                     self.g.dynamic[ii,jj,opts.n_s+1] = Constraint(x_end - x_ii_jj_end)
-                    self.g.algebraic[ii,jj,opts.n_s+1] = Constraint(
-                        dcs.g_z_fun(x_ii_jj_end , self.w.z[ii,jj,opts.n_s+1].sym, u_i, v_global, p))
+                    self.g.algebraic[ii,jj,opts.n_s+1] = self._algebraic_constraint(
+                        dcs.g_z_fun(x_ii_jj_end, z_ii_jj_end, u_i, v_global, p))
                     # y_gap at the right boundary point is defined by the gap function there.
                     self.g.y_gap_rbp[ii,jj] = Constraint(
-                        self.w.y_gap[ii,jj,opts.n_s+1].sym - dcs.f_c_fun(x_ii_jj_end))
+                        self.w.y_gap[ii,jj,opts.n_s+1].sym - dcs.f_c_fun(x_ii_jj_end, z_ii_jj_end))
                 self._fe_path_constraints(ii, jj)
-                x_prev = x_ii_jj_end 
+                x_prev = x_ii_jj_end
+                z_prev = z_ii_jj_end
             self._numerical_time_constraints(ii)
             self._stage_path_constraints(ii)
 
