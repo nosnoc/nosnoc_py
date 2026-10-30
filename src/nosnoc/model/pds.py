@@ -34,7 +34,6 @@ class Pds(Base):
         self.f = f
         self.f_c = f_c 
         self.friction_exists = False
-        self.J_n = None
         
         self.__backfill()
 
@@ -42,9 +41,7 @@ class Pds(Base):
         dims = self.dims
 
         dims.n_c = self.f_c.size(1)
-
-        if self.J_n is None:
-            self.J_n = ca.jacobian(self.f_c, self.x).T
+        self.J_n = ca.jacobian(self.f_c, self.x).T
     
 
     
