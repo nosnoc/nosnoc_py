@@ -14,11 +14,11 @@ from .model import Pds
 from .dcs import Stewart as StewartDCS
 from .dcs import Heaviside as HeavisideDCS
 from .dcs import Cls as ClsDCS
-from .dcs import Pds as PdsDCS
+from .dcs import Gcs as GcsDCS
 from .discrete_time_problem import Stewart as StewartDTP
 from .discrete_time_problem import Heaviside as HeavisideDTP
 from .discrete_time_problem import Cls as ClsDTP
-from .discrete_time_problem import Pds as PdsDTP
+from .discrete_time_problem import Gcs as GcsDTP
 from .nosnoc_types import DcsMode, RKRepresentation
 from nosnoc.mpccsol.plugins.reg_homotopy import RegHomotopyOptions
 
@@ -107,8 +107,8 @@ class FESDIntegratorPlugin(IntegratorPlugin):
             self.dtp = ClsDTP(self.dcs, opts)
             self.dtp.populate_problem()
         elif isinstance(model, Pds):
-            self.dcs = PdsDCS(model)
-            self.dtp = PdsDTP(self.dcs, opts)
+            self.dcs = GcsDCS(model)
+            self.dtp = GcsDTP(self.dcs, opts)
             self.dtp.populate_problem()
         else:
             raise NotImplementedError("Only Pss, Heaviside, Cls and Pds are implemented")
