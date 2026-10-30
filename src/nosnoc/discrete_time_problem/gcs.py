@@ -146,7 +146,7 @@ class Gcs(Base):
     @override
     def _warmstart_shift(self):
         """Warmstart the current problem by shifting one control interval"""
-        raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
+        raise NotImplementedError("Shift warmstarting not yet implemented for Gcs")
 
 
 
