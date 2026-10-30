@@ -27,7 +27,6 @@ class Pds(Base):
                  *,
                  f: ca.SX, #velocity of the system without constraints in x,u
                  f_c: ca.SX, #f_c is the gap function in x
-                 J_n: Optional[ca.SX] = None,
                  **kwargs
                  ):
         super().__init__(**kwargs)
@@ -35,7 +34,7 @@ class Pds(Base):
         self.f = f
         self.f_c = f_c 
         self.friction_exists = False
-        self.J_n = J_n
+        self.J_n = None
         
         self.__backfill()
 
