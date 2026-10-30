@@ -12,7 +12,6 @@ import numpy as np
 class PdsDims(Dims):
     def __init__(self, parent: BaseDims):
         super().__init__(parent)
-        self.n_q = 0 
         self.n_c = 0
 
 
