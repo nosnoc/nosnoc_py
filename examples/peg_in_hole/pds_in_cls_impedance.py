@@ -96,7 +96,8 @@ def example(plot=True):
     print(f"final q_c CLS: {x_cls[-1, :3]}, error to Q_REF: {np.linalg.norm(x_cls[-1, :3] - Q_REF):.3e}")
     print(f"final v_c CLS: {x_cls[-1, 3:6]}")
     if plot:
-        plot_comparison(t_pds, x_pds, t_cls, x_cls, u)
+        fig = plot_comparison(t_pds, x_pds, t_cls, x_cls, u)
+        fig.savefig(Path(__file__).with_name(Path(__file__).stem + "_results.png"), dpi=150)
         anim = animate(t_pds, x_pds, t_cls, x_cls, gif_path=Path(__file__).with_suffix(".gif"))
         plt.show()
     return t_pds, x_pds, t_cls, x_cls, u

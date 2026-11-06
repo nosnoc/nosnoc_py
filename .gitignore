@@ -8,6 +8,7 @@ env
 *.pdf
 *.gif
 *.pkl
+*.png
 
 private*
 external
