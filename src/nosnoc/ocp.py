@@ -171,20 +171,34 @@ class OcpSolver():
         return np.concatenate(t_grid_full)
 
     def get_control_grid(self):
-        if self.opts.use_fesd:
-            h = self.dtp.w.h[:,:].res
-        else:
-            h = self.dtp.p.T[()].val/(np.sum(self.opts.N_finite_elements))*(np.ones(np.sum(self.opts.N_finite_elements)))
+        # if self.opts.use_fesd:
+        #     h = self.dtp.w.h[:,:].res
+        # else:
+        #     h = self.dtp.p.T[()].val/(np.sum(self.opts.N_finite_elements))*(np.ones(np.sum(self.opts.N_finite_elements)))
 
-            if self.opts.use_speed_of_time_variables:
-                sot = self.get("sot")
-                h = sot*h
-        t_grid = [0]
-        for ii in range(1,self.opts.N_stages+1):
-            h_sum = np.sum(self.dtp.w.h[ii,:].res) 
-            sot = self.dtp._get_stage_sot(ii)
-            h_sum *= sot
-            t_grid.append(t_grid[-1]+h_sum)
+        #     if self.opts.use_speed_of_time_variables:
+        #         sot = self.get("sot")
+        #         h = sot*h
+        # t_grid = [0]
+        # for ii in range(1,self.opts.N_stages+1):
+        #     h_sum = np.sum(self.dtp.w.h[ii,:].res) 
+        #     sot = self.dtp._get_stage_sot(ii)
+        #     h_sum *= sot
+        #     t_grid.append(t_grid[-1]+h_sum)
+
+        # Use `_fe_lengths()` for both FESD and fixed-step: when `use_fesd=False` there are no
+        # `w.h` decision variables, so indexing `self.dtp.w.h[ii,:]` would fail (in the h_sum).
+        h_all = self._fe_lengths()
+        nfe_list = self.opts.N_finite_elements
+        if isinstance(nfe_list, (int, np.integer)):
+            nfe_list = [int(nfe_list)] * self.opts.N_stages
+        t_grid = [0.0]
+        start = 0
+        for nfe in nfe_list:
+            h_sum = float(np.sum(h_all[start:start + nfe]))
+            t_grid.append(t_grid[-1] + h_sum)
+            start += nfe
+
         return np.array(t_grid)
 
     def get_objective(self):

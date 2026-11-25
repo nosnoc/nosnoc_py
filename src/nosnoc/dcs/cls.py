@@ -101,7 +101,7 @@ class Cls(Base):
         self.G_path_fun = ca.Function('G_path', [model.x, model.z, model.u, model.v_global, model.p], [model.G_path])
         self.H_path_fun = ca.Function('H_path', [model.x, model.z, model.u, model.v_global, model.p], [model.H_path])
         self.g_terminal_fun = ca.Function('g_terminal', [model.x, model.z, model.v_global, model.p_global], [model.g_terminal])
-        self.f_q_T_fun = ca.Function('f_q_T', [model.x, model.z, model.v_global, model.p], [model.f_q_T])
+        self.f_q_T_fun = ca.Function('f_q_T', [model.x, model.z, model.v_global, model.p_global], [model.f_q_T])
 
         # The RK functions additionally take h_rescale as a parameter. lambda_normal is a contact
         # force in FESD (h_rescale = 1) but a contact impulse in the non-FESD implicit-Euler scheme,
