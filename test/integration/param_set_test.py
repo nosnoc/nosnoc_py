@@ -1,3 +1,5 @@
+from parameterized import parameterized
+import unittest
 import nosnoc as ns
 import casadi as ca
 import numpy as np
