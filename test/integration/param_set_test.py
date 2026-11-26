@@ -24,7 +24,7 @@ def get_options(**kwargs):
     }
     return ns.Options(**(default_opts | kwargs))
 
-def get_model(n_p_global, n_p_time_Var):
+def get_model(n_p_global, n_p_time_var):
     q = ca.SX.sym('q', 1)
     v = ca.SX.sym('v', 1)
     x = ca.vertcat(q, v)
@@ -73,7 +73,7 @@ def get_model(n_p_global, n_p_time_Var):
 
 def solve_ocp(n_p_global, n_p_time_var):
     opts = get_options()
-    model = get_model()
+    model = get_model(n_p_global, n_p_time_var)
     solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     solver = ns.OcpSolver(model, opts, solver_opts)
     # buggy stuff
