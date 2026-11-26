@@ -77,7 +77,7 @@ def solve_ocp(n_p_global, n_p_time_var):
     solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
     solver = ns.OcpSolver(model, opts, solver_opts)
     # buggy stuff
-    solver.set_param("p_global", (), np.rand(n_p_global))
+    solver.set_param("p_global", (), np.random.rand(n_p_global))
     solver.set_param("p_time_var", (range(1, N_STAGES + 1),), 3*np.ones((N_STAGES, n_p_time_var)))
     # end
     solver.solve()
