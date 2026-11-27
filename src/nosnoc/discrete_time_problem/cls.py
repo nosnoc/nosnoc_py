@@ -434,4 +434,38 @@ class Cls(Base):
     @override
     def _warmstart_shift(self):
         """Warmstart the current problem by shifting one control interval"""
-        raise NotImplementedError("Shift warmstarting not yet implemented for CLS")
+        opts = self.opts
+        rbp = self.rbp
+        # iterate control stages
+        for ii in range(1, opts.N_stages+1):
+            next_ii = min(ii+1, opts.N_stages)
+            # warmstart x left bound
+            self.w.x[ii,range(1,opts.N_finite_elements[ii-1]+1),0](
+                init=self.w.x[next_ii,range(1,opts.N_finite_elements[next_ii-1]+1),0].res.flatten()
+            )
+            # warmstart lambda_normal
+            self.w.lambda_normal[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)](
+                init=self.w.lambda_normal[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+1)].res.flatten()
+            )
+            # warmstart y_gap
+            self.w.y_gap[ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)](
+                init=self.w.y_gap[next_ii,range(1,opts.N_finite_elements[ii-1]+1),range(1,opts.n_s+rbp+1)].res.flatten()
+            )
+
+            if opts.use_fesd and not self._is_relaxed_oc():
+                # warmstart Lambda_normal
+                self.w.Lambda_normal[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                    init=self.w.Lambda_normal[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+                )
+                # warmstart P_vn
+                self.w.P_vn[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                    init=self.w.P_vn[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+                )
+                # warmstart N_vn
+                self.w.N_vn[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                    init=self.w.N_vn[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+                )
+                # warmstart Y_gap
+                self.w.Y_gap[ii,range(1,opts.N_finite_elements[ii-1]+1)](
+                    init=self.w.Y_gap[next_ii,range(1,opts.N_finite_elements[ii-1]+1)].res.flatten()
+                )

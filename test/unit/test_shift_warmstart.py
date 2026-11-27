@@ -6,6 +6,9 @@ from examples.sliding_mode_ocp.sliding_mode_ocp import (
     get_default_options,
     get_sliding_mode_ocp_description
 )
+from examples.disc_manipulation.disc_around_obstacle import get_default_options as disc_default_options
+from examples.disc_manipulation.disc_around_obstacle import get_disc_model
+
 
 rk_options = [
     (rk_representation, rk_scheme, use_fesd)
@@ -129,3 +132,51 @@ class TestShiftWarmstart(unittest.TestCase):
             init = var[N_stages].init
             res = var[N_stages].res
             self.assertTrue(np.allclose(init,res))
+
+    @parameterized.expand((True,False))
+    def test_cls(self,use_fesd):
+        """
+        Test Stewart DTP shift warmstart routine.
+        """
+        opts = disc_default_options(use_fesd=use_fesd)
+        solver_opts = ns.mpccsol.plugins.reg_homotopy.RegHomotopyOptions()
+        model = get_disc_model()
+
+        solver = ns.OcpSolver(model, opts, solver_opts)
+
+        np.copyto(solver.dtp.w.res,np.random.rand(len(solver.dtp.w))) # Don't need to solve just add random values :P
+        solver.warmstart_shift()
+        # Check depth 3 variables
+        for name in ["x", "z", "lambda_normal", "y_gap"]:
+            var = getattr(solver.dtp.w,name)
+            for ii in range(1,N_stages):
+                init = var[ii,:,:].init
+                res = var[ii+1,:,:].res
+                self.assertTrue(np.allclose(init,res))
+            init = var[N_stages,:,:].init
+            res = var[N_stages,:,:].res
+            self.assertTrue(np.allclose(init,res))
+        # check depth 2 variables
+        for name in (["h", "Lambda_normal", "P_vn", "N_vn", "Y_gap"] if opts.use_fesd else []):
+            var = getattr(solver.dtp.w,name)
+            for ii in range(1,N_stages):
+                init = var[ii,:].init
+                res = var[ii+1,:].res
+                self.assertTrue(np.allclose(init,res))
+            init = var[N_stages,:].init
+            res = var[N_stages,:].res
+            self.assertTrue(np.allclose(init,res))
+
+        # check depth 1 variables
+        for name in ["u"]:
+            var = getattr(solver.dtp.w,name)
+            for ii in range(1,N_stages):
+                init = var[ii].init
+                res = var[ii+1].res
+                self.assertTrue(np.allclose(init,res))
+            init = var[N_stages].init
+            res = var[N_stages].res
+            self.assertTrue(np.allclose(init,res))
+
+if __name__ == "__main__":
+    unittest.main()
