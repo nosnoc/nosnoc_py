@@ -3,4 +3,5 @@ from .pss import Pss, PssDims
 from .heaviside import Heaviside, HeavisideModelDims
 from .cls import Cls, ClsDims
 from .pds import Pds, PdsDims
+from .dae import Dae, DaeDims
 # TODO(@anton) others
